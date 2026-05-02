@@ -1,26 +1,26 @@
-import { useState } from 'react'
 
 import './App.css'
+import { Route, Routes } from 'react-router';
+import MyCounter from './features/myCounterExample/components/MyCounter';
 
 
 /**
  * Diese Komponente nur nutzen, um die Navigierung der Pages mittels
- * React-Router zu managen und zu den entsprechenden Komponenten zu leiten
- * die im feautes ordner definiert sind
+ * React-Router zu managen und zu den entsprechenden Komponenten zu leiten,
+ * die im features-Ordner liegen. Alle globalen Provider oder Kontext-Wrapper können hier hinzugefügt werden,
+ * um sie in der gesamten App verfügbar zu machen.
  * @returns 
  */
 function App() {
-  const [count, setCount] = useState(0)
-
-  const increment = () => {
-    setCount(count + 1);
-  }
-
   return (
     <>
-      {/* This is only example code... */}
-      <p className="text-3xl font-bold underline">Counter: {count}</p>
-      <button className="mt-3 p-2 bg-sky-500 rounded-2xl"onClick={increment}>Increment</button>
+    <Routes>
+      {/* Hier können die Routen zu den verschiedenen Pages definiert werden */}
+
+      {/* Beispiele: */}
+      <Route path='/' element={<p>Home Page</p>} />
+      <Route path='/counter-page' element={<MyCounter />} />
+    </Routes>
     </>
   )
 }

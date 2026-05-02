@@ -73,8 +73,9 @@ import { BrowserRouter as Router, Route, Switch } from 'react-router-dom';
 import HomePage from './features/home/HomePage';
 import UserPage from './features/user/UserPage';
 <Router>
-    <Route path="/" exact component={HomePage} />
-    <Route path="/user" component={UserPage} />
+    <Route path="/" element={HomePage} />
+    <Route path="/user" element={UserPage} />
+    <Route path="*" element={<p>Page not found</p>} />
 </Router>
 ```
 
