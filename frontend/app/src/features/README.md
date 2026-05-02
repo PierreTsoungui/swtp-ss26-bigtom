@@ -7,6 +7,7 @@
 - [React Router](https://reactrouter.com/)
 - [Tailwind CSS](https://tailwindcss.com/)
 - [Material UI](https://mui.com/)
+- [Vitest](https://vitest.dev/)
 
 ## Ordnerstruktur
 
@@ -91,3 +92,12 @@ Zuvor müssen Sie sicherstellen, dass alle Abhängigkeiten installiert sind. Fü
 npm install
 ```
 
+## Testing
+Für das Testen verwenden wir Vitest, ein modernes Test-Framework, das speziell für Vite-Projekte entwickelt wurde. Es bietet eine schnelle und einfache Möglichkeit, Unit-Tests und Integrationstests für unsere React-Komponenten zu schreiben.
+Um Tests auszuführen, verwenden Sie den folgenden Befehl:
+
+```bash
+npm run test
+```
+
+Dieser Befehl startet den Test-Runner und führt alle Tests in Ihrem Projekt aus. Sie können Tests in Dateien mit der Endung `.test.tsx` oder `.spec.tsx` schreiben, und Vitest wird sie automatisch erkennen und ausführen.
