@@ -5,20 +5,21 @@
  * @param canSubmit Gibt an, ob die Analyse gestartet werden kann (basierend auf der Validierung der IDAT-Dateien und des Sample Sheets).
  * @returns JSX.Element Ein Button, der den Request zum Starten der Analyse auslöst.
  */
-const SubmitButton: React.FC<{ canSubmit: boolean }> = ({ canSubmit }) => {
-    return (
-        <div className="flex justify-center m-10">
-            <button
-            disabled={!canSubmit}
-            onClick={() => console.log("Not implemented yet!")}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300
-                        disabled:cursor-not-allowed text-white font-bold
-                        py-3 px-10 rounded-full transition-colors"
-            >
-            Analyse starten
-            </button>
-        </div>
-    );
-}
+const SubmitButton: React.FC<{ canSubmit: boolean; onClick: () => void }> =
+    ({ canSubmit, onClick }) => {
+        return (
+            <div className="flex justify-center m-10">
+                <button
+                    disabled={!canSubmit}
+                    onClick={onClick}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300
+                           disabled:cursor-not-allowed text-white font-bold
+                           py-3 px-10 rounded-full transition-colors"
+                >
+                    Analyse starten
+                </button>
+            </div>
+        );
+    }
 
 export default SubmitButton;

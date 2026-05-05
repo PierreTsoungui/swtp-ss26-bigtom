@@ -114,12 +114,45 @@ function UploadView() : JSX.Element {
       </div>
 
       {/* Analyse-starten Button */}
-      <SubmitButton canSubmit={canSubmit} />
-
+      <SubmitButton canSubmit={canSubmit} onClick={handleUpload} />
       {/* Dateiliste IDAT */}
       <FileViewList files={idatFiles} errors={idatErrors} onRemove={onRemoveIdatFile} />
     </div>
   );
+
+  // API CALL
+  const handleUpload = async () => {
+    const formData = new FormData();
+
+    idatFiles.forEach((file) => {
+      formData.append("idat_files", file);
+    });
+
+    if (sampleSheet) {
+      formData.append("sample_sheet", sampleSheet);
+    }
+
+    try {
+      const response = await fetch("http://localhost:8000/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.detail || "Upload fehlgeschlagen");
+        return;
+      }
+
+      const data = await response.json();
+      console.log("JOB ID:", data.job_id);
+
+      alert("Upload erfolgreich! Job erstellt: " + data.job_id);
+
+    } catch (err) {
+      alert("Server nicht erreichbar");
+    }
+  };
 }
 
 export default UploadView;
