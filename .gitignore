@@ -1,2 +1,5 @@
 .idea
 .vscode
+backend/venv
+backend/app/__pycache__
+backend/app/api/routes/__pycache__
