@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./jobs:/app/jobs
+      - ./r_backend:/app/r_backend
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  r_worker:
+    build: ./r_backend
+    volumes:
+      - ./jobs:/app/jobs
+      - ./r_backend:/app/r_backend
+      - ./data:/data
+    command: tail -f /dev/null   # Container läuft im Hintergrund
