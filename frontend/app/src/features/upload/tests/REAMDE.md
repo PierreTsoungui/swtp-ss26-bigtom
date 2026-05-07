@@ -10,7 +10,10 @@
 
 (=> Auszug aus Claude)
 
+Wir benutzen jsdom + RTL, da es einfacher einzurichten ist und für die meisten Tests ausreichend ist.
+
 #### Links
 https://vitest.dev/api/browser/react
 https://vitest.dev/guide/learn/writing-tests.html
 https://vitest.dev/guide/browser/component-testing
+

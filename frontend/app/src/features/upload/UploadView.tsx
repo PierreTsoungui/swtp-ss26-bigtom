@@ -4,6 +4,7 @@ import SubmitButton from "./components/SubmitButton";
 import FileViewList from "./components/FileViewList";
 import SampleSheetUpload from "./components/SampleSheetUpload";
 import IdatUpload from "./components/IdatUpload";
+import { useUpload } from "./hooks/useUpload";
 
 // TODOS:
 // - Testen mit echten Dateien (auch ungültige Dateien!)
@@ -23,6 +24,18 @@ function UploadView() : JSX.Element {
   const [sampleSheet, setSampleSheet] = useState<File | null>(null);
   const [idatErrors, setIdatErrors] = useState<string[]>([]);
   const [sampleSheetError, setSampleSheetError] = useState<string>("");
+
+  // Analyse-Button nur aktiv wenn keine Fehler und beide Felder befüllt
+  const canSubmit = idatFiles.length > 0 && sampleSheet !== null &&
+                    idatErrors.length === 0 && sampleSheetError === "";
+
+  const { data, isLoading, error, upload } = useUpload();
+  
+  const handleUpload = async () => {
+    if (canSubmit) {
+      await upload(idatFiles, sampleSheet!);
+    }
+  }
 
   // ## IDAT Upload 
   const handleIdatChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,9 +102,6 @@ function UploadView() : JSX.Element {
       setIdatFiles(updated);
   };
 
-  // Analyse-Button nur aktiv wenn keine Fehler und beide Felder befüllt
-  const canSubmit = idatFiles.length > 0 && sampleSheet !== null &&
-                    idatErrors.length === 0 && sampleSheetError === "";
 
   return (
     <div className="container mx-auto">
@@ -114,45 +124,16 @@ function UploadView() : JSX.Element {
       </div>
 
       {/* Analyse-starten Button */}
-      <SubmitButton canSubmit={canSubmit} onClick={handleUpload} />
+      <SubmitButton canSubmit={canSubmit && !isLoading} onClick={handleUpload} />
+      {isLoading && <p>Upload läuft...</p>}
+      {error && <p className="text-red-500">{error}</p>}
+      {data && <p>Job erstellt: {data.job_id}</p>}
+
+
       {/* Dateiliste IDAT */}
       <FileViewList files={idatFiles} errors={idatErrors} onRemove={onRemoveIdatFile} />
     </div>
   );
-
-  // API CALL
-  const handleUpload = async () => {
-    const formData = new FormData();
-
-    idatFiles.forEach((file) => {
-      formData.append("idat_files", file);
-    });
-
-    if (sampleSheet) {
-      formData.append("sample_sheet", sampleSheet);
-    }
-
-    try {
-      const response = await fetch("http://localhost:8000/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        alert(error.detail || "Upload fehlgeschlagen");
-        return;
-      }
-
-      const data = await response.json();
-      console.log("JOB ID:", data.job_id);
-
-      alert("Upload erfolgreich! Job erstellt: " + data.job_id);
-
-    } catch (err) {
-      alert("Server nicht erreichbar");
-    }
-  };
 }
 
 export default UploadView;
