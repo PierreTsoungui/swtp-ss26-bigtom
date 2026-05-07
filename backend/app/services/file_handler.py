@@ -1,3 +1,4 @@
+from email import header
 import shutil
 from pathlib import Path
 from typing import List, Tuple, Dict
@@ -34,7 +35,6 @@ def get_total_file_size(files: List[UploadFile]) -> int:
 
 
 # ==================== VALIDIERUNG ====================
-
 def validate_idat_files(files: List[UploadFile]) -> Tuple[bool, Dict]:
     """
     VALIDIERUNG nach Kundengespräch:
@@ -42,6 +42,7 @@ def validate_idat_files(files: List[UploadFile]) -> Tuple[bool, Dict]:
     - Format .idat
     - Anzahl gerade (rot + grün pro Sample)
     - Gesamtgröße (basierend auf 16 Samples = 30 MB)
+    - Magic Number (IDAT-Header)
     """
     # 1. Leere Liste?
     if not files:
@@ -51,14 +52,34 @@ def validate_idat_files(files: List[UploadFile]) -> Tuple[bool, Dict]:
             "details": {"missing_fields": ["idat_files"]}
         }
     
-    # 2. Format prüfen
+    # 2. Format und Header prüfen (für JEDE Datei)
     for file in files:
+        # Format prüfen
         ext = Path(file.filename).suffix.lower()
         if ext not in ALLOWED_IDAT_EXTENSIONS:
             return False, {
                 "error": "INVALID_FILE_FORMAT",
                 "message": f"Datei '{file.filename}' ist keine .idat Datei",
                 "details": {"invalid_file": file.filename}
+            }
+        
+        # Magic Number / Header prüfen
+        try:
+            header = file.file.read(8)
+            file.file.seek(0)  # Zurücksetzen für späteres Speichern!
+            
+            # Prüfe ob es eine IDAT sein KÖNNTE
+            if not (header.startswith(b'IDAT') or header.startswith(b'\xff\xfeIDAT')):
+                return False, {
+                    "error": "INVALID_IDAT_CONTENT",
+                    "message": f"Datei '{file.filename}' scheint keine gültige IDAT-Datei zu sein",
+                    "details": {"invalid_file": file.filename, "detected_header": header[:4].hex()}
+                }
+        except Exception as e:
+            # Bei Lesefehlern: Datei ablehnen
+            return False, {
+                "error": "IDAT_READ_ERROR",
+                "message": f"Datei '{file.filename}' konnte nicht gelesen werden: {str(e)}"
             }
     
     # 3. Anzahl prüfen (muss gerade sein für rot+grün)
@@ -69,7 +90,7 @@ def validate_idat_files(files: List[UploadFile]) -> Tuple[bool, Dict]:
             "details": {"file_count": len(files)}
         }
     
-    # 4. Gesamtgröße prüfen ( 16 Samples = 30 MB)
+    # 4. Gesamtgröße prüfen
     total_size = get_total_file_size(files)
     if total_size > MAX_TOTAL_SIZE:
         return False, {
@@ -90,14 +111,13 @@ def validate_idat_files(files: List[UploadFile]) -> Tuple[bool, Dict]:
         "expected_sample_count": expected_samples,
         "total_size_mb": round(total_size / (1024 * 1024), 2)
     }
-
-
 def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
     """
     VALIDIERUNG:
     - Datei vorhanden
     - Format .xlsx, .xls, .csv
     - Größe (Sample Sheet ist klein)
+    - Magic Number (Excel-Dateien prüfen)
     """
     # 1. Datei vorhanden?
     if not file:
@@ -119,7 +139,47 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
             }
         }
     
-    # 3. Größe prüfen (Sample Sheet sollte klein sein, z. B. < 10 MB)
+    # 3. Magic Number für Excel-Dateien prüfen
+    try:
+        header = file.file.read(8)
+        file.file.seek(0)  # Zurücksetzen!
+        
+        # .xlsx: PK (ZIP) Header
+        if ext == '.xlsx' and not header.startswith(b'PK\x03\x04'):
+            return False, {
+                "error": "INVALID_EXCEL_CONTENT",
+                "message": f"Datei '{file.filename}' ist keine gültige Excel-Datei (.xlsx)",
+                "details": {"invalid_file": file.filename, "detected_header": header[:4].hex()}
+            }
+        
+        # .xls: OLE Header
+        if ext == '.xls' and not header.startswith(b'\xd0\xcf\x11\xe0'):
+            return False, {
+                "error": "INVALID_EXCEL_CONTENT",
+                "message": f"Datei '{file.filename}' ist keine gültige Excel-Datei (.xls)",
+                "details": {"invalid_file": file.filename}
+            }
+        
+        # .csv: 
+        if ext == '.csv':
+            try:
+                content = file.file.read(1024)
+                file.file.seek(0)
+                # Prüfe ob CSV-ähnliche Zeichen enthält
+                text = content.decode('utf-8', errors='ignore')
+                if not (',' in text or ';' in text or '"' in text or '\n' in text):
+                    #  kann trotzdem CSV sein
+                    pass
+            except:
+                pass
+                
+    except Exception as e:
+        return False, {
+            "error": "SAMPLE_SHEET_READ_ERROR",
+            "message": f"Sample Sheet '{file.filename}' konnte nicht gelesen werden: {str(e)}"
+        }
+    
+    # 4. Größe prüfen (Sample Sheet sollte klein sein, < 10 MB)
     file_size = get_file_size(file)
     if file_size > 10 * 1024 * 1024:  # 10 MB
         return False, {
@@ -130,12 +190,13 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
             }
         }
     
+    # Erfolg
     return True, {
         "message": f"Sample Sheet valid: {file.filename}",
         "format": ext,
-        "filename": file.filename
+        "filename": file.filename,
+        "size_mb": round(file_size / (1024 * 1024), 2)
     }
-
 
 # ==================== SPEICHERN ====================
 
