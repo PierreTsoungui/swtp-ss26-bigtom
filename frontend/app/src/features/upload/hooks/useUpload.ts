@@ -36,7 +36,7 @@ export function useUpload() : UploadState {
     formData.append("sample_sheet", sampleSheet)
 
     try {
-      const response = await fetch("http://localhost:8000/api/upload", {
+      const response = await fetch("http://localhost:8000/api/v1/upload", {
         method: "POST",
         body: formData,
       })
