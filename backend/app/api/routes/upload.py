@@ -81,7 +81,7 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
         
        
         result = await run_r_script(
-            script="process_data.R",
+            script="data.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet=sample_sheet_filename
