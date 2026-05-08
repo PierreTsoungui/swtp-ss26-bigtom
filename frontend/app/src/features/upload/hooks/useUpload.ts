@@ -43,7 +43,15 @@ export function useUpload() : UploadState {
 
       if (!response.ok) {
         const err = await response.json()
-        setError(err.detail || "Upload fehlgeschlagen")
+        const detail = err.detail
+
+        if (typeof detail === "string") {
+          setError(detail)
+        } else if (detail?.message) {
+          setError(detail.message)
+        } else {
+          setError("Upload fehlgeschlagen")
+        }
         return
       }
 
