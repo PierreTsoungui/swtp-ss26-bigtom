@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Tuple, Dict
 from fastapi import UploadFile
 
-UPLOAD_BASE_DIR = Path("app/temp")
+UPLOAD_BASE_DIR = Path("/app/jobs")
 ALLOWED_IDAT_EXTENSIONS = {".idat"}
 ALLOWED_SHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 

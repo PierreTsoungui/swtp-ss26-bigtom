@@ -140,5 +140,6 @@ preprocessed_data <- preprocessRaw(raw_data)
 beta <- getBeta(preprocessed_data)
 
 # Output.csv erstellen
-write.csv(as.data.frame(beta), "output.csv", row.names = TRUE)
-cat("Fertig! output.csv geschrieben\n")
+output_path <- file.path(idat_dirs[1], "output.csv")
+write.csv(as.data.frame(beta), output_path, row.names = TRUE)
+cat("Fertig! Geschrieben nach:", output_path, "\n")
