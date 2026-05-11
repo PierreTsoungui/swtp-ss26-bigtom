@@ -16,6 +16,7 @@ app.add_middleware(
 # Routen registrieren
 app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
 app.include_router(status.router, prefix="/api/v1", tags=["Status"])
+app.include_router(status.router, prefix="/api/v1", tags=["stats"])
 
 @app.get("/")
 async def root():
