@@ -1,6 +1,5 @@
 import './App.css'
 import { Route, Routes } from 'react-router';
-import MyCounter from './features/myCounterExample/components/MyCounter';
 import UploadView from './features/upload/UploadView';
 
 
@@ -16,12 +15,7 @@ function App() {
     <>
     <Routes>
       {/* Hier können die Routen zu den verschiedenen Pages definiert werden */}
-
-      {/* Beispiele: */}
       <Route path='/' element={<p>Home Page</p>} />
-      <Route path='/counter-page' element={<MyCounter />} />
-
-      {/* Richtige Pages hier hinzufügen */}
       <Route path='/upload' element={<UploadView />} />
     </Routes>
     </>

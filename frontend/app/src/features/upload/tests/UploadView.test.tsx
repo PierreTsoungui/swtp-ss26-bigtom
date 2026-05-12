@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import UploadView from "./UploadView";
+import UploadView from "../UploadView";
 import { describe, it, expect } from "vitest";
 
 describe("UploadView", () => {
