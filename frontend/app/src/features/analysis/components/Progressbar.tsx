@@ -1,8 +1,13 @@
 
 import LinearProgressWithLabelAndValue from '@mui/material/LinearProgress';
 import type { JobStatus } from '../utils/types';
+import CancelButton from './CancelButton';
 
-function Progressbar({ data }: { data : JobStatus }) {
+type ProgressbarProps = {
+    data: JobStatus;
+}
+
+function Progressbar({ data }: ProgressbarProps) {
     return (
         
         <div className="w-full bg-gray-200 rounded-full h-4">
@@ -12,6 +17,7 @@ function Progressbar({ data }: { data : JobStatus }) {
             {data.estimated_seconds_remaining !== null && (
                 <p>Geschätzte verbleibende Zeit: {data.estimated_seconds_remaining} Sekunden</p>
             )}
+            <CancelButton onCancel={() => console.log("Analyse abgebrochen")} />
         </div>
     );
 }

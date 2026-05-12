@@ -1,3 +1,5 @@
+import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
+
 // features/analysis/types.ts
 export interface FilterStep {
   name: string;
@@ -8,14 +10,6 @@ export interface FilterStats {
   total_before: number;
   steps: FilterStep[];
   remaining: number;
-}
-
-export interface ProblemDetail {
-  type: string;
-  title: string;
-  status: number;
-  detail: string;
-  instance: string;
 }
 
 export type JobStatusValue =
