@@ -1,6 +1,7 @@
 import './App.css'
 import { Route, Routes } from 'react-router';
 import UploadView from './features/upload/UploadView';
+import { AnalysisPage } from './features/analysis/AnalysisPage';
 
 
 /**
@@ -17,7 +18,7 @@ function App() {
       {/* Hier können die Routen zu den verschiedenen Pages definiert werden */}
       <Route path='/' element={<p>Home Page</p>} />
       <Route path='/upload' element={<UploadView />} />
-      <Route path='/analysis/:jobId' element={<AnalysisPage />} />
+      <Route path='/analysis/:job_id' element={<AnalysisPage />} />
     </Routes>
     </>
   )

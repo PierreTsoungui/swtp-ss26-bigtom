@@ -5,6 +5,7 @@ import FileViewList from "./components/FileViewList";
 import SampleSheetUpload from "./components/SampleSheetUpload";
 import IdatUpload from "./components/IdatUpload";
 import { useUpload } from "./hooks/useUpload";
+import {type NavigateFunction, useNavigate} from "react-router";
 
 // TODOS:
 // - Testen mit echten Dateien (auch ungültige Dateien!)
@@ -25,15 +26,22 @@ function UploadView() : JSX.Element {
   const [idatErrors, setIdatErrors] = useState<string[]>([]);
   const [sampleSheetError, setSampleSheetError] = useState<string>("");
 
+  const navigate : NavigateFunction  = useNavigate();
+
+
   // Analyse-Button nur aktiv wenn keine Fehler und beide Felder befüllt
   const canSubmit = idatFiles.length > 0 && sampleSheet !== null &&
                     idatErrors.length === 0 && sampleSheetError === "";
 
-  const { data, isLoading, error, upload } = useUpload();
+  const { isLoading, error, upload } = useUpload();
   
   const handleUpload = async () => {
-    if (canSubmit) {
-      await upload(idatFiles, sampleSheet!);
+    if (!canSubmit) return;
+
+    const jobId = await upload(idatFiles, sampleSheet!);
+
+    if (jobId) {
+      navigate(`/analysis/${jobId}`);
     }
   }
 
@@ -127,8 +135,6 @@ function UploadView() : JSX.Element {
       <SubmitButton canSubmit={canSubmit && !isLoading} onClick={handleUpload} />
       {isLoading && <p>Upload läuft...</p>}
       {error && <p className="text-red-500">{error}</p>}
-      {data && <p>Job erstellt: {data.job_id}</p>}
-
 
       {/* Dateiliste IDAT */}
       <FileViewList files={idatFiles} errors={idatErrors} onRemove={onRemoveIdatFile} />

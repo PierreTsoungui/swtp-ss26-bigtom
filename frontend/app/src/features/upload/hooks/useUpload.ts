@@ -10,10 +10,10 @@ import { useState } from "react"
  * @property {function} upload - Funktion zum Starten des Uploads, nimmt IDAT-Dateien und Sample Sheet als Argumente.
  */
 type UploadState = {
-  data: { job_id: string } | null
+  // data: { job_id: string } | null
   isLoading: boolean
   error: string | null
-  upload: (idatFiles: File[], sampleSheet: File) => Promise<void>
+  upload: (idatFiles: File[], sampleSheet: File) => Promise<string | null>
 }
 
 /**
@@ -22,14 +22,14 @@ type UploadState = {
  * @returns {UploadState} Der Upload-Status und die zugehörigen Funktionen.
  */
 export function useUpload() : UploadState {
-  const [data, setData] = useState<{ job_id: string } | null>(null)
+  // const [data, setData] = useState<{ job_id: string } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const upload = async (idatFiles: File[], sampleSheet: File) => {
     setIsLoading(true)
     setError(null)
-    setData(null)
+    // setData(null)
 
     const formData = new FormData()
     idatFiles.forEach((file) => formData.append("idat_files", file))
@@ -52,11 +52,10 @@ export function useUpload() : UploadState {
         } else {
           setError("Upload fehlgeschlagen")
         }
-        return
+        return null;
       }
-
-      const result = await response.json()
-      setData(result)
+      const data = await response.json()
+      return data.job_id;
 
     } catch {
       setError("Server nicht erreichbar")
@@ -65,5 +64,5 @@ export function useUpload() : UploadState {
     }
   }
 
-  return { data, isLoading, error, upload }
+  return { isLoading, error, upload }
 }

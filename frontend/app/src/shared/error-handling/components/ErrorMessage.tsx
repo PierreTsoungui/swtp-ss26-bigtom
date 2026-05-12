@@ -1,35 +1,34 @@
 import { Snackbar, type SnackbarOrigin } from "@mui/material";
 import type { ProblemDetail } from "../types/ErrorTypes";
-import React from "react";
+import {useEffect, useState} from "react";
 
-interface State extends SnackbarOrigin {
+interface ErrorMessageProps extends SnackbarOrigin {
   open: boolean;
+  error: ProblemDetail;
 }
 
-function ErrorMessage({ open, vertical, horizontal }: State, error : ProblemDetail) {
+function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) {
 
-    const [state, setState] = React.useState<State>({
-        open: open,
-        vertical: vertical,
-        horizontal: horizontal,
-    });
+    const [isOpen, setisOpen] = useState(open);
 
     const handleClose = () => {
-        setState({ ...state, open: false });
+        setisOpen(false)
     };
     
-    // Nach 10 Sekunden automatisch schließen    React.useEffect(() => {
-    if (state.open) {
-        const timer = setTimeout(() => {
-            setState({ ...state, open: false });
-        }, 10000);
-        return () => clearTimeout(timer);
-    }
+    // Nach 10 Sekunden automatisch schließen
+    useEffect(() => {
+        if (isOpen) {
+            const timer = setTimeout(() => {
+                setisOpen(false);
+            }, 10000);
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen]);
     // Error titel und detail angeben
     return (
         <Snackbar
         anchorOrigin={{ vertical, horizontal }}
-        open={open}
+        open={isOpen}
         onClose={handleClose}
         message={`${error.title}: ${error.detail}`}
         key={vertical + horizontal}

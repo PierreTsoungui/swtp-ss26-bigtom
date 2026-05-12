@@ -1,6 +1,5 @@
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
 
-// features/analysis/types.ts
 export interface FilterStep {
   name: string;
   removed: number;

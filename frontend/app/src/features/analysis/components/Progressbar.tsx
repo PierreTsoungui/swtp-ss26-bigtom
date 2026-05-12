@@ -4,23 +4,23 @@ import type { JobStatus } from '../utils/types';
 import CancelButton from './CancelButton';
 
 type ProgressbarProps = {
-    data: JobStatus;
+    jobStatus: JobStatus;
 }
 
-function Progressbar({ data }: ProgressbarProps) {
+function Progressbar({ jobStatus }: ProgressbarProps) {
     return (
-        
         <div className="w-full bg-gray-200 rounded-full h-4">
-            <p>Schritte: {data.steps_completed} von {data.steps_total}</p>
-            <LinearProgressWithLabelAndValue value={data.progress_percent} />
-            <p>Aktueller Schritt: {data.current_step}</p>
-            {data.estimated_seconds_remaining !== null && (
-                <p>Geschätzte verbleibende Zeit: {data.estimated_seconds_remaining} Sekunden</p>
+            <p>Schritte: {jobStatus.steps_completed} von {jobStatus.steps_total}</p>
+            <LinearProgressWithLabelAndValue value={jobStatus.progress_percent} />
+            <p>Aktueller Schritt: {jobStatus.current_step}</p>
+            {jobStatus.estimated_seconds_remaining !== null && (
+                <p>Geschätzte verbleibende Zeit: {jobStatus.estimated_seconds_remaining} Sekunden</p>
             )}
             <CancelButton onCancel={() => console.log("Analyse abgebrochen")} />
         </div>
     );
 }
+export default Progressbar;
 
 /*
 export interface JobStatus {

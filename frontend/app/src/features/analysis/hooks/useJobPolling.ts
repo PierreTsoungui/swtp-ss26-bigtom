@@ -1,18 +1,10 @@
-// Hier wird GET /status/{jod_id} in einem Intervall von 1-2 Sekunden gepollt, um den aktuellen Status der Analyse zu erhalten.
-// Jod_id wird wahrscheinlich über Context oder Props übergeben, damit der Hook in verschiedenen Komponenten genutzt werden kann.
-// Polling stoppen wenn: Status "completed" oder "failed" ist, oder wenn die Komponente unmounted wird (Cleanup Funktion in useEffect).
-
 import { useState, useEffect, useRef } from "react";
 import type { JobStatus, JobStatusValue } from "../utils/types";
 
 const TERMINAL_STATES: JobStatusValue[] = ["completed", "failed", "canceled"];
 
-export function useJobPolling(jobId: string | null) : JobStatus | null {
-  const [jobState, setJobState] = useState<JobState>({
-    status: "queued",
-    progressPercent: 0,
-    currentStep: "Warte auf Start...",
-  });
+export function useJobPolling(jobId: string | null): JobStatus | null {
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -20,27 +12,38 @@ export function useJobPolling(jobId: string | null) : JobStatus | null {
 
     intervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/status/${jobId}`);
-        const data: JobState = await res.json();
-        setJobState(data);
+        const res = await fetch(`/api/v1/status/${jobId}`);
+        const data: JobStatus = await res.json();
+        setJobStatus(data);
 
-        // Polling stoppen bei Endzustand
-        if (data.status === "completed" || data.status === "failed") {
+        const isWaitingForSelection =
+          data.status === "waiting" && data.phase === "waiting_selection";
+
+        if (TERMINAL_STATES.includes(data.status) || isWaitingForSelection) {
           clearInterval(intervalRef.current!);
         }
       } catch {
-        setJobState((prev) => ({
-          ...prev,
-          status: "failed",
-          error: "Verbindung zum Server unterbrochen.",
-        }));
+        setJobStatus((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "failed",
+                error: {
+                  type: "http://localhost:3000/analysis/errors#connection-error",
+                  title: "Verbindungsfehler",
+                  status: 503,
+                  detail: "Verbindung zum Server unterbrochen.",
+                  instance: `/api/v1/status/${jobId}`,
+                },
+              }
+            : null
+        );
         clearInterval(intervalRef.current!);
       }
     }, 1500);
 
-    // Cleanup wenn Komponente unmountet
     return () => clearInterval(intervalRef.current!);
   }, [jobId]);
 
-  return jobState;
+  return jobStatus;
 }
