@@ -59,3 +59,12 @@ def delete_job(job_id: str) -> bool:
         del jobs[job_id]
         return True
     return False
+
+def save_filter_stats(job_id: str, filter_stats: Dict) -> Optional[JobStatus]:
+    job = get_job(job_id)
+    if not job:
+        return None
+    
+    job.filter_stats = filter_stats
+    jobs[job_id] = job
+    return job
