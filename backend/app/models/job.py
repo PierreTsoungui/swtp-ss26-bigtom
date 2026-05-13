@@ -12,7 +12,7 @@ class JobStatus(BaseModel):
     steps_completed: int = 0
     filter_stats: Optional[Dict] = None
     estimated_seconds_remaining: Optional[int] = None
-    error_message: Optional[str] = None
+    normalization_method: str= None
     temp_dir: Optional[str] = None
     created_at: datetime
     expires_at: datetime
@@ -21,6 +21,12 @@ class UploadResponse(BaseModel):
     job_id: str
     status: str
 
+class NormalizeResponse(BaseModel):
+    job_id: str
+    status: str
+    method: str
+class NormalizeRequest(BaseModel):
+    method: str
 class StatusResponse(BaseModel):
     job_id: str
     status: str
