@@ -11,10 +11,26 @@ export interface FilterStats {
   remaining: number;
 }
 
+export type FilteringStatsStatus = "filtering" | "filtering_done";
+
+export interface FilteringStats {
+  totalProbes: number;
+  removedLowQuality: number;
+  removedFailedSamples: number;
+  remaining: number;
+}
+
+export interface FilteringStatsResponse {
+  status: FilteringStatsStatus;
+  filterStats: FilteringStats;
+}
+
 export type JobStatusValue =
   | "queued"
   | "running"
   | "waiting"
+  | "filtering"
+  | "filtering_done"
   | "completed"
   | "failed"
   | "canceled";
