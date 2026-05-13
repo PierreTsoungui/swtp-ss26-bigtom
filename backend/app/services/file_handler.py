@@ -3,16 +3,17 @@ import shutil
 from pathlib import Path
 from typing import List, Tuple, Dict
 from fastapi import UploadFile
+import os
 
-UPLOAD_BASE_DIR = Path("/app/jobs")
+UPLOAD_BASE_DIR = Path(os.getenv("JOB_BASE_DIR", "./jobs"))
+
+#UPLOAD_BASE_DIR = Path("/app/jobs")
 ALLOWED_IDAT_EXTENSIONS = {".idat"}
 ALLOWED_SHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
 
 MAX_TOTAL_SIZE = 200 * 1024 * 1024  # 200 MB (mehr als genug für 30 MB + Puffer)
 
-
-# ==================== HILFSFUNKTIONEN ====================
 
 def get_file_size(file: UploadFile) -> int:
     """
@@ -34,7 +35,6 @@ def get_total_file_size(files: List[UploadFile]) -> int:
     return total
 
 
-# ==================== VALIDIERUNG ====================
 def validate_idat_files(files: List[UploadFile]) -> Tuple[bool, Dict]:
     """
     VALIDIERUNG nach Kundengespräch:
@@ -226,6 +226,7 @@ def ensure_upload_dir(job_id: str) -> Path:
     job_dir = UPLOAD_BASE_DIR / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
     return job_dir
+
 
 
 def clean_job_files(job_id: str):
