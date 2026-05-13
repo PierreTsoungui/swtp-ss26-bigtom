@@ -1,7 +1,9 @@
 import { useParams } from "react-router";
 import { FilteringStats } from "./components/FilteringStats";
+import { ResultsTable } from "./components/ResultsTable";
 import { useFilteringStats } from "./hooks/useFilteringStats";
 import { useJobPolling } from "./hooks/useJobPolling";
+import { useResultsTable } from "./hooks/useResultsTable";
 import type { FilteringStatsStatus, JobStatusValue } from "./utils/types";
 
 export function AnalysisPage() {
@@ -9,6 +11,7 @@ export function AnalysisPage() {
   const jobStatus = useJobPolling(job_id ?? null);
   const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
   const filteringStats = useFilteringStats(job_id ?? null, filteringStatus);
+  const resultsTable = useResultsTable(job_id ?? null, jobStatus?.status);
 
   if (!job_id) {
     return (
@@ -72,6 +75,53 @@ export function AnalysisPage() {
             Die abgeschlossenen Filterschritte werden abgerufen.
           </p>
         </section>
+      </main>
+    );
+  }
+
+  if (jobStatus?.status === "normalization_done") {
+    if (resultsTable.error) {
+      return (
+        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+          <section
+            className="w-full max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 text-red-900 shadow-sm"
+            role="alert"
+          >
+            <h1 className="text-2xl font-semibold">
+              Ergebnistabelle konnte nicht geladen werden
+            </h1>
+            <p className="mt-3">{resultsTable.error}</p>
+          </section>
+        </main>
+      );
+    }
+
+    if (resultsTable.isLoading || !resultsTable.data) {
+      return (
+        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+          <section
+            className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <h1 className="text-2xl font-semibold text-slate-900">
+              Ergebnistabelle wird geladen
+            </h1>
+            <p className="mt-3 text-slate-600">
+              Die normalisierten Analyseergebnisse werden abgerufen.
+            </p>
+          </section>
+        </main>
+      );
+    }
+
+    return (
+      <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
+        <ResultsTable
+          data={resultsTable.data}
+          sorting={resultsTable.sorting}
+          onSortingChange={resultsTable.setSorting}
+        />
       </main>
     );
   }

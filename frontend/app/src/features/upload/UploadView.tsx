@@ -5,7 +5,7 @@ import FileViewList from "./components/FileViewList";
 import SampleSheetUpload from "./components/SampleSheetUpload";
 import IdatUpload from "./components/IdatUpload";
 import { useUpload } from "./hooks/useUpload";
-import {type NavigateFunction, useNavigate} from "react-router";
+import { useNavigate } from "react-router";
 
 // TODOS:
 // - Testen mit echten Dateien (auch ungültige Dateien!)
@@ -26,7 +26,7 @@ function UploadView() : JSX.Element {
   const [idatErrors, setIdatErrors] = useState<string[]>([]);
   const [sampleSheetError, setSampleSheetError] = useState<string>("");
 
-  const navigate : NavigateFunction  = useNavigate();
+  const navigate = useNavigate();
 
 
   // Analyse-Button nur aktiv wenn keine Fehler und beide Felder befüllt
@@ -36,12 +36,12 @@ function UploadView() : JSX.Element {
   const { isLoading, error, upload } = useUpload();
   
   const handleUpload = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !sampleSheet) return;
 
-    const jobId = await upload(idatFiles, sampleSheet!);
+    const jobId = await upload(idatFiles, sampleSheet);
 
     if (jobId) {
-      navigate(`/analysis/${jobId}`);
+      void navigate(`/analysis/${jobId}`);
     }
   }
 
@@ -78,7 +78,7 @@ function UploadView() : JSX.Element {
   };
 
   // ## Samplesheet Upload 
-  const handleSampleSheetChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSampleSheetChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -132,7 +132,12 @@ function UploadView() : JSX.Element {
       </div>
 
       {/* Analyse-starten Button */}
-      <SubmitButton canSubmit={canSubmit && !isLoading} onClick={handleUpload} />
+      <SubmitButton
+        canSubmit={canSubmit && !isLoading}
+        onClick={() => {
+          void handleUpload();
+        }}
+      />
       {isLoading && <p>Upload läuft...</p>}
       {error && <p className="text-red-500">{error}</p>}
 

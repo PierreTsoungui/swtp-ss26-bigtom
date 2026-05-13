@@ -26,7 +26,7 @@ export function useUpload() : UploadState {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const upload = async (idatFiles: File[], sampleSheet: File) => {
+  const upload = async (idatFiles: File[], sampleSheet: File): Promise<string | null> => {
     setIsLoading(true)
     setError(null)
     // setData(null)
@@ -42,27 +42,53 @@ export function useUpload() : UploadState {
       })
 
       if (!response.ok) {
-        const err = await response.json()
-        const detail = err.detail
-
-        if (typeof detail === "string") {
-          setError(detail)
-        } else if (detail?.message) {
-          setError(detail.message)
-        } else {
-          setError("Upload fehlgeschlagen")
-        }
+        const err: unknown = await response.json()
+        setError(getUploadErrorMessage(err))
         return null;
       }
-      const data = await response.json()
+      const data: unknown = await response.json()
+      if (!isUploadResponse(data)) {
+        setError("Upload-Antwort konnte nicht verarbeitet werden")
+        return null
+      }
+
       return data.job_id;
 
     } catch {
       setError("Server nicht erreichbar")
+      return null
     } finally {
       setIsLoading(false)
     }
   }
 
   return { isLoading, error, upload }
+}
+
+function getUploadErrorMessage(value: unknown): string {
+  if (!isRecord(value)) return "Upload fehlgeschlagen"
+
+  const detail = value.detail
+
+  if (typeof detail === "string") {
+    return detail
+  }
+
+  if (isRecord(detail) && typeof detail.message === "string") {
+    return detail.message
+  }
+
+  if (typeof value.message === "string") {
+    return value.message
+  }
+
+  return "Upload fehlgeschlagen"
+}
+
+function isUploadResponse(value: unknown): value is { job_id: string } {
+  return isRecord(value) && typeof value.job_id === "string"
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
