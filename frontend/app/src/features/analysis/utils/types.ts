@@ -11,10 +11,32 @@ export interface FilterStats {
   remaining: number;
 }
 
+export interface FilteringStep {
+  name: string;
+  probesBefore: number;
+  removed: number;
+  probesAfter: number;
+}
+
+export interface FilteringStats {
+  steps: FilteringStep[];
+  finalProbeCount: number;
+}
+
+export type FilteringStatsStatus = "idle" | "filtering" | "filtering_done" | "error";
+
+export interface FilteringStatsResponse {
+  status: FilteringStatsStatus;
+  filterStats?: FilteringStats;
+  error?: string;
+}
+
 export type JobStatusValue =
   | "queued"
   | "running"
   | "waiting"
+  | "filtering"
+  | "filtering_done"
   | "completed"
   | "failed"
   | "canceled";
