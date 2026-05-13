@@ -1,6 +1,5 @@
 # app/api/routes/upload.py
-from app.models import job
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request
 from typing import List
 from pathlib import Path
 import uuid
@@ -22,22 +21,44 @@ router = APIRouter()
 
 @router.post("/upload", response_model=UploadResponse, status_code=201)
 async def upload_files(
+    request: Request,
     background_tasks: BackgroundTasks,
     idat_files: List[UploadFile] = File(...),
     sample_sheet: UploadFile = File(...)
 ):
-    # Validierung
+    
     idat_valid, idat_result = validate_idat_files(idat_files)
     if not idat_valid:
-        print(f"[DEBUG] IDAT Validierung fehlgeschlagen: {idat_result}")
-        raise HTTPException(status_code=400, detail=idat_result)
+        raise HTTPException(
+            status_code=idat_result["status"],
+            detail={
+                "type": idat_result["type"],
+                "title": idat_result["title"],
+                "status": idat_result["status"],
+                "detail": idat_result["message"],
+                "instance": request.url.path,
+                **{k: v for k, v in idat_result.items() 
+                   if k not in ["error", "message", "type", "title", "status"]}
+            }
+        )
     
+   
     sheet_valid, sheet_result = validate_sample_sheet(sample_sheet)
     if not sheet_valid:
-        print(f"[DEBUG] Sample Sheet Validierung fehlgeschlagen: {sheet_result}")
-        raise HTTPException(status_code=415, detail=sheet_result)
+        raise HTTPException(
+            status_code=sheet_result["status"],
+            detail={
+                "type": sheet_result["type"],
+                "title": sheet_result["title"],
+                "status": sheet_result["status"],
+                "detail": sheet_result["message"],
+                "instance": request.url.path,
+                **{k: v for k, v in sheet_result.items() 
+                   if k not in ["error", "message", "type", "title", "status"]}
+            }
+        )
     
-    # Job erstellen
+    # Job erstellen und speichern
     job_id = str(uuid.uuid4())
     job_dir = ensure_upload_dir(job_id)
     
@@ -49,25 +70,24 @@ async def upload_files(
         raise HTTPException(
             status_code=500,
             detail={
-                "error": "SAVE_FAILED",
-                "message": f"Fehler beim Speichern der Dateien: {str(e)}"
+                "type": "/errors/save-failed",
+                "title": "Save failed",
+                "status": 500,
+                "detail": f"Fehler beim Speichern: {str(e)}",
+                "instance": request.url.path,
+                "job_id": job_id
             }
         )
     
+    create_job(job_id, str(job_dir))
     
-    create_job(job_id, str(job_dir))  
-    
-    # Hintergrundtask starten
     background_tasks.add_task(
         process_upload_background,
         job_id,
         job_dir,
         sample_sheet.filename
-    )
-    
+    )  
     return UploadResponse(job_id=job_id, status="queued")
-
-
 async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
     """
     Hintergrundverarbeitung für die Filterung.
@@ -100,7 +120,7 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
         
       
         result = await run_r_script(
-            script="mock_filtering.R",
+            script="data.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet=sample_sheet_filename,

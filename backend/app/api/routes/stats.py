@@ -1,55 +1,69 @@
-from fastapi import APIRouter, HTTPException
+# app/api/routes/filter.py
+from fastapi import APIRouter, HTTPException, Request
 from app.services.job_manager import get_job
+from app.core.error_types import ErrorTypes, problem_detail
 from datetime import datetime
 
 router = APIRouter()
 
 
 @router.get("/filter/{job_id}/stats")
-async def get_filter_stats(job_id: str):
+async def get_filter_stats(request: Request, job_id: str):
     job = get_job(job_id)
 
-    # 1. Job existiert nicht
+    
     if not job:
         raise HTTPException(
             status_code=404,
-            detail={
-                "error": "JOB_NOT_FOUND",
-                "message": "No job found for given job_id"
-            }
+            detail=problem_detail(
+                error_type=ErrorTypes.JOB_NOT_FOUND,
+                detail=f"Kein Job mit der ID '{job_id}' gefunden",
+                instance=request.url.path,
+                job_id=job_id
+            )
         )
 
-    # 2. Session abgelaufen
+   
     if job.expires_at < datetime.now():
         raise HTTPException(
             status_code=410,
-            detail={
-                "error": "SESSION_EXPIRED",
-                "message": "Die Sitzung ist abgelaufen."
-            }
+            detail=problem_detail(
+                error_type=ErrorTypes.SESSION_EXPIRED,
+                detail="Die Sitzung ist abgelaufen, die Daten wurden gelöscht",
+                instance=request.url.path,
+                job_id=job_id,
+                expires_at=job.expires_at.isoformat()
+            )
         )
 
-    # 3. Filter noch nicht fertig
+   
     if job.phase != "filtering_done":
         raise HTTPException(
             status_code=409,
-            detail={
-                "error": "FILTERING_NOT_FINISHED",
-                "message": "Filterung ist noch nicht abgeschlossen."
-            }
+            detail=problem_detail(
+                error_type=ErrorTypes.FILTERING_NOT_FINISHED,
+                detail=f"Filterung ist noch nicht abgeschlossen (aktueller Status: {job.phase})",
+                instance=request.url.path,
+                job_id=job_id,
+                current_phase=job.phase,
+                current_status=job.status,
+                progress_percent=job.progress_percent
+            )
         )
 
-    # 4. Kein Ergebnis vorhanden
+   
     if not job.filter_stats:
         raise HTTPException(
             status_code=404,
-            detail={
-                "error": "NO_STATS_AVAILABLE",
-                "message": "Keine Filterstatistik verfügbar."
-            }
+            detail=problem_detail(
+                error_type=ErrorTypes.NO_STATS_AVAILABLE, 
+                detail="Keine Filterstatistik für diesen Job verfügbar",
+                instance=request.url.path,
+                job_id=job_id
+            )
         )
 
-    # 5. Erfolg → Stats zurückgeben
+    
     return {
         "job_id": job.job_id,
         "filter_stats": job.filter_stats
