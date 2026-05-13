@@ -14,7 +14,8 @@ def create_job(job_id: str, temp_dir: str) -> JobStatus:
         current_step="Files uploaded, waiting for processing...",
         temp_dir=temp_dir,
         created_at=datetime.now(),
-        expires_at=datetime.now() + timedelta(hours=24)
+        expires_at=datetime.now() + timedelta(hours=24),
+        preview_plots=[] 
     )
     jobs[job_id] = job
     return job
