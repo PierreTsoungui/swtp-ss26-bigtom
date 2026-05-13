@@ -11,18 +11,24 @@ export interface FilterStats {
   remaining: number;
 }
 
-export type FilteringStatsStatus = "filtering" | "filtering_done";
+export interface FilteringStep {
+  name: string;
+  probesBefore: number;
+  removed: number;
+  probesAfter: number;
+}
 
 export interface FilteringStats {
-  totalProbes: number;
-  removedLowQuality: number;
-  removedFailedSamples: number;
-  remaining: number;
+  steps: FilteringStep[];
+  finalProbeCount: number;
 }
+
+export type FilteringStatsStatus = "idle" | "filtering" | "filtering_done" | "error";
 
 export interface FilteringStatsResponse {
   status: FilteringStatsStatus;
-  filterStats: FilteringStats;
+  filterStats?: FilteringStats;
+  error?: string;
 }
 
 export type JobStatusValue =

@@ -1,60 +1,27 @@
-import { useParams /*, useNavigate*/ } from "react-router";
+import { useParams } from "react-router";
 import { FilteringStats } from "./components/FilteringStats";
 import { useFilteringStats } from "./hooks/useFilteringStats";
-// import ErrorMessage from "../../shared/error-handling/components/ErrorMessage";
-// import { useJobPolling } from "./hooks/useJobPolling";
-// import type { JobStatus } from "./utils/types";
-// import ProgressBar from "./components/Progressbar";
-
-// TODO: Progressbar später mit echter Job-Polling-Logik verbinden.
+import { useJobPolling } from "./hooks/useJobPolling";
+import type { FilteringStatsStatus, JobStatusValue } from "./utils/types";
 
 export function AnalysisPage() {
   const { job_id } = useParams<{ job_id: string }>();
-  const filteringStats = useFilteringStats(job_id ?? null);
+  const jobStatus = useJobPolling(job_id ?? null);
+  const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
+  const filteringStats = useFilteringStats(job_id ?? null, filteringStatus);
 
-  /*
-  const navigate = useNavigate();
-  const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
-
-  useEffect(() => {
-    if (!jobStatus) return;
-
-    // Spezialfall: Normalisierungsvorschau bereit
-    if (
-      jobStatus.status === "waiting" &&
-      jobStatus.phase === "waiting_selection"
-    ) {
-      navigate(`/normalization/${job_id}`);
-    }
-
-    // Pipeline komplett abgeschlossen
-    if (jobStatus.status === "completed") {
-      navigate(`/results/${job_id}`);
-    }
-  }, [jobStatus?.status, jobStatus?.phase]);
-
-
-  // Fehlerfall
-  if (jobStatus?.status === "failed" && jobStatus.error) {
+  if (!job_id) {
     return (
-      <ErrorMessage
-        open={true}
-        vertical="top"
-        horizontal="center"
-        error={jobStatus.error}
-      />
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <InfoPanel
+          title="Analyse nicht verfügbar"
+          message="Für diese Analyse wurde keine Job-ID übergeben."
+        />
+      </main>
     );
   }
 
-  // Ladescreen
-  return (
-    <div className="flex justify-center items-center min-h-screen">
-      {jobStatus && <ProgressBar jobStatus={jobStatus} />}
-    </div>
-  );
-     */
-
-  if (filteringStats?.status === "filtering") {
+  if (filteringStatus === "filtering") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
         <section
@@ -76,23 +43,82 @@ export function AnalysisPage() {
     );
   }
 
-  return (
-    <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
-      {filteringStats?.status === "filtering_done" ? (
-        <FilteringStats stats={filteringStats.filterStats} />
-      ) : (
+  if (filteringStats.error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
         <section
-          className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
-          aria-labelledby="analysis-title"
+          className="w-full max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 text-red-900 shadow-sm"
+          role="alert"
         >
-          <h1 id="analysis-title" className="text-2xl font-semibold text-slate-900">
-            Analyse
+          <h1 className="text-2xl font-semibold">Filterstatistik konnte nicht geladen werden</h1>
+          <p className="mt-3">{filteringStats.error}</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (filteringStats.isLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <section
+          className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Filterstatistik wird geladen
           </h1>
           <p className="mt-3 text-slate-600">
-            Keine Filterstatistiken für diesen Job verfügbar.
+            Die abgeschlossenen Filterschritte werden abgerufen.
           </p>
         </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
+      {filteringStatus === "filtering_done" && filteringStats.data ? (
+        <FilteringStats stats={filteringStats.data} />
+      ) : (
+        <InfoPanel
+          title="Analyse"
+          message="Keine Filterstatistiken für diesen Job verfügbar."
+        />
       )}
     </main>
   );
+}
+
+interface InfoPanelProps {
+  title: string;
+  message: string;
+}
+
+function InfoPanel({ title, message }: InfoPanelProps) {
+  return (
+    <section
+      className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+      aria-labelledby="analysis-title"
+    >
+      <h1 id="analysis-title" className="text-2xl font-semibold text-slate-900">
+        {title}
+      </h1>
+      <p className="mt-3 text-slate-600">{message}</p>
+    </section>
+  );
+}
+
+function mapJobStatusToFilteringStatsStatus(
+  status: JobStatusValue | undefined
+): FilteringStatsStatus {
+  if (status === "filtering" || status === "filtering_done") {
+    return status;
+  }
+
+  if (status === "failed" || status === "canceled") {
+    return "error";
+  }
+
+  return "idle";
 }
