@@ -16,7 +16,9 @@ class ErrorTypes:
     FILTERING_NOT_FINISHED = ErrorType("/errors/filtering-not-finished", 409, "Filtering not finished")
     NO_STATS_AVAILABLE = ErrorType("/errors/no-stats-available", 404, "No stats available")
     
-   
+    INVALID_NORMALIZATION_METHOD = ErrorType("/errors/invalid-normalization-method", 400, "Invalid normalization method")
+    NORMALIZATION_NOT_ALLOWED = ErrorType("/errors/normalization-not-allowed", 409, "Normalization not allowed")
+    NORMALIZATION_FAILED = ErrorType("/errors/normalization-failed", 500, "Normalization failed")
 
 def problem_detail(
     error_type: ErrorType,
