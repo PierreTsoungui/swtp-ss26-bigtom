@@ -3,8 +3,11 @@ import shutil
 from pathlib import Path
 from typing import List, Tuple, Dict
 from fastapi import UploadFile
+import os
 
-UPLOAD_BASE_DIR = Path("/app/jobs")
+UPLOAD_BASE_DIR = Path(os.getenv("JOB_BASE_DIR", "./jobs"))
+
+#UPLOAD_BASE_DIR = Path("/app/jobs")
 ALLOWED_IDAT_EXTENSIONS = {".idat"}
 ALLOWED_SHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
@@ -146,8 +149,8 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
     - Größe (Sample Sheet ist klein)
     - Magic Number (Excel-Dateien prüfen)
     """
-    
-  
+
+
     if not file:
         return False, {
             "error": "FILE_MISSING",
@@ -157,7 +160,7 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
             "status": 400
         }
 
-    
+
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_SHEET_EXTENSIONS:
         return False, {
@@ -170,7 +173,7 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
             "allowed_formats": list(ALLOWED_SHEET_EXTENSIONS)
         }
 
-    
+
     try:
         chunk = read_chunk(file, 2048)
 
