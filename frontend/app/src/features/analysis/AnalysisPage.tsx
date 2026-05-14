@@ -2,11 +2,12 @@ import { useParams } from "react-router";
 import { FilteringStats } from "./components/FilteringStats";
 import { useFilteringStats } from "./hooks/useFilteringStats";
 import { useJobPolling } from "./hooks/useJobPolling";
-import type { FilteringStatsStatus, JobStatusValue } from "./utils/types";
+import type {FilteringStatsStatus, JobStatus, JobStatusValue} from "./utils/types";
+import Progressbar from "./components/Progressbar.tsx";
 
 export function AnalysisPage() {
   const { job_id } = useParams<{ job_id: string }>();
-  const jobStatus = useJobPolling(job_id ?? null);
+  const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
   const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
   const filteringStats = useFilteringStats(job_id ?? null, filteringStatus);
 
@@ -21,25 +22,26 @@ export function AnalysisPage() {
     );
   }
 
-  if (filteringStatus === "filtering") {
+  if (!jobStatus) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <section
-          className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm"
-          aria-live="polite"
-          aria-busy="true"
-        >
-          <p className="text-sm font-medium uppercase tracking-wide text-slate-500">
-            Analyse
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-            Filterung läuft
-          </h1>
-          <p className="mt-3 text-slate-600">
-            Die Filterstatistiken werden angezeigt, sobald die Filterung abgeschlossen ist.
-          </p>
-        </section>
-      </main>
+        <main className="flex min-h-screen items-center justify-center">
+          <p className="text-slate-500">Verbindung wird aufgebaut...</p>
+        </main>
+    );
+  }
+
+  if (filteringStatus === "filtering" || filteringStatus === "idle") {
+    /*if (!jobStatus) {
+      return (
+          <main className="flex min-h-screen items-center justify-center">
+            <p className="text-slate-500">Verbindung wird aufgebaut...</p>
+          </main>
+      );
+    }*/
+    return (
+        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+          <Progressbar jobStatus={jobStatus} />
+        </main>
     );
   }
 
@@ -58,22 +60,20 @@ export function AnalysisPage() {
   }
 
   if (filteringStats.isLoading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <section
-          className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm"
-          aria-live="polite"
-          aria-busy="true"
-        >
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Filterstatistik wird geladen
-          </h1>
-          <p className="mt-3 text-slate-600">
-            Die abgeschlossenen Filterschritte werden abgerufen.
-          </p>
-        </section>
-      </main>
-    );
+    if (!jobStatus) {
+      return (
+        <main className="flex min-h-screen items-center justify-center">
+          <p className="text-slate-500">Verbindung wird aufgebaut...</p>
+        </main>
+      );
+    }
+    else {
+      return (
+          <main className="flex min-h-screen items-center justify-center">
+            <p className="text-slate-500">Lade Filterstatistiken...</p>
+          </main>
+      );
+    }
   }
 
   return (
@@ -122,3 +122,47 @@ function mapJobStatusToFilteringStatsStatus(
 
   return "idle";
 }
+
+
+/*
+const navigate = useNavigate();
+const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
+
+useEffect(() => {
+  if (!jobStatus) return;
+
+  // Spezialfall: Normalisierungsvorschau bereit
+  if (
+    jobStatus.status === "waiting" &&
+    jobStatus.phase === "waiting_selection"
+  ) {
+    navigate(`/normalization/${job_id}`);
+  }
+
+  // Pipeline komplett abgeschlossen
+  if (jobStatus.status === "completed") {
+    navigate(`/results/${job_id}`);
+  }
+}, [jobStatus?.status, jobStatus?.phase]);
+
+
+// Fehlerfall
+if (jobStatus?.status === "failed" && jobStatus.error) {
+  return (
+    <ErrorMessage
+      open={true}
+      vertical="top"
+      horizontal="center"
+      error={jobStatus.error}
+    />
+  );
+}
+
+// Ladescreen
+return (
+  <div className="flex justify-center items-center min-h-screen">
+    {jobStatus && <ProgressBar jobStatus={jobStatus} />}
+  </div>
+);
+   */
+

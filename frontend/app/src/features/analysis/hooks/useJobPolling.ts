@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { JobStatus, JobStatusValue } from "../utils/types";
 
-const TERMINAL_STATES: JobStatusValue[] = ["completed", "failed", "canceled"];
+const TERMINAL_STATES: JobStatusValue[] = ["completed", "failed", "canceled", "filtering_done"];
 
 export function useJobPolling(jobId: string | null): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
@@ -9,6 +9,8 @@ export function useJobPolling(jobId: string | null): JobStatus | null {
 
   useEffect(() => {
     if (!jobId) return;
+    console.log(`[POLLING] Starting job polling for job ID: ${jobId}`);
+    console.log(`[POLLING] Initial job status: ${JSON.stringify(jobStatus)}`);
 
     intervalRef.current = setInterval(async () => {
       try {
