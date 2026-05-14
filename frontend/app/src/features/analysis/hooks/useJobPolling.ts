@@ -131,6 +131,7 @@ function isJobPhase(value: unknown): value is JobPhase {
     value === "validating" ||
     value === "converting" ||
     value === "filtering" ||
+    value === "filtering_done" ||
     value === "normalization_preview" ||
     value === "waiting_selection" ||
     value === "normalizing" ||

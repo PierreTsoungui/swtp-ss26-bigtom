@@ -64,7 +64,4 @@ async def get_filter_stats(request: Request, job_id: str):
         )
 
     
-    return {
-        "job_id": job.job_id,
-        "filter_stats": job.filter_stats
-    }
+    return job.filter_stats
