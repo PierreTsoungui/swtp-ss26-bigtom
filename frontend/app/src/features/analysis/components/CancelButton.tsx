@@ -1,7 +1,4 @@
 function CancelButton({ onCancel }: { onCancel: () => void }) {
-    // TODO: onCancel Funktion implementieren, die den Request zum Abbrechen der Analyse an die API sendet. Wahrscheinlich muss hier die job_id mitgegeben werden, damit die API weiß, welche Analyse abgebrochen werden soll.
-    // Route müsste POST /reset/{job_id} sein
-
     return (
         <div className="flex justify-center m-10">
             <button
