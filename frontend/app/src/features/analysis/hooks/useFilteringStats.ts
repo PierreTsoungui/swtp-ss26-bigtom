@@ -40,7 +40,7 @@ export function useFilteringStats(
       setError(null);
 
       try {
-        const response = await fetch(`/filter/${encodeURIComponent(requestedJobId)}/stats`, {
+        const response = await fetch(`/api/v1/filter/${encodeURIComponent(requestedJobId)}/stats`, {
           signal: controller.signal,
         });
 
