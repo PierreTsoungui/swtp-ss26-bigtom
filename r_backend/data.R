@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 # =========================
 # LIBRARIES
 # =========================
+=======
+# Verwendete Bibliotheken
+>>>>>>> origin/feature/us-15/frontend-normalization-preview
 library(readxl)
 library(readr)
 library(minfi)
@@ -118,8 +122,59 @@ samples <- as.data.frame(samples)
 
 cat("Valid samples after filtering:", nrow(samples), "\n")
 
+<<<<<<< HEAD
 if (nrow(samples) < 1) {
   stop("No valid samples found")
+=======
+# Manifest automatisch erkennen und laden
+# Erkennen von Chiptyp, Laden von passendem Manifestund Setzen von Annotation
+load_manifest <- function(raw_data, samples) {
+  array_type <- annotation(raw_data)["array"]
+  cat("Erkannter Array-Typ:",array_type,"\n")
+  if (array_type=="Unknown") {
+    first_idat <- paste0(samples$Basename[1], "_Grn.idat")
+    chip <- illuminaio::readIDAT(first_idat)$ChipType
+    cat("ChipType aus IDAT:",chip,"\n")
+    if (grepl("EPIC|8x5",chip)) {
+      array_type <- "IlluminaHumanMethylationEPICv2"
+      anno       <- "20a1.hg38"
+    } else if (grepl("8x1",chip)) {
+      array_type <- "IlluminaHumanMethylationEPIC"
+      anno       <- "ilm10b4.hg19"
+    } else if (grepl("12x1",chip)) {
+      array_type <- "IlluminaHumanMethylation450k"
+      anno       <- "ilmn12.hg19"
+    } else {
+      stop("Unbekannter ChipType: ", chip, "\nBitte Manifest manuell installieren.")
+    }
+    annotation(raw_data)["array"] <<- array_type
+    annotation(raw_data)["annotation"] <<- anno
+    cat("Array-Typ:",array_type,"\n")
+    cat("Annotation:",anno,"\n")
+    
+  }
+  
+  pkg <- switch(array_type,
+                "IlluminaHumanMethylation450k"   = "IlluminaHumanMethylation450kmanifest",
+                "IlluminaHumanMethylationEPIC"   = "IlluminaHumanMethylationEPICmanifest",
+                "IlluminaHumanMethylationEPICv2" = "IlluminaHumanMethylationEPICv2manifest",
+                NULL
+  )
+
+  if (is.null(pkg)) {
+    stop("Kein passendes Paket für Manifest gefunden !")
+  }
+
+  if (!requireNamespace(pkg,quietly=TRUE)) {
+    cat("Installiere:",pkg,"\n")
+  } else {
+    cat("Package bereits installiert:",pkg,"\n")
+  }
+  
+  library(pkg,character.only=TRUE)
+  cat("Manifest geladen:",pkg,"\n")
+  return(raw_data)
+>>>>>>> origin/feature/us-15/frontend-normalization-preview
 }
 
 cat("Final SampleIDs:\n")
@@ -128,6 +183,7 @@ print(samples$SampleID)
 cat("Final BaseNames:\n")
 print(samples$Basename)
 
+<<<<<<< HEAD
 # =========================
 # READ IDAT
 # =========================
@@ -152,6 +208,15 @@ cat("Array type:", array_type, "\n")
 
 if (array_type == "Unknown") {
   stop("Unknown array type")
+=======
+if (!inherits(raw_data, "RGChannelSet")) {
+
+  stop(
+    "raw_data ist KEIN RGChannelSet!\n",
+    "Aktuelle Klasse: ",
+    paste(class(raw_data), collapse = ", ")
+  )
+>>>>>>> origin/feature/us-15/frontend-normalization-preview
 }
 
 # =========================
@@ -166,6 +231,7 @@ pkg <- switch(
   "IlluminaHumanMethylationEPICv2" =
     "IlluminaHumanMethylationEPICv2manifest",
 
+<<<<<<< HEAD
   "IlluminaHumanMethylation450k" =
     "IlluminaHumanMethylation450kmanifest",
 
@@ -218,3 +284,12 @@ write.csv(
 cat("Saved output.csv\n")
 
 cat("=== DONE ===\n")
+=======
+beta <- filter_raw_data(raw_data = raw_data, job_dir = ".", save_rds = TRUE)
+
+# Output.csv erstellen
+output_path <- file.path(idat_dirs[1], "output.csv")
+
+write.csv(as.data.frame(beta), output_path, row.names = TRUE)
+cat("Fertig! Geschrieben nach:", output_path, "\n")
+>>>>>>> origin/feature/us-15/frontend-normalization-preview

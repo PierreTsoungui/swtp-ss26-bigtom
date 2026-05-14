@@ -86,6 +86,15 @@ async def upload_files(
         sample_sheet.filename
     )
     return UploadResponse(job_id=job_id, status="queued")
+    
+async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
+    """
+    Hintergrundverarbeitung für die Filterung.
+    Status-Wechsel: queued → running → filtering → completed OR failed
+    """
+    
+    
+    # Callback für Fortschritts-Updates aus R
 
 
 async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
@@ -164,3 +173,4 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             error_message=str(e)
         )
         print(f"[FILTERING] Job {job_id}: Fehler - {str(e)}")
+        
