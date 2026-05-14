@@ -2,10 +2,24 @@ import LinearProgress from '@mui/material/LinearProgress';
 import type { JobStatus } from '../utils/types';
 import CancelButton from './CancelButton';
 
+/**
+ * Props, die an die Progressbar übergeben werden
+ * @property {JobStatus} jobStatus - Der aktuelle Status des Jobs, der die Fortschrittsinformationen enthält.
+ */
 type ProgressbarProps = {
     jobStatus: JobStatus;
 };
 
+/**
+ * Fortschrittsanzeige-Komponente, die den aktuellen Status eines Analysejobs visualisiert.
+ * Sie zeigt den Fortschrittsbalken, die Anzahl der abgeschlossenen Schritte,
+ * den aktuellen Schritt und die geschätzte verbleibende Zeit an.
+ * Außerdem enthält sie einen Button zum Abbrechen der Analyse.
+ *
+ * @param props - Props der Progressbar-Komponente
+ * @param props.jobStatus - Aktueller Status des Analysejobs
+ * @returns Die gerenderte Fortschrittsanzeige
+ */
 function Progressbar({ jobStatus }: ProgressbarProps) {
     return (
         <div className="w-9/12 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -68,7 +82,7 @@ function Progressbar({ jobStatus }: ProgressbarProps) {
 
             <div className="mt-6 flex justify-center">
                 <CancelButton
-                    onCancel={() => console.log('Analyse abgebrochen')}
+                    onCancel={() => console.log('Not yet implemented')}
                 />
             </div>
         </div>

@@ -1,8 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import type { JobStatus, JobStatusValue } from "../utils/types";
 
+/**
+
+ */
 const TERMINAL_STATES: JobStatusValue[] = ["completed", "failed", "canceled", "filtering_done"];
 
+/**
+ * Custom Hook, der den Status eines Jobs überwacht, indem er regelmäßig die API abfragt.
+ * @param jobId Die ID des Jobs, dessen Status überwacht werden soll. Wenn `null`, wird kein Polling durchgeführt.
+ */
 export function useJobPolling(jobId: string | null): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);

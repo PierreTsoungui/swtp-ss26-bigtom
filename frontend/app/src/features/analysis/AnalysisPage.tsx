@@ -5,6 +5,11 @@ import { useJobPolling } from "./hooks/useJobPolling";
 import type {FilteringStatsStatus, JobStatus, JobStatusValue} from "./utils/types";
 import Progressbar from "./components/Progressbar.tsx";
 
+/**
+ * Hauptseite für die Analyse eines Jobs. Zeigt abhängig vom Status des Jobs entweder einen Fortschrittsbalken,
+ * eine Fehlermeldung oder die Filterstatistiken an.
+ * @returns Die gerenderte Analyse-Seite
+ */
 export function AnalysisPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
@@ -31,13 +36,6 @@ export function AnalysisPage() {
   }
 
   if (filteringStatus === "filtering" || filteringStatus === "idle") {
-    /*if (!jobStatus) {
-      return (
-          <main className="flex min-h-screen items-center justify-center">
-            <p className="text-slate-500">Verbindung wird aufgebaut...</p>
-          </main>
-      );
-    }*/
     return (
         <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
           <Progressbar jobStatus={jobStatus} />
