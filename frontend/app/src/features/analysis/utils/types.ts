@@ -37,6 +37,7 @@ export type JobStatusValue =
   | "waiting"
   | "filtering"
   | "filtering_done"
+  | "normalization_done"
   | "completed"
   | "failed"
   | "canceled";
@@ -64,4 +65,21 @@ export interface JobStatus {
   filter_stats: FilterStats | null;
   estimated_seconds_remaining: number | null;
   error?: ProblemDetail;
+}
+
+export type ResultsTableCellValue = string | number | null;
+
+export interface ResultsTableResponse {
+  columns: string[];
+  rows: Array<Record<string, ResultsTableCellValue>>;
+  page: number;
+  page_size: number;
+  total_rows: number;
+}
+
+export type SortOrder = "asc" | "desc";
+
+export interface ResultsTableSorting {
+  column: string;
+  order: SortOrder;
 }

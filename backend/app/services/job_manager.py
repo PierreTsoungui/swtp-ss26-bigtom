@@ -28,6 +28,7 @@ def update_job(
     current_step: str = None,
     steps_completed: int = None,
     filter_stats: Dict = None,
+    normalization_method: str = None,
     error_message: str = None
 ) -> Optional[JobStatus]:
     if job_id not in jobs:
@@ -46,9 +47,8 @@ def update_job(
         job.steps_completed = steps_completed
     if filter_stats:
         job.filter_stats = filter_stats
-    if error_message:
-        job.error_message = error_message
-    
+    if normalization_method:
+        job.normalization_method = normalization_method
     jobs[job_id] = job
     return job
 

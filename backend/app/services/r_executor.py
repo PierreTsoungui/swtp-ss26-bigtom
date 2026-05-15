@@ -1,9 +1,11 @@
+# app/services/r_executor.py
 import asyncio
 import json
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 
 R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
+USE_MOCK_R = True
 
 
 async def run_r_script(
@@ -12,20 +14,43 @@ async def run_r_script(
     job_dir: str,
     sample_sheet: str,
     mode: str = "filtering",
+    script_args: list = [],
     on_progress: Optional[Callable] = None
 ) -> Dict[str, Any]:
 
     script_path = f"/app/r_backend/{script}"
     docker_job_dir = f"/app/jobs/{job_id}"
-
+    script_path = f"/app/r_backend/{script}"
+    
+    
     cmd = [
         "docker", "exec", R_WORKER_CONTAINER,
-        "Rscript", script_path,
-        f"{docker_job_dir}/{sample_sheet}",
-        docker_job_dir
+        "Rscript", script_path,  
     ]
 
     print(f"[R_EXECUTOR] mode={mode}", flush=True)
+
+    if mode == "normalization_preview":
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            f"{docker_job_dir}/filtered_data.rds",
+            docker_job_dir
+        ]
+    elif mode == "normalization":
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            docker_job_dir,
+            *script_args          # <- method kommt hier rein
+        ]
+    else:  # filtering
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            f"{docker_job_dir}/{sample_sheet}",
+            docker_job_dir
+        ]
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -133,6 +158,13 @@ async def run_r_script(
                 "stdout": stdout_str,
                 "stderr": stderr_str,
                 "preview_plots": preview_plots[:5] 
+            }
+
+        if mode == "normalization":
+            return {
+                "returncode": returncode,
+                "stdout": stdout_str,
+                "stderr": stderr_str
             }
 
         return {

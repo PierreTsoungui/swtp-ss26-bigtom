@@ -23,14 +23,10 @@ export function useFilteringStats(
   const [data, setData] = useState<FilteringStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const shouldLoad = status === "filtering_done" && Boolean(jobId);
 
   useEffect(() => {
-    if (status !== "filtering_done" || !jobId) {
-      setData(null);
-      setIsLoading(false);
-      setError(null);
-      return;
-    }
+    if (!shouldLoad || !jobId) return;
 
     const controller = new AbortController();
     const requestedJobId = jobId;
@@ -78,9 +74,13 @@ export function useFilteringStats(
     void loadFilteringStats();
 
     return () => controller.abort();
-  }, [jobId, status]);
+  }, [jobId, shouldLoad]);
 
-  return { data, isLoading, error };
+  return {
+    data: shouldLoad ? data : null,
+    isLoading: shouldLoad ? isLoading : false,
+    error: shouldLoad ? error : null,
+  };
 }
 
 export function parseFilteringStatsResponse(value: unknown): FilteringStatsResponse {
