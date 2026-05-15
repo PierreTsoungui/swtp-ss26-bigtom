@@ -3,6 +3,7 @@ from app.api.routes import normalize
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import upload, status, stats, normalization_preview, normalize
+from app.api.routes.table import router as table_router
 
 app = FastAPI(title="Methylation Analysis API", version="1.0")
 
@@ -22,6 +23,8 @@ app.include_router(stats.router,  prefix="/api/v1", tags=["Filter"])
 app.include_router(normalization_preview.router, prefix="/api/v1", tags=["normalization_preview"])
 app.include_router(stats.router, prefix="/api/v1", tags=["stats"])
 app.include_router(normalize.router, prefix="/api/v1", tags=["normalize"])
+app.include_router(table_router, prefix="/api/v1")
+
 @app.get("/")
 async def root():
     return {"message": "Methylation Analysis API", "version": "1.0"}
