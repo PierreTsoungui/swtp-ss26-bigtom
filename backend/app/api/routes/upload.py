@@ -118,6 +118,7 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             current_step="Starte Filterung der Rohdaten..."
         )
 
+      
         result = await run_r_script(
             script="init_filter.R",
             job_id=job_id,
@@ -131,7 +132,7 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
                 job_id,
                 status="failed",
                 phase="filtering",
-                progress_percent=get_job(job_id).progress_percent,
+                progress_percent=get_job(job_id).progress_percent if get_job(job_id) else 0,
                 error_message=result["stderr"]
             )
             return
@@ -172,7 +173,7 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             job_id,
             status="failed",
             phase="filtering",
-            progress_percent=get_job(job_id).progress_percent,
+            progress_percent=get_job(job_id).progress_percent if get_job(job_id) else 0,
             error_message=str(e)
         )
         print(f"[FILTERING] Job {job_id}: Fehler - {str(e)}")

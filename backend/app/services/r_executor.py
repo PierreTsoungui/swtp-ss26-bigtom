@@ -1,9 +1,11 @@
+# app/services/r_executor.py
 import asyncio
 import json
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 
 R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
+USE_MOCK_R = True
 
 
 async def run_r_script(
@@ -17,12 +19,12 @@ async def run_r_script(
 
     script_path = f"/app/r_backend/{script}"
     docker_job_dir = f"/app/jobs/{job_id}"
-
+    script_path = f"/app/r_backend/{script}"
+    
+    
     cmd = [
         "docker", "exec", R_WORKER_CONTAINER,
-        "Rscript", script_path,
-        f"{docker_job_dir}/{sample_sheet}",
-        docker_job_dir
+        "Rscript", script_path,  
     ]
 
     print(f"[R_EXECUTOR] mode={mode}", flush=True)
