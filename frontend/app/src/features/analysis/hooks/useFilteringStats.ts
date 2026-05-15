@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { filteringStatsMock } from "../mocks/filteringStatsMock";
 import type {
   FilterStats,
   FilteringStats,
   FilteringStatsResponse,
-  FilteringStatsStatus,
+  FilteringStatsStatus, JobStatus,
 } from "../utils/types";
 
 interface UseFilteringStatsResult {
@@ -17,15 +16,39 @@ const INVALID_RESPONSE_MESSAGE =
   "Die Filterstatistik konnte nicht verarbeitet werden.";
 
 export function useFilteringStats(
-  jobId: string | null,
-  status: FilteringStatsStatus | null | undefined
+  jobStatus: JobStatus | null
 ): UseFilteringStatsResult {
   const [data, setData] = useState<FilteringStats | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  //const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const shouldLoad = status === "filtering_done" && Boolean(jobId);
+  // const shouldLoad = status === "filtering_done" && Boolean(jobId);
 
   useEffect(() => {
+    if (!jobStatus?.filter_stats) {
+      setData(null);
+      return;
+    }
+
+    try {
+      const parsed = parseFilteringStats(jobStatus.filter_stats);
+      if (!parsed) {
+        setError("Filterstatistik konnte nicht verarbeitet werden");
+        return;
+      }
+      setData(parsed);
+      setError(null);
+    } catch (err) {
+      setError(toErrorMessage(err));
+      setData(null);
+    }
+  }, [jobStatus?.filter_stats]);
+
+  return {
+    data,
+    isLoading: false,  // Nicht mehr nötig, da aus jobStatus kommt
+    error,
+  };
+  /*useEffect(() => {
     if (!shouldLoad || !jobId) return;
 
     const controller = new AbortController();
@@ -81,6 +104,7 @@ export function useFilteringStats(
     isLoading: shouldLoad ? isLoading : false,
     error: shouldLoad ? error : null,
   };
+}*/
 }
 
 export function parseFilteringStatsResponse(value: unknown): FilteringStatsResponse {
@@ -213,9 +237,9 @@ function isValidNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function shouldUseMockFallback(): boolean {
+/*function shouldUseMockFallback(): boolean {
   return import.meta.env.DEV && import.meta.env.VITE_USE_FILTERING_STATS_MOCK === "true";
-}
+}*/
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {

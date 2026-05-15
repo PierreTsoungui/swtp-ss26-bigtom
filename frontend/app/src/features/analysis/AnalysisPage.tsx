@@ -17,7 +17,7 @@ export function AnalysisPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
   const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
-  const filteringStats = useFilteringStats(job_id ?? null, filteringStatus);
+  const filteringStats = useFilteringStats(jobStatus);
   const resultsTable = useResultsTable(job_id ?? null, jobStatus?.status);
   const navigate : NavigateFunction = useNavigate();
 
