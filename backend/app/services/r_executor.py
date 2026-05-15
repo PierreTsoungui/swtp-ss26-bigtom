@@ -14,6 +14,7 @@ async def run_r_script(
     job_dir: str,
     sample_sheet: str,
     mode: str = "filtering",
+    script_args: list = [],
     on_progress: Optional[Callable] = None
 ) -> Dict[str, Any]:
 
@@ -36,7 +37,14 @@ async def run_r_script(
             f"{docker_job_dir}/filtered_data.rds",
             docker_job_dir
         ]
-    else:
+    elif mode == "normalization":
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            docker_job_dir,
+            *script_args          # <- method kommt hier rein
+        ]
+    else:  # filtering
         cmd = [
             "docker", "exec", R_WORKER_CONTAINER,
             "Rscript", script_path,
@@ -150,6 +158,13 @@ async def run_r_script(
                 "stdout": stdout_str,
                 "stderr": stderr_str,
                 "preview_plots": preview_plots[:5] 
+            }
+
+        if mode == "normalization":
+            return {
+                "returncode": returncode,
+                "stdout": stdout_str,
+                "stderr": stderr_str
             }
 
         return {

@@ -55,7 +55,7 @@ async def start_normalization(
     """
    # AUSKOMMENTIERT, DA NORMALISIERUNG NUR NACH FILTERUNG ERLAUBT SEIN SOLL
 
-   
+
     if job.status != "waiting_selection":
         raise HTTPException(
             status_code=409,
@@ -124,10 +124,12 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
        
         
         result = await run_r_script(
-            script="normalize.R", # R-Skript für Normalisierung
+            script="normalize.R",
             job_id=job_id,
             job_dir=job_dir,
-            script_args=[method],  
+            sample_sheet="",
+            mode="normalization",
+            script_args=[method],
             on_progress=on_progress
         )
         
