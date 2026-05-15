@@ -1,9 +1,10 @@
-import { useParams } from "react-router";
+import {type NavigateFunction, useNavigate, useParams} from "react-router";
 import { FilteringStats } from "./components/FilteringStats";
 import { useFilteringStats } from "./hooks/useFilteringStats";
 import { useJobPolling } from "./hooks/useJobPolling";
 import type {FilteringStatsStatus, JobStatus, JobStatusValue} from "./utils/types";
 import Progressbar from "./components/Progressbar.tsx";
+import {useEffect} from "react";
 
 /**
  * Hauptseite für die Analyse eines Jobs. Zeigt abhängig vom Status des Jobs entweder einen Fortschrittsbalken,
@@ -15,6 +16,23 @@ export function AnalysisPage() {
   const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
   const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
   const filteringStats = useFilteringStats(job_id ?? null, filteringStatus);
+  const navigate : NavigateFunction = useNavigate();
+
+
+  useEffect(() => {
+    if (!jobStatus) return;
+
+    // Spezialfall: Normalisierungsvorschau bereit
+    if (jobStatus.status === "waiting" && jobStatus.phase === "waiting_selection") {
+      navigate(`/normalization/${job_id}`);
+    }
+
+    // Pipeline komplett abgeschlossen
+    /*if (jobStatus.status === "completed") {
+      navigate(`/results/${job_id}`);
+    }*/
+
+  }, [jobStatus?.status, jobStatus?.phase]);
 
   if (!job_id) {
     return (
