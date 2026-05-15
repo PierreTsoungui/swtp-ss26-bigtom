@@ -27,6 +27,21 @@ async def run_r_script(
 
     print(f"[R_EXECUTOR] mode={mode}", flush=True)
 
+    if mode == "normalization_preview":
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            f"{docker_job_dir}/filtered_data.rds",
+            docker_job_dir
+        ]
+    else:
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            f"{docker_job_dir}/{sample_sheet}",
+            docker_job_dir
+        ]
+
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,

@@ -260,9 +260,9 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
 # ==================== SPEICHERN ====================
 
 def save_idat_files(files: List[UploadFile], job_dir: Path) -> List[str]:
-    """Speichert IDAT-Dateien"""
     saved_paths = []
     for file in files:
+        file.file.seek(0)
         file_path = job_dir / file.filename
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -271,7 +271,7 @@ def save_idat_files(files: List[UploadFile], job_dir: Path) -> List[str]:
 
 
 def save_sample_sheet(file: UploadFile, job_dir: Path) -> str:
-    """Speichert Sample Sheet"""
+    file.file.seek(0)
     file_path = job_dir / file.filename
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

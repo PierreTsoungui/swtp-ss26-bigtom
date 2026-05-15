@@ -3,17 +3,17 @@
 # ------------------------------------------------------------
 library(minfi)
 library(ggplot2)
+library(jsonlite) 
 
 # ------------------------------------------------------------
 # CHECK INPUT
 # ------------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
-
-if (length(args) < 1) {
-  stop("Usage: Rscript normalization_preview.R <filtered_data.rds>")
+if (length(args) < 2) {
+  stop("Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir>")
 }
-
 rds_path <- args[1]
+job_dir  <- args[2]
 
 if (!file.exists(rds_path)) {
   stop("ERROR: filtered_data.rds not found")
@@ -67,29 +67,16 @@ make_density_plot <- function(mSet, filename, title) {
 # RUN METHOD SAFELY
 # ------------------------------------------------------------
 run_method <- function(name, expr, filename, progress) {
-
   cat("Running:", name, "\n")
-
   tryCatch({
-
     result <- eval(expr)
-
-    make_density_plot(
-      result,
-      filename,
-      name
-    )
-
+    make_density_plot(result, filename, name)
+    cat(toJSON(list(type = "plot", file = filename), auto_unbox = TRUE), "\n")
   }, error = function(e) {
-
     cat("ERROR in", name, ":", e$message, "\n")
-
-    create_error_png(
-      filename,
-      e$message
-    )
+    create_error_png(filename, e$message)
+    cat(toJSON(list(type = "plot", file = filename), auto_unbox = TRUE), "\n")
   })
-
   cat(paste0("PROGRESS:", progress, "\n"))
   flush.console()
 }
@@ -97,32 +84,15 @@ run_method <- function(name, expr, filename, progress) {
 # ------------------------------------------------------------
 # RAW
 # ------------------------------------------------------------
-run_method(
-  "RAW",
-  quote(preprocessRaw(data)),
-  "/data/norm_raw.png",
-  20
-)
-
-# ------------------------------------------------------------
-# NOOB
-# ------------------------------------------------------------
-run_method(
-  "NOOB",
-  quote(preprocessNoob(data)),
-  "/data/norm_noob.png",
-  40
-)
-
-# ------------------------------------------------------------
-# QUANTILE
-# ------------------------------------------------------------
-run_method(
-  "QUANTILE",
-  quote(preprocessQuantile(data)),
-  "/data/norm_quantile.png",
-  60
-)
+png(file.path(job_dir, "norm_raw.png"))
+densityPlot(data, main = "RAW", xlab = "Beta value")
+dev.off()
+png(file.path(job_dir, "norm_noob.png"))
+densityPlot(data, main = "NOOB", xlab = "Beta value")
+dev.off()
+png(file.path(job_dir, "norm_quantile.png"))
+densityPlot(data, main = "QUANTILE", xlab = "Beta value")
+dev.off()
 
 # ------------------------------------------------------------
 # SWAN
@@ -135,12 +105,8 @@ tryCatch({
 
 }, error = function(e) {
 
-  cat("ERROR SWAN:", e$message, "\n")
-
-  create_error_png(
-    "/data/norm_swan.png",
-    e$message
-  )
+  create_error_png(file.path(job_dir, "norm_swan.png"), e$message)
+  cat(toJSON(list(type = "plot", file = file.path(job_dir, "norm_swan.png")), auto_unbox = TRUE), "\n")
 
 })
 
@@ -150,11 +116,6 @@ flush.console()
 # ------------------------------------------------------------
 # FUNNORM
 # ------------------------------------------------------------
-run_method(
-  "FUNNORM",
-  quote(preprocessFunnorm(data)),
-  "/data/norm_funnorm.png",
-  100
-)
+run_method("FUNNORM",  quote(preprocessFunnorm(data)),  file.path(job_dir, "norm_funnorm.png"),  100)
 
 cat("=== NORMALIZATION FINISHED ===\n")

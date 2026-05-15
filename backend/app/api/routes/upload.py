@@ -5,6 +5,7 @@ from pathlib import Path
 import uuid
 import json
 
+from app.services.normalization_preview_service import run_normalization_preview
 from app.services.job_manager import create_job, get_job, save_filter_stats, update_job
 from app.services.file_handler import (
     ensure_upload_dir,
@@ -86,7 +87,7 @@ async def upload_files(
         sample_sheet.filename
     )
     return UploadResponse(job_id=job_id, status="queued")
-    
+
 async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
     """
     Hintergrundverarbeitung für die Filterung.
@@ -135,10 +136,8 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             )
             return
 
-        # Filter-Stats aus der von R geschriebenen JSON-Datei lesen
         stats_path = Path(job_dir) / "filter_stats.json"
         if not stats_path.exists():
-            print(f"[FILTERING] Warnung: filter_stats.json nicht gefunden in {job_dir}")
             update_job(
                 job_id,
                 status="failed",
@@ -163,6 +162,10 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
         )
 
         print(f"[FILTERING] Job {job_id}: Filterung erfolgreich abgeschlossen")
+
+        # NEU: Normalization Preview automatisch starten
+        print(f"[PREVIEW] Job {job_id}: Starte Normalization Preview...")
+        await run_normalization_preview(job_id, str(job_dir))
 
     except Exception as e:
         update_job(
