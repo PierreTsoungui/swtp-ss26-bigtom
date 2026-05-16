@@ -18,7 +18,7 @@ export interface FilteringStep {
   probesAfter: number;
 }
 
-export interface FilteringStats {
+export interface FilteringStatsType {
   steps: FilteringStep[];
   finalProbeCount: number;
 }
@@ -27,7 +27,7 @@ export type FilteringStatsStatus = "idle" | "filtering" | "filtering_done" | "er
 
 export interface FilteringStatsResponse {
   status: FilteringStatsStatus;
-  filterStats?: FilteringStats;
+  filterStats?: FilteringStatsType;
   error?: string;
 }
 

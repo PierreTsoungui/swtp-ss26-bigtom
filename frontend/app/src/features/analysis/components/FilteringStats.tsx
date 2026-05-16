@@ -1,5 +1,5 @@
 import type {
-  FilteringStats as FilteringStatsData,
+  FilteringStatsType as FilteringStatsData,
   FilteringStep,
 } from "../utils/types";
 

@@ -1,12 +1,12 @@
 import {type NavigateFunction, useNavigate, useParams} from "react-router";
-import { FilteringStats } from "./components/FilteringStats";
 import { ResultsTable } from "./components/ResultsTable";
-import { useFilteringStats } from "./hooks/useFilteringStats";
+import {convertBackendFilterStats} from "./hooks/useFilteringStats";
 import { useJobPolling } from "./hooks/useJobPolling";
 import { useResultsTable } from "./hooks/useResultsTable";
-import type {FilteringStatsStatus, JobStatus, JobStatusValue} from "./utils/types";
+import type {FilteringStatsType,  JobStatus} from "./utils/types";
 import Progressbar from "./components/Progressbar.tsx";
-import {useEffect} from "react";
+import {useEffect, useRef} from "react";
+import {FilteringStats} from "./components/FilteringStats";
 
 /**
  * Hauptseite für die Analyse eines Jobs. Zeigt abhängig vom Status des Jobs entweder einen Fortschrittsbalken,
@@ -16,11 +16,19 @@ import {useEffect} from "react";
 export function AnalysisPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
-  const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
-  const filteringStats = useFilteringStats(jobStatus);
+  // const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
+  // const filteringStatus : FilterStats | null | undefined = jobStatus?.filter_stats;
+  // const filteringStats = useFilteringStats(jobStatus);
   const resultsTable = useResultsTable(job_id ?? null, jobStatus?.status);
   const navigate : NavigateFunction = useNavigate();
 
+  // ── Filter Stats cachen ───────────────────────────────────────
+  // Sobald filter_stats einmal nicht null sind, speichern wir sie.
+  // Sie bleiben sichtbar auch wenn die Phase weiterwechselt.
+  const cachedFilterStats = useRef<FilteringStatsType | null>(null);
+  if (jobStatus?.filter_stats && !cachedFilterStats.current) {
+    cachedFilterStats.current = convertBackendFilterStats(jobStatus.filter_stats);
+  }
 
   useEffect(() => {
     if (!jobStatus) return;
@@ -55,8 +63,8 @@ export function AnalysisPage() {
         </main>
     );
   }
-
-  if (filteringStatus === "filtering" || filteringStatus === "idle") {
+  // Filterstatistik anzeigen!
+  if ((jobStatus.status === "running" && jobStatus.phase === "filtering") || jobStatus.status === "queued") {
     return (
         <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
           <Progressbar jobStatus={jobStatus} />
@@ -64,7 +72,7 @@ export function AnalysisPage() {
     );
   }
 
-  if (filteringStats.error) {
+  if (jobStatus.status === "failed") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
         <section
@@ -72,13 +80,13 @@ export function AnalysisPage() {
           role="alert"
         >
           <h1 className="text-2xl font-semibold">Filterstatistik konnte nicht geladen werden</h1>
-          <p className="mt-3">{filteringStats.error}</p>
+          <p className="mt-3">{jobStatus.error?.detail ?? "Ein Fehler ist aufgetreten"}</p>
         </section>
       </main>
     );
   }
 
-  if (filteringStats.isLoading) {
+  /*if (filteringStats.isLoading) {
     if (!jobStatus) {
       return (
         <main className="flex min-h-screen items-center justify-center">
@@ -93,7 +101,7 @@ export function AnalysisPage() {
           </main>
       );
     }
-  }
+  }*/
 
   if (jobStatus?.status === "normalization_done") {
     if (resultsTable.error) {
@@ -144,8 +152,8 @@ export function AnalysisPage() {
 
   return (
     <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
-      {filteringStatus === "filtering_done" && filteringStats.data ? (
-        <FilteringStats stats={filteringStats.data} />
+      { cachedFilterStats.current ? (
+        <FilteringStats stats={cachedFilterStats.current} />
       ) : (
         <InfoPanel
           title="Analyse"
@@ -175,7 +183,7 @@ function InfoPanel({ title, message }: InfoPanelProps) {
   );
 }
 
-function mapJobStatusToFilteringStatsStatus(
+/*function mapJobStatusToFilteringStatsStatus(
   status: JobStatusValue | undefined
 ): FilteringStatsStatus {
   if (status === "filtering" || status === "filtering_done") {
@@ -187,7 +195,7 @@ function mapJobStatusToFilteringStatsStatus(
   }
 
   return "idle";
-}
+}*/
 
 
 /*

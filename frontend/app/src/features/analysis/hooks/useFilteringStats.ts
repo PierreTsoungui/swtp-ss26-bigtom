@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import type {
   FilterStats,
-  FilteringStats,
+  FilteringStatsType,
   FilteringStatsResponse,
   FilteringStatsStatus, JobStatus,
 } from "../utils/types";
 
 interface UseFilteringStatsResult {
-  data: FilteringStats | null;
+  data: FilteringStatsType | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -18,7 +18,7 @@ const INVALID_RESPONSE_MESSAGE =
 export function useFilteringStats(
   jobStatus: JobStatus | null
 ): UseFilteringStatsResult {
-  const [data, setData] = useState<FilteringStats | null>(null);
+  const [data, setData] = useState<FilteringStatsType | null>(null);
   //const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // const shouldLoad = status === "filtering_done" && Boolean(jobId);
@@ -143,7 +143,7 @@ export function parseFilteringStatsResponse(value: unknown): FilteringStatsRespo
   return { status, filterStats };
 }
 
-function parseFilteringStats(value: unknown): FilteringStats | null {
+function parseFilteringStats(value: unknown): FilteringStatsType | null {
   if (isFilteringStats(value)) {
     return value;
   }
@@ -155,7 +155,7 @@ function parseFilteringStats(value: unknown): FilteringStats | null {
   return null;
 }
 
-function isFilteringStats(value: unknown): value is FilteringStats {
+function isFilteringStats(value: unknown): value is FilteringStatsType {
   if (!isRecord(value) || !Array.isArray(value.steps)) return false;
 
   return (
@@ -198,7 +198,7 @@ function isBackendFilterStep(value: unknown): boolean {
   );
 }
 
-function convertBackendFilterStats(stats: FilterStats): FilteringStats {
+export function convertBackendFilterStats(stats: FilterStats): FilteringStatsType {
   let probesBefore = stats.total_before;
 
   const steps = stats.steps.map((step) => {
