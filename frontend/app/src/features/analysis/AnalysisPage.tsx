@@ -1,12 +1,13 @@
 import {type NavigateFunction, useNavigate, useParams} from "react-router";
 import { ResultsTable } from "./components/ResultsTable";
-import {convertBackendFilterStats} from "./hooks/useFilteringStats";
 import { useJobPolling } from "./hooks/useJobPolling";
 import { useResultsTable } from "./hooks/useResultsTable";
 import type {FilteringStatsType,  JobStatus} from "./utils/types";
 import Progressbar from "./components/Progressbar.tsx";
 import {useEffect, useRef} from "react";
 import {FilteringStats} from "./components/FilteringStats";
+import CircularProgress from '@mui/material/CircularProgress';
+import {convertBackendFilterStats} from "./utils/helpers.ts";
 
 /**
  * Hauptseite für die Analyse eines Jobs. Zeigt abhängig vom Status des Jobs entweder einen Fortschrittsbalken,
@@ -16,9 +17,6 @@ import {FilteringStats} from "./components/FilteringStats";
 export function AnalysisPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
-  // const filteringStatus = mapJobStatusToFilteringStatsStatus(jobStatus?.status);
-  // const filteringStatus : FilterStats | null | undefined = jobStatus?.filter_stats;
-  // const filteringStats = useFilteringStats(jobStatus);
   const resultsTable = useResultsTable(job_id ?? null, jobStatus?.status);
   const navigate : NavigateFunction = useNavigate();
 
@@ -73,35 +71,33 @@ export function AnalysisPage() {
   }
 
   if (jobStatus.status === "failed") {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <section
-          className="w-full max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 text-red-900 shadow-sm"
-          role="alert"
-        >
-          <h1 className="text-2xl font-semibold">Filterstatistik konnte nicht geladen werden</h1>
-          <p className="mt-3">{jobStatus.error?.detail ?? "Ein Fehler ist aufgetreten"}</p>
-        </section>
-      </main>
-    );
-  }
+    // Wenn wir bereits Filterstatistiken haben → weiter anzeigen
+    // statt den Fehlerscreen zu zeigen, damit der Nutzer die letzten verfügbaren Statistiken sehen kann.
+    if (cachedFilterStats.current) {
+      return (
+          <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
+            <div className="w-full max-w-4xl space-y-4">
+              {/* Fehlerhinweis als Banner, nicht als Fullscreen */}
+              <section
+                  className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-900"
+                  role="alert"
+              >
+                <p className="font-semibold">
+                  Normalisierungsvorschau fehlgeschlagen
+                </p>
+                <p className="text-sm mt-1">
+                  {jobStatus.error?.detail ??
+                      "Die Normalisierungsvorschau konnte nicht berechnet werden. Bitte Backend-Logs prüfen."}
+                </p>
+              </section>
 
-  /*if (filteringStats.isLoading) {
-    if (!jobStatus) {
-      return (
-        <main className="flex min-h-screen items-center justify-center">
-          <p className="text-slate-500">Verbindung wird aufgebaut...</p>
-        </main>
-      );
-    }
-    else {
-      return (
-          <main className="flex min-h-screen items-center justify-center">
-            <p className="text-slate-500">Lade Filterstatistiken...</p>
+              {/* Filterstatistik bleibt sichtbar */}
+              <FilteringStats stats={cachedFilterStats.current} />
+            </div>
           </main>
       );
     }
-  }*/
+  }
 
   if (jobStatus?.status === "normalization_done") {
     if (resultsTable.error) {
@@ -152,14 +148,39 @@ export function AnalysisPage() {
 
   return (
     <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
-      { cachedFilterStats.current ? (
-        <FilteringStats stats={cachedFilterStats.current} />
-      ) : (
-        <InfoPanel
-          title="Analyse"
-          message="Keine Filterstatistiken für diesen Job verfügbar."
-        />
-      )}
+      <div className="w-full max-w-4xl space-y-4">
+
+        {jobStatus.phase === "normalization_preview"
+            && jobStatus.status === "running" && (
+                <section
+                    className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900"
+                    aria-live="polite"
+                >
+                  <div className="flex items-center gap-3">
+                    <CircularProgress aria-label="Loading…" />
+                    <div>
+                      <p className="font-semibold">
+                        Normalisierungsvorschau wird berechnet...
+                      </p>
+                      <p className="text-sm mt-1">
+                        Sie werden automatisch weitergeleitet sobald alle
+                        Methoden berechnet wurden.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+        )}
+
+
+        { cachedFilterStats.current ? (
+          <FilteringStats stats={cachedFilterStats.current} />
+        ) : (
+          <InfoPanel
+            title="Analyse"
+            message="Keine Filterstatistiken für diesen Job verfügbar."
+          />
+        )}
+      </div>
     </main>
   );
 }
