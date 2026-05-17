@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import "@testing-library/jest-dom";
-import MethylationResultsTable from "../components/MethylationResultsTable";
+import { describe, it, expect, vi } from "vitest";
+import MethylationResultsTable from "../components/MethylationTable";
 import type { MethylationRow } from "../mocks/methylationMock";
 
 const mockRows: MethylationRow[] = [
@@ -65,7 +65,7 @@ describe("MethylationResultsTable", () => {
   });
 
   it("ruft onRowClick auf wenn eine Zeile geklickt wird", () => {
-    const handleRowClick = jest.fn();
+    const handleRowClick = vi.fn();
     render(<MethylationResultsTable rows={mockRows} onRowClick={handleRowClick} />);
 
     const firstRow = screen.getByText("cg12345678").closest("tr");

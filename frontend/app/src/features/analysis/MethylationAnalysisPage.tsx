@@ -1,11 +1,11 @@
 // app/src/features/analysisTabelle/tabellePage.tsx
 import { useState } from "react";
-import MethylationResultsTable from "../analysis/components/MethylationResultsTable";
-import FilterPanel from "../analysis/components/FilterPanel";
-import GeneDetailPanel from "../analysis/components/GeneDetailPanel";
-import { methylationRows, statsMock } from "../analysis/mocks/methylationMock";
-import type { MethylationRow } from "../analysis/mocks/methylationMock";
-import "./tabellePage.css";
+import MethylationResultsTable from "./components/MethylationTable";
+import FilterPanel from "./components/FilterPanel";
+import GeneDetailPanel from "./components/GeneDetailPanel";
+import { methylationRows, statsMock } from "./mocks/methylationMock";
+import type { MethylationRow } from "./mocks/methylationMock";
+import "./MethylationAnalysisPage.css";
 
 export default function TabellePage() {
   const [selectedCpg, setSelectedCpg] = useState<MethylationRow | null>(methylationRows[0]);

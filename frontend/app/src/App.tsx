@@ -1,5 +1,5 @@
 import { Route, Routes } from "react-router-dom";
-import TabellePage from "./features/analysis/tabellePage";
+import TabellePage from "./features/analysis/MethylationAnalysisPage";
 
 import UploadView from "./features/upload/UploadView";
 import './App.css'
