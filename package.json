@@ -1,0 +1,20 @@
+{
+  "name": "swtp-ss26-bigtom",
+  "version": "1.0.0",
+  "description": "=======\r # Methylome Analyzer",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@magrathea.mni.thm.de:swtp-ss26-bigtom.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "react-router-dom": "^7.15.0"
+  }
+}
