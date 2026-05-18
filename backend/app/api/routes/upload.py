@@ -1,4 +1,5 @@
 # app/api/routes/upload.py
+
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request
 from typing import List
 from pathlib import Path
@@ -87,29 +88,15 @@ async def upload_files(
         sample_sheet.filename
     )
     return UploadResponse(job_id=job_id, status="queued")
-
+ 
+    
+    # Callback für Fortschritts-Updates aus R
 async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
     """
     Hintergrundverarbeitung für die Filterung.
-    Status-Wechsel: queued → running → filtering → completed OR failed
     """
-    
-    
-    # Callback für Fortschritts-Updates aus R
-
-
-async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
-    async def on_progress(progress_data: dict):
-        update_job(
-            job_id,
-            status="running",
-            phase="filtering",
-            progress_percent=progress_data["progress"],
-            current_step=progress_data["step"]
-        )
-        print(f"[FILTERING] Job {job_id}: {progress_data['progress']}% - {progress_data['step']}")
-
     try:
+       
         update_job(
             job_id,
             status="running",
@@ -117,8 +104,19 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             progress_percent=0,
             current_step="Starte Filterung der Rohdaten..."
         )
+        
+       
+        async def on_progress(progress_data: dict):
+            update_job(
+                job_id,
+                status="running",
+                phase="filtering",
+                progress_percent=progress_data["progress"],
+                current_step=progress_data["step"]
+            )
+            print(f"[FILTERING] Job {job_id}: {progress_data['progress']}% - {progress_data['step']}")
 
-      
+       
         result = await run_r_script(
             script="init_filter.R",
             job_id=job_id,
@@ -127,23 +125,25 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             on_progress=on_progress
         )
 
+        
         if result["returncode"] != 0:
             update_job(
                 job_id,
                 status="failed",
                 phase="filtering",
-                progress_percent=get_job(job_id).progress_percent if get_job(job_id) else 0,
+                progress_percent=0,
                 error_message=result["stderr"]
             )
             return
 
+        
         stats_path = Path(job_dir) / "filter_stats.json"
         if not stats_path.exists():
             update_job(
                 job_id,
                 status="failed",
                 phase="filtering",
-                progress_percent=get_job(job_id).progress_percent,
+                progress_percent=0,
                 error_message="filter_stats.json wurde von R nicht erstellt"
             )
             return
@@ -151,11 +151,13 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
         with open(stats_path, "r") as f:
             filter_stats = json.load(f)
 
+        # Im Job-Manager speichern
         save_filter_stats(job_id, filter_stats)
 
+      
         update_job(
             job_id,
-            status="filtering_done",
+            status="running",
             phase="filtering_done",
             progress_percent=100,
             current_step="Filterung abgeschlossen",
@@ -163,17 +165,17 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
         )
 
         print(f"[FILTERING] Job {job_id}: Filterung erfolgreich abgeschlossen")
-
-        # NEU: Normalization Preview automatisch starten
+          # NEU: Normalization Preview automatisch starten
         print(f"[PREVIEW] Job {job_id}: Starte Normalization Preview...")
         await run_normalization_preview(job_id, str(job_dir))
-
+        print(f"[PREVIEW] Job {job_id}: Normalization Preview abgeschlossen")
     except Exception as e:
+       
         update_job(
             job_id,
             status="failed",
             phase="filtering",
-            progress_percent=get_job(job_id).progress_percent if get_job(job_id) else 0,
+            progress_percent=0,
             error_message=str(e)
         )
         print(f"[FILTERING] Job {job_id}: Fehler - {str(e)}")

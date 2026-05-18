@@ -111,7 +111,10 @@ async def run_r_script(
                     # PREVIEW MODE
                     if mode == "normalization_preview":
                         if data.get("type") == "plot":
-                            preview_plots.append(data["file"])
+                           preview_plots.append({
+                                    "method": data["method"],
+                                    "file": data["file"]
+                                })
 
                 except json.JSONDecodeError:
                     pass

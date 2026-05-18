@@ -1,6 +1,6 @@
 import asyncio
-from typing import List
-from pathlib import Path
+
+
 
 from app.services.job_manager import (
     get_job,
@@ -11,8 +11,8 @@ from app.services.r_executor import run_r_script
 
 
 # START PREVIEW (Background Task)
-
 async def run_normalization_preview(job_id: str, job_dir: str):
+    print(f"[PREVIEW] ====== START run_normalization_preview für {job_id} ======")
     job = get_job(job_id)
     if not job:
         return
@@ -23,8 +23,9 @@ async def run_normalization_preview(job_id: str, job_dir: str):
             status="running",
             phase="normalization_preview",
             progress_percent=0,
-            current_step="Starting normalization preview..."
+            current_step="Starte normalization_preview..."
         )
+        
 
         async def on_progress(data):
             update_job(
@@ -54,18 +55,15 @@ async def run_normalization_preview(job_id: str, job_dir: str):
             )
             return
 
-        # Container-Pfad für die Prüfung verwenden
-        docker_job_dir = Path(f"/app/jobs/{job_id}")
-        plot_names = ["norm_raw.png", "norm_noob.png", "norm_quantile.png",
-                      "norm_swan.png", "norm_funnorm.png"]
-        plots = [name for name in plot_names if (docker_job_dir / name).exists()]
+        # Direkt output aus R nutzen 
+        preview_plots = result.get("preview_plots", [])
 
-        if len(plots) < 5:
+        if len(preview_plots) < 5:
             update_job(
                 job_id,
                 status="failed",
                 phase="normalization_preview",
-                error_message=f"Not enough plots generated (expected 5, got {len(plots)})"
+                error_message=f"Not enough plots generated (expected 5, got {len(preview_plots)})"
             )
             return
 
@@ -76,7 +74,9 @@ async def run_normalization_preview(job_id: str, job_dir: str):
             progress_percent=100,
             current_step="Preview completed - waiting for selection",
         )
-        job.preview_plots = plot_names
+
+        # keine File Check nötig
+        job.preview_plots = preview_plots
 
     except Exception as e:
         print(f"[PREVIEW] Exception: {e}")
@@ -87,18 +87,3 @@ async def run_normalization_preview(job_id: str, job_dir: str):
             progress_percent=0,
             error_message=str(e)
         )
-
-
-
-# GET RESULT HELPERS
-
-def get_preview_plots(job_id: str) -> List[str]:
-    """
-    Gibt Plot-URLs zurück (oder relative paths)
-    """
-    job = get_job(job_id)
-
-    if not job:
-        return []
-
-    return getattr(job, "preview_plots", []) or []

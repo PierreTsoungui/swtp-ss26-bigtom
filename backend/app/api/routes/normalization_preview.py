@@ -57,7 +57,6 @@ async def start_preview(
         "status": "accepted"
     }
 
-
 @router.get("/preview/normalization/{job_id}")
 async def get_preview(job_id: str):
 
@@ -66,31 +65,29 @@ async def get_preview(job_id: str):
     if not job:
         raise HTTPException(
             status_code=404,
-            detail={
-                "error": "JOB_NOT_FOUND",
-                "message": "No job found"
-            }
+            detail={"error": "JOB_NOT_FOUND", "message": "No job found"}
         )
 
     if job.expires_at < datetime.now():
         raise HTTPException(
             status_code=410,
-            detail={
-                "error": "SESSION_EXPIRED",
-                "message": "Session expired"
-            }
+            detail={"error": "SESSION_EXPIRED", "message": "Session expired"}
         )
 
-    plot_names = ["norm_raw.png", "norm_noob.png", "norm_quantile.png",
-                  "norm_swan.png", "norm_funnorm.png"]
-    plots = [
-        f"/api/v1/preview/normalization/{job_id}/{name}"
-        for name in plot_names
-        if (Path(job.temp_dir) / name).exists()
-    ]
-
-    return {"job_id": job_id, "plots": plots, "count": len(plots)}
-
+    #  preview_plots aus Job holen 
+    preview_plots = getattr(job, "preview_plots", [])
+    return {
+        "job_id": job_id,
+        "plots": [
+        {
+            "method": p["method"].lower(),
+            "url": f"/api/v1/preview/normalization/{job_id}/{p['file']}",
+            "quality_score": None
+        }
+        for p in preview_plots
+        ],
+        "recommendation": preview_plots[0]["method"].lower() if preview_plots else "raw"
+    }
 
 @router.get("/preview/normalization/{job_id}/{plot_name}")
 async def get_plot_image(job_id: str, plot_name: str):
