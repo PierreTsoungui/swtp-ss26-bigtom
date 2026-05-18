@@ -53,3 +53,4 @@ RUN R -e "install.packages('tidyverse', repos='https://cloud.r-project.org')"
 
 # Verifikation
 RUN R -e "cat('All R packages installed successfully\n')"
+
