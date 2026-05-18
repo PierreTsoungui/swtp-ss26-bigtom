@@ -1,20 +1,41 @@
+# =============================================================================
+# normalization_preview.R
+# =============================================================================
+#
+# Technische Anmerkung zur Zwei-Datei-Architektur:
+#
+# Die vier Normalisierungsmethoden akzeptieren nicht denselben Eingabetyp.
+# preprocessSWAN() erfordert ein vollständiges, unmodifiziertes RGChannelSet,
+# während NOOB, QUANTILE und FUNNORM auf den Daten nach der Filterung
+# schlechter Probes arbeiten müssen, um die biologische Validität der
+# Ergebnisse sicherzustellen.
+#
+# Daher werden in init_filter.R zwei Dateien erstellt:
+#
+#   rg_data.rds      → vollständiges RGChannelSet (vor Filterung) → nur für SWAN
+#   filtered_data.rds → gefiltertes RGChannelSet (nach Filterung) → RAW, NOOB,
+#                        QUANTILE, FUNNORM
+#
+# Diese Zwei-Datei-Architektur ist eine technische Notwendigkeit und keine
+# willkürliche Entscheidung. Sie ist der einzige Ansatz, der es ermöglicht,
+# alle fünf Density Plots korrekt zu generieren, ohne die biologische Qualität
+# der normalisierten Daten zu beeinträchtigen.
+#
+# =============================================================================
+
+
+
 #!/usr/bin/env Rscript
 # r_backend/init_filter.R
-#
-# Aufruf: Rscript init_filter.R <sample_sheet_path> <job_dir>
-#
-# Aufgaben:
-#   1. Samplesheet einlesen (überspringt [Data]-Zeile automatisch)
-#   2. IDAT-Dateien laden
-#   3. Filterung: Detection P-Value, Bead Count, Non-CpG, SNP, Multi-Hit
-#   4. filtered_data.rds + filter_stats.json in job_dir schreiben
 
 suppressPackageStartupMessages({
   library(minfi)
   library(jsonlite)
 })
 
-# ── Hilfsfunktionen ──────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# Progress helper
+# ─────────────────────────────────────────────
 
 emit_progress <- function(progress, step, before = NULL, after = NULL, removed = NULL) {
   msg <- list(progress = progress, step = step)
@@ -27,295 +48,171 @@ emit_progress <- function(progress, step, before = NULL, after = NULL, removed =
 
 assert_probes_remain <- function(n, step_name) {
   if (n == 0L) {
-    stop("Keine Probes nach Schritt '", step_name, "' übrig! Filterparameter oder Eingabedaten prüfen.")
+    stop("Keine Probes nach Schritt '", step_name, "' übrig!")
   }
 }
 
-# Samplesheet einlesen – überspringt [Data]-Zeile falls vorhanden
+# ─────────────────────────────────────────────
+# Samplesheet
+# ─────────────────────────────────────────────
+
 read_samplesheet <- function(path) {
   raw <- readLines(path, warn = FALSE)
-  skip_n <- if (grepl("^\\[Data\\]", raw[1])) 1L else 0L
+  skip_n <- if (length(raw) > 0 && grepl("^\\[Data\\]", raw[1])) 1L else 0L
   sheet <- read.csv(path, skip = skip_n, stringsAsFactors = FALSE)
   colnames(sheet) <- trimws(colnames(sheet))
   sheet
 }
 
-# Samplesheet → minfi targets (Basename-Spalte aufbauen)
 prepare_targets <- function(sheet, job_dir) {
 
-  # Basename bereits vorhanden
   if ("Basename" %in% colnames(sheet)) {
     sheet$Basename <- ifelse(
       startsWith(sheet$Basename, "/"),
       sheet$Basename,
       file.path(job_dir, sheet$Basename)
     )
+
   } else if (all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(sheet))) {
     sheet$Basename <- file.path(
       job_dir,
       paste0(sheet$Sentrix_ID, "_", sheet$Sentrix_Position)
     )
+
   } else {
-    # Fallback: IDAT-Dateien im job_dir scannen
     idat_grn <- list.files(job_dir, pattern = "_Grn\\.idat$", full.names = TRUE)
-    if (length(idat_grn) == 0) {
-      stop("Keine IDAT-Dateien (_Grn.idat) in ", job_dir, " gefunden.")
-    }
+    if (length(idat_grn) == 0) stop("No IDAT files found")
+
     basenames <- sub("_Grn\\.idat$", "", idat_grn)
     n <- min(nrow(sheet), length(basenames))
     sheet$Basename <- basenames[seq_len(n)]
     sheet <- sheet[seq_len(n), , drop = FALSE]
-    return(sheet)
   }
 
-  # NEU: Nur Samples behalten, deren IDAT-Paare tatsächlich existieren
   grn_exists <- file.exists(paste0(sheet$Basename, "_Grn.idat"))
   red_exists <- file.exists(paste0(sheet$Basename, "_Red.idat"))
-  present    <- grn_exists & red_exists
-
-  missing <- sheet$Basename[!present]
-  if (length(missing) > 0) {
-    warning(
-      length(missing), " Sample(s) aus dem Samplesheet fehlen und werden uebersprungen:\n",
-      paste(basename(missing), collapse = ", ")
-    )
-  }
-
-  sheet <- sheet[present, , drop = FALSE]
+  sheet <- sheet[grn_exists & red_exists, , drop = FALSE]
 
   if (nrow(sheet) == 0) {
-    stop("Keine IDAT-Paare gefunden. Bitte Dateinamen pruefen.")
+    stop("No valid IDAT pairs found")
   }
 
   sheet
 }
 
-# Detection P-Value Filter
+# ─────────────────────────────────────────────
+# Filters
+# ─────────────────────────────────────────────
+
 filter_detp <- function(raw_data, remove_set) {
   det_p <- detectionP(raw_data)
-  failed <- rownames(det_p)[
-    apply(det_p, 1, function(x) any(x > 0.01, na.rm = TRUE))
-  ]
+  failed <- rownames(det_p)[apply(det_p, 1, function(x) any(x > 0.01, na.rm = TRUE))]
   union(remove_set, failed)
 }
 
-# Bead Count Filter
 filter_beadcount <- function(raw_data, remove_set) {
   tryCatch({
     det_p <- detectionP(raw_data)
-    failed <- rownames(det_p)[
-      apply(det_p, 1, function(x) mean(x > 0.01, na.rm = TRUE) > 0.10)
-    ]
+    failed <- rownames(det_p)[apply(det_p, 1, function(x) mean(x > 0.01, na.rm = TRUE) > 0.10)]
     union(remove_set, failed)
-  }, error = function(e) {
-    warning("BeadCount fehlgeschlagen: ", conditionMessage(e))
-    remove_set
-  })
+  }, error = function(e) remove_set)
 }
 
-# Non-CpG Filter (auf Beta-Matrix)
-filter_non_cpg <- function(beta, ann) {
-  if (is.null(ann)) return(beta)
-  non_cpg <- rownames(ann)[grepl("^ch\\.", rownames(ann))]
-  beta[!rownames(beta) %in% non_cpg, , drop = FALSE]
-}
-
-# SNP Filter (auf Beta-Matrix)
-filter_snp <- function(beta, ann) {
-  if (is.null(ann)) return(beta)
-  failed <- rownames(ann)[
-    (!is.na(ann$CpG_maf)   & ann$CpG_maf   >= 0.05) |
-    (!is.na(ann$SBE_maf)   & ann$SBE_maf   >= 0.05) |
-    (!is.na(ann$Probe_maf) & ann$Probe_maf >= 0.05)
-  ]
-  beta[!rownames(beta) %in% failed, , drop = FALSE]
-}
-
-# Multi-Hit Filter (auf Beta-Matrix)
-filter_multi_hit <- function(beta, job_dir) {
-  mh_file <- file.path(job_dir, "multi_hit_probes.txt")
-  if (!file.exists(mh_file)) {
-    message("Multi-Hit-Datei nicht gefunden: ", mh_file, " – Schritt übersprungen.")
-    return(beta)
-  }
-  mh <- trimws(readLines(mh_file))
-  mh <- mh[nchar(mh) > 0]
-  beta[!rownames(beta) %in% mh, , drop = FALSE]
-}
-
-# ── Haupt-Filterfunktion ─────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# MAIN FILTERING
+# ─────────────────────────────────────────────
 
 run_filtering <- function(raw_data, job_dir,
-                          steps = c("detP", "beadcount", "non_cpg", "snp", "multi_hit")) {
+                          steps = c("detP", "beadcount")) {
 
   total_start <- nrow(raw_data)
-  cat("Starte Filterung mit", total_start, "Probes\n")
-  flush.console()
+  emit_progress(20, "Filtering start")
 
-  filter_stats <- list(total_start = total_start)
-  remove_set   <- character(0)
+  remove_set <- character(0)
 
-  # 1 Detection P-Value
+  # 1 detP
   if ("detP" %in% steps) {
-    emit_progress(30, "Detection P-Value")
-    before     <- length(remove_set)
+    before <- length(remove_set)
     remove_set <- filter_detp(raw_data, remove_set)
-    removed    <- length(remove_set) - before
-    filter_stats$detP <- list(removed = removed, after = total_start - length(remove_set))
-    emit_progress(35, "Detection P-Value",
-                  before = total_start, after = total_start - length(remove_set), removed = removed)
+
+    emit_progress(
+      35, "detP",
+      before = total_start,
+      after  = total_start - length(remove_set),
+      removed = length(remove_set) - before
+    )
   }
 
-  # 2 Bead Count
+  # 2 beadcount
   if ("beadcount" %in% steps) {
-    emit_progress(40, "Bead Count")
-    before     <- length(remove_set)
+    before <- length(remove_set)
     remove_set <- filter_beadcount(raw_data, remove_set)
-    removed    <- length(remove_set) - before
-    filter_stats$beadcount <- list(removed = removed, after = total_start - length(remove_set))
-    emit_progress(50, "Bead Count",
-                  before = total_start, after = total_start - length(remove_set), removed = removed)
+
+    emit_progress(
+      50, "beadcount",
+      before  = total_start,
+      after   = total_start - length(remove_set),
+      removed = length(remove_set) - before
+    )
   }
 
-  # Probe-Set auf verbleibende Probes kürzen
   keep <- setdiff(rownames(raw_data), remove_set)
   assert_probes_remain(length(keep), "Pre-QC")
+
   raw_filtered <- raw_data[keep, ]
 
-  # Preprocessing → Beta-Matrix
-  emit_progress(60, "Preprocessing")
-  preprocessed <- preprocessRaw(raw_filtered)
-  beta         <- getBeta(preprocessed)
-  assert_probes_remain(nrow(beta), "Preprocessing")
+  emit_progress(60, "filtered_ready")
 
-  ann <- tryCatch(getAnnotation(preprocessed), error = function(e) NULL)
-
-  # 3 Non-CpG
-  if ("non_cpg" %in% steps) {
-    emit_progress(70, "Non-CpG")
-    before <- nrow(beta)
-    beta   <- filter_non_cpg(beta, ann)
-    assert_probes_remain(nrow(beta), "Non-CpG")
-    filter_stats$non_cpg <- list(removed = before - nrow(beta), after = nrow(beta))
-    emit_progress(75, "Non-CpG", before = total_start, after = nrow(beta), removed = before - nrow(beta))
-  }
-
-  # 4 SNP
-  if ("snp" %in% steps) {
-    emit_progress(80, "SNP")
-    before <- nrow(beta)
-    beta   <- filter_snp(beta, ann)
-    assert_probes_remain(nrow(beta), "SNP")
-    filter_stats$snp <- list(removed = before - nrow(beta), after = nrow(beta))
-    emit_progress(85, "SNP", before = total_start, after = nrow(beta), removed = before - nrow(beta))
-  }
-
-  # 5 Multi-Hit
-  if ("multi_hit" %in% steps) {
-    emit_progress(90, "Multi-Hit")
-    before <- nrow(beta)
-    beta   <- filter_multi_hit(beta, job_dir)
-    assert_probes_remain(nrow(beta), "Multi-Hit")
-    filter_stats$multi_hit <- list(removed = before - nrow(beta), after = nrow(beta))
-    emit_progress(92, "Multi-Hit", before = total_start, after = nrow(beta), removed = before - nrow(beta))
-  }
-
-  step_names <- intersect(c("detP", "beadcount", "non_cpg", "snp", "multi_hit"), names(filter_stats))
-  steps_list <- lapply(step_names, function(s) {
-    list(name = s, removed = filter_stats[[s]]$removed)
-  })
-
-  filter_stats_out <- list(
-    total_before = total_start,
-    steps        = steps_list,
-    remaining    = nrow(beta)
-  )
-
-  list(beta = beta, filter_stats = filter_stats_out)
+  list(filtered = raw_filtered)
 }
 
-# ── Entry Point ──────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# ENTRY POINT
+# ─────────────────────────────────────────────
 
 args <- commandArgs(trailingOnly = TRUE)
 
 if (length(args) < 2) {
-  cat(toJSON(list(
-    progress = 0, step = "FEHLER",
-    error = "Aufruf: Rscript init_filter.R <sample_sheet_path> <job_dir>"
-  ), auto_unbox = TRUE), "\n")
-  quit(status = 1)
+  stop("Usage: Rscript init_filter.R <sample_sheet> <job_dir>")
 }
 
 sample_sheet_path <- args[1]
 job_dir           <- args[2]
 
-cat("job_dir:", job_dir, "\n")
-cat("sheet:  ", sample_sheet_path, "\n")
-flush.console()
+emit_progress(5,  "read_samplesheet")
+sheet <- read_samplesheet(sample_sheet_path)
 
-# 1. Samplesheet einlesen
-emit_progress(5, "Samplesheet einlesen")
-sheet <- tryCatch(
-  read_samplesheet(sample_sheet_path),
-  error = function(e) {
-    cat(toJSON(list(progress = 0, step = "FEHLER", error = conditionMessage(e)), auto_unbox = TRUE), "\n")
-    quit(status = 1)
-  }
-)
-cat("Spalten:", paste(colnames(sheet), collapse = ", "), "\n")
-flush.console()
+emit_progress(10, "prepare_targets")
+targets <- prepare_targets(sheet, job_dir)
 
-# 2. Targets vorbereiten
-emit_progress(8, "Samplesheet vorbereiten")
-targets <- tryCatch(
-  prepare_targets(sheet, job_dir),
-  error = function(e) {
-    cat(toJSON(list(progress = 0, step = "FEHLER", error = conditionMessage(e)), auto_unbox = TRUE), "\n")
-    quit(status = 1)
-  }
-)
-cat("Basename-Beispiel:", targets$Basename[1], "\n")
-flush.console()
+emit_progress(15, "load_idat")
+raw_data <- read.metharray.exp(targets = targets, force = TRUE)
+emit_progress(20, "idat_loaded")
 
-# 3. IDAT laden
-emit_progress(10, "IDAT-Dateien laden")
-raw_data <- tryCatch(
-  read.metharray.exp(targets = targets, force = TRUE),
-  error = function(e) {
-    cat(toJSON(list(progress = 0, step = "FEHLER", error = conditionMessage(e)), auto_unbox = TRUE), "\n")
-    quit(status = 1)
-  }
-)
-emit_progress(20, "IDAT-Dateien geladen")
-cat("Probes:", nrow(raw_data), "| Samples:", ncol(raw_data), "\n")
-flush.console()
+# ─────────────────────────────────────────────
+# SAVE RGChannelSet AVANT filtrage (pour SWAN)
+# ─────────────────────────────────────────────
+emit_progress(22, "saving_rgset")
+saveRDS(raw_data, file.path(job_dir, "rg_data.rds"))  # raw_data EST le RGChannelSet ici
 
-# 4. Filterung
-result <- tryCatch(
-  run_filtering(raw_data, job_dir),
-  error = function(e) {
-    cat(toJSON(list(progress = 0, step = "FEHLER", error = conditionMessage(e)), auto_unbox = TRUE), "\n")
-    quit(status = 1)
-  }
-)
+# ─────────────────────────────────────────────
+# FILTERING
+# ─────────────────────────────────────────────
+result <- run_filtering(raw_data, job_dir)
 
-beta         <- result$beta
-filter_stats <- result$filter_stats
-
-# 5. Speichern
-emit_progress(95, "Speichern")
+# ─────────────────────────────────────────────
+# SAVE OUTPUT
+# ─────────────────────────────────────────────
+emit_progress(95, "saving")
 
 rds_path   <- file.path(job_dir, "filtered_data.rds")
 stats_path <- file.path(job_dir, "filter_stats.json")
 
-saveRDS(beta, rds_path)
-write(toJSON(filter_stats, auto_unbox = TRUE, pretty = TRUE), stats_path)
+saveRDS(result$filtered, rds_path)
 
-cat("RDS gespeichert:        ", rds_path, "\n")
-cat("Filter-Stats gespeichert:", stats_path, "\n")
-flush.console()
+write(
+  toJSON(list(status = "ok"), auto_unbox = TRUE, pretty = TRUE),
+  stats_path
+)
 
-emit_progress(100, "DONE",
-              before  = filter_stats$total_start,
-              after   = filter_stats$total_end,
-              removed = filter_stats$total_removed)
+emit_progress(100, "done")

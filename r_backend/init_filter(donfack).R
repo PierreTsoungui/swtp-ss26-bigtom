@@ -16,6 +16,7 @@
 suppressPackageStartupMessages({
   library(minfi)
   library(jsonlite)
+  library(readxl)
 })
 
 # ────────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,138 @@
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   1) import type {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   2)   ResultsTableCellValue,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   3)   ResultsTableResponse,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   4)   ResultsTableSorting,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   5) } from "../utils/types";
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   6) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   7) interface ResultsTableProps {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   8)   data: ResultsTableResponse;
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200   9)   sorting: ResultsTableSorting | null;
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  10)   onSortingChange: (sorting: ResultsTableSorting) => void;
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  11) }
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  12) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  13) const numberFormatter = new Intl.NumberFormat("de-DE");
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  14) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  15) export function ResultsTable({
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  16)   data,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  17)   sorting,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  18)   onSortingChange,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  19) }: ResultsTableProps) {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  20)   const visibleRows = data.rows.slice(0, 100);
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  21) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  22)   return (
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  23)     <section
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  24)       className="w-full max-w-7xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  25)       aria-labelledby="results-table-title"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  26)     >
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  27)       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  28)         <div>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  29)           <h2 id="results-table-title" className="text-2xl font-semibold text-slate-900">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  30)             Ergebnistabelle
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  31)           </h2>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  32)           <p className="mt-1 text-sm text-slate-600">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  33)             Zeige {visibleRows.length} von {numberFormatter.format(data.total_rows)} Zeilen.
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  34)           </p>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  35)         </div>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  36)         <p className="text-sm text-slate-500">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  37)           Seite {data.page}, {data.page_size} Zeilen pro Seite
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  38)         </p>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  39)       </div>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  40) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  41)       <div className="overflow-x-auto">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  42)         <table className="min-w-full border-collapse text-left text-sm">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  43)           <caption className="sr-only">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  44)             Normalisierte Analyseergebnisse mit dynamischen Spalten
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  45)           </caption>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  46)           <thead>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  47)             <tr className="border-b border-slate-200 bg-slate-50 text-slate-700">
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  48)               {data.columns.map((column) => {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  49)                 const activeOrder =
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  50)                   sorting?.column === column ? sorting.order : undefined;
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  51) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  52)                 return (
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  53)                   <th
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  54)                     key={column}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  55)                     scope="col"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  56)                     aria-sort={toAriaSort(activeOrder)}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  57)                     className="whitespace-nowrap px-4 py-3 font-semibold"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  58)                   >
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  59)                     <button
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  60)                       type="button"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  61)                       className="inline-flex items-center gap-2 rounded-sm text-left font-semibold text-slate-700 hover:text-slate-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  62)                       onClick={() => onSortingChange(getNextSorting(column, sorting))}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  63)                     >
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  64)                       <span>{column}</span>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  65)                       <span
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  66)                         aria-hidden="true"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  67)                         className={
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  68)                           activeOrder
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  69)                             ? "text-slate-900"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  70)                             : "text-slate-400"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  71)                         }
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  72)                       >
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  73)                         {activeOrder === "asc" ? "▲" : activeOrder === "desc" ? "▼" : "↕"}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  74)                       </span>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  75)                     </button>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  76)                   </th>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  77)                 );
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  78)               })}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  79)             </tr>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  80)           </thead>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  81)           <tbody>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  82)             {visibleRows.map((row, rowIndex) => (
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  83)               <tr
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  84)                 key={getRowKey(row, rowIndex)}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  85)                 className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  86)               >
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  87)                 {data.columns.map((column) => (
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  88)                   <td
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  89)                     key={`${rowIndex}-${column}`}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  90)                     className="whitespace-nowrap px-4 py-3 text-slate-700"
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  91)                   >
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  92)                     {formatCellValue(row[column])}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  93)                   </td>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  94)                 ))}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  95)               </tr>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  96)             ))}
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  97)           </tbody>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  98)         </table>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200  99)       </div>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 100)     </section>
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 101)   );
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 102) }
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 103) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 104) function getNextSorting(
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 105)   column: string,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 106)   currentSorting: ResultsTableSorting | null
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 107) ): ResultsTableSorting {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 108)   if (currentSorting?.column === column && currentSorting.order === "asc") {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 109)     return { column, order: "desc" };
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 110)   }
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 111) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 112)   return { column, order: "asc" };
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 113) }
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 114) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 115) function toAriaSort(
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 116)   order: ResultsTableSorting["order"] | undefined
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 117) ): "ascending" | "descending" | "none" {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 118)   if (order === "asc") return "ascending";
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 119)   if (order === "desc") return "descending";
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 120)   return "none";
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 121) }
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 122) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 123) function formatCellValue(value: ResultsTableCellValue | undefined): string {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 124)   if (value === null || value === undefined) return "–";
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 125)   if (typeof value === "number") return numberFormatter.format(value);
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 126)   return value;
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 127) }
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 128) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 129) function getRowKey(
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 130)   row: Record<string, ResultsTableCellValue>,
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 131)   rowIndex: number
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 132) ): string {
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 133)   const firstValue = Object.values(row).find(
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 134)     (value) => value !== null && value !== ""
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 135)   );
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 136) 
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 137)   return `${rowIndex}-${String(firstValue ?? "empty")}`;
+8205f5c3 (ladn57 2026-05-17 03:19:01 +0200 138) }

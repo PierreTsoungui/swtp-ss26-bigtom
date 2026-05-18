@@ -1,4 +1,4 @@
-version: '3.8'
+
 
 services:
 
@@ -23,6 +23,12 @@ services:
   r_worker:
     build: ./r_backend
     volumes:
-    - ./r_backend:/app/r_backend
-    - ./data:/app/data
+      - ./r_backend:/app/r_backend
+      - ./data:/app/data
+      - ./jobs:/app/jobs
     command: tail -f /dev/null
+    ulimits:
+      nproc:
+        soft: 65535
+        hard: 65535
+    shm_size: '256m'

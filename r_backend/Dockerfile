@@ -16,11 +16,27 @@ RUN apt-get update && apt-get install -y \
     liblzma-dev \
     libhdf5-dev \
     build-essential wget git \
+    # ── BLAS mono-thread ──
+    libblas-dev \
+    liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# ─────────────────────────────────────────────
+# BLAS mono-thread : remplace OpenBLAS par le
+# BLAS de référence pour éviter pthread_create()
+# error 22 dans Docker avec minfi/preprocessQuantile
+# preprocessFunnorm qui créent des threads BLAS
+# indépendamment de BiocParallel
+# ─────────────────────────────────────────────
+RUN update-alternatives --set \
+    libblas.so.3-x86_64-linux-gnu \
+    /usr/lib/x86_64-linux-gnu/blas/libblas.so.3 \
+    && update-alternatives --set \
+    liblapack.so.3-x86_64-linux-gnu \
+    /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3
 
 RUN R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')"
 RUN R -e "BiocManager::install(version='3.20', ask=FALSE)"
-
 
 # EPICv2 Annotation
 RUN R -e "BiocManager::install(c( \
@@ -51,6 +67,8 @@ RUN R -e "install.packages(c( \
 
 RUN R -e "install.packages('tidyverse', repos='https://cloud.r-project.org')"
 
+# Verifikation BLAS
+RUN R -e "sessionInfo()" | grep -i blas || true
+
 # Verifikation
 RUN R -e "cat('All R packages installed successfully\n')"
-
