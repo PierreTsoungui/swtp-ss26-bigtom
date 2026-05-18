@@ -1,35 +1,142 @@
+#!/usr/bin/env Rscript
+
+# ------------------------------------------------------------
+# NORMALIZATION PREVIEW
+#
+# AUFGABE:
+#   - Gefiltertes RGChannelSet laden
+#   - Mehrere Normalisierungsmethoden testen
+#   - Density-Plots erzeugen
+#   - JSON-Metadaten ans Backend senden
+#
+# WICHTIGE ÄNDERUNGEN:
+# ------------------------------------------------------------
+#
+# 1. filtered_data.rds enthält jetzt ein RGChannelSet
+#    statt einer Beta-Matrix
+#
+# 2. SWAN wurde korrigiert:
+#    preprocessSWAN() braucht:
+#       preprocessSWAN(rgSet, mSet)
+#
+# 3. FUNNORM robuster gemacht:
+#    nPCs = 2 reduziert Fehler:
+#       "initial centers are not distinct"
+#
+# 4. PNGs wurden VERGRÖSSERT
+#
+# 5. densityPlot() wurde verbessert:
+#      - größere Schrift
+#      - dickere Linien
+#      - kleinere Ränder
+#
+# 6. Einheitliche run_method()-Funktion
+#
+# 7. RAW ist nur Referenzplot
+#    (nicht auswählbar im Frontend)
+#
+# ------------------------------------------------------------
+
 # ------------------------------------------------------------
 # LIBRARIES
 # ------------------------------------------------------------
-library(minfi)
-library(ggplot2)
-library(jsonlite) 
+
+suppressPackageStartupMessages({
+
+  library(minfi)
+  library(ggplot2)
+  library(jsonlite)
+})
 
 # ------------------------------------------------------------
-# CHECK INPUT
+# INPUT CHECK
 # ------------------------------------------------------------
+
 args <- commandArgs(trailingOnly = TRUE)
+
 if (length(args) < 2) {
-  stop("Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir>")
+
+  stop(
+    "Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir>"
+  )
 }
+
 rds_path <- args[1]
 job_dir  <- args[2]
 
 if (!file.exists(rds_path)) {
+
   stop("ERROR: filtered_data.rds not found")
 }
 
 # ------------------------------------------------------------
-# LOAD DATA
+# LOAD FILTERED RGChannelSet
 # ------------------------------------------------------------
-data <- readRDS(rds_path)
+#
+# GEÄNDERT:
+# ----------
+# ALT:
+#   Beta-Matrix geladen
+#
+# NEU:
+#   RGChannelSet laden
+#
+# WARUM?
+# -------
+# preprocessNoob()
+# preprocessQuantile()
+# preprocessFunnorm()
+# preprocessSWAN()
+#
+# brauchen ein RGChannelSet
+# ------------------------------------------------------------
+
+filtered_rgset <- readRDS(rds_path)
 
 # ------------------------------------------------------------
-# CREATE ERROR PNG
+# HELPERS
 # ------------------------------------------------------------
-create_error_png <- function(filename, message) {
 
-  png(filename, width = 800, height = 400)
+emit_plot <- function(method, filename) {
+
+  cat(
+    toJSON(
+      list(
+        type   = "plot",
+        method = tolower(method),
+        file   = basename(filename)
+      ),
+      auto_unbox = TRUE
+    ),
+    "\n"
+  )
+
+  flush.console()
+}
+
+# ------------------------------------------------------------
+# ERROR PNG
+# ------------------------------------------------------------
+#
+# GEÄNDERT:
+# ----------
+# PNG deutlich größer gemacht
+#
+# ALT:
+#   kleine PNGs
+#
+# NEU:
+#   1400x800 + höhere Auflösung
+# ------------------------------------------------------------
+
+create_error_png <- function(filename, message, method) {
+
+  png(
+    filename,
+    width = 1400,
+    height = 800,
+    res = 150
+  )
 
   plot.new()
 
@@ -37,85 +144,314 @@ create_error_png <- function(filename, message) {
     0.5,
     0.5,
     paste("ERROR:\n", message),
-    cex = 1.2
+    cex = 1.5
   )
 
   dev.off()
 
-  cat("Created fallback PNG:", filename, "\n")
+  emit_plot(method, filename)
 }
 
 # ------------------------------------------------------------
-# CREATE DENSITY PLOT
+# DENSITY PLOT
 # ------------------------------------------------------------
-make_density_plot <- function(mSet, filename, title) {
+#
+# GEÄNDERT:
+# ----------
+# ALT:
+#   kleine schwer lesbare Plots
+#
+# NEU:
+#   - größere PNGs
+#   - größere Schrift
+#   - dickere Linien
+#   - kleinere Margins
+#
+# WARUM?
+# -------
+# densityPlot() aus minfi nutzt sonst
+# nur einen kleinen Bereich des Bildes
+# ------------------------------------------------------------
 
-  png(filename)
+make_density_plot <- function(beta_values, filename, title) {
+
+  png(
+    filename,
+    width = 1600,
+    height = 1000,
+    res = 150
+  )
+
+  # --------------------------------------------------------
+  # GEÄNDERT:
+  # kleinere Ränder
+  # --------------------------------------------------------
+
+  par(
+    mar = c(5, 5, 4, 2)
+  )
 
   densityPlot(
-    getBeta(mSet),
+    beta_values,
+
     main = title,
-    xlab = "Beta value"
+
+    xlab = "Beta value",
+
+    # ------------------------------------------------------
+    # GEÄNDERT:
+    # größere Schrift
+    # ------------------------------------------------------
+
+    cex.main = 2,
+    cex.lab  = 1.5,
+    cex.axis = 1.3,
+
+    # ------------------------------------------------------
+    # GEÄNDERT:
+    # dickere Linien
+    # ------------------------------------------------------
+
+    lwd = 2
   )
 
   dev.off()
 
-  cat("Saved:", filename, "\n")
+  cat(
+    "Saved:",
+    filename,
+    "\n"
+  )
+
+  flush.console()
 }
 
 # ------------------------------------------------------------
-# RUN METHOD SAFELY
+# RUN METHOD
 # ------------------------------------------------------------
-run_method <- function(name, expr, filename, progress) {
-  cat("Running:", name, "\n")
-  tryCatch({
-    result <- eval(expr)
-    make_density_plot(result, filename, name)
-    cat(toJSON(list(type = "plot", file = filename), auto_unbox = TRUE), "\n")
-  }, error = function(e) {
-    cat("ERROR in", name, ":", e$message, "\n")
-    create_error_png(filename, e$message)
-    cat(toJSON(list(type = "plot", file = filename), auto_unbox = TRUE), "\n")
-  })
-  cat(paste0("PROGRESS:", progress, "\n"))
+#
+# GEÄNDERT:
+# ----------
+# Einheitliche Funktion für:
+#   RAW
+#   NOOB
+#   QUANTILE
+#   SWAN
+#   FUNNORM
+#
+# Weniger duplizierter Code
+# ------------------------------------------------------------
+
+run_method <- function(method_name, normalization_expr) {
+
+  filename <- file.path(
+    job_dir,
+    paste0(
+      "norm_",
+      tolower(method_name),
+      ".png"
+    )
+  )
+
+  cat(
+    "Running:",
+    method_name,
+    "\n"
+  )
+
   flush.console()
+
+  tryCatch({
+
+    # --------------------------------------------------------
+    # NORMALIZATION
+    # --------------------------------------------------------
+
+    normalized <- eval(normalization_expr)
+
+    # --------------------------------------------------------
+    # BETA VALUES
+    # --------------------------------------------------------
+
+    beta <- getBeta(normalized)
+
+    # --------------------------------------------------------
+    # DENSITY PLOT
+    # --------------------------------------------------------
+
+    make_density_plot(
+      beta,
+      filename,
+      method_name
+    )
+
+    # --------------------------------------------------------
+    # SEND TO BACKEND
+    # --------------------------------------------------------
+
+    emit_plot(
+      method_name,
+      filename
+    )
+
+  }, error = function(e) {
+
+    cat(
+      "ERROR in",
+      method_name,
+      ":",
+      e$message,
+      "\n"
+    )
+
+    flush.console()
+
+    # --------------------------------------------------------
+    # ERROR IMAGE
+    # --------------------------------------------------------
+
+    create_error_png(
+      filename,
+      e$message,
+      method_name
+    )
+  })
 }
 
 # ------------------------------------------------------------
 # RAW
 # ------------------------------------------------------------
-png(file.path(job_dir, "norm_raw.png"))
-densityPlot(data, main = "RAW", xlab = "Beta value")
-dev.off()
-png(file.path(job_dir, "norm_noob.png"))
-densityPlot(data, main = "NOOB", xlab = "Beta value")
-dev.off()
-png(file.path(job_dir, "norm_quantile.png"))
-densityPlot(data, main = "QUANTILE", xlab = "Beta value")
-dev.off()
+#
+# GEÄNDERT:
+# ----------
+# RAW basiert jetzt auf preprocessRaw()
+#
+# WARUM?
+# -------
+# Vergleich mit normalisierten Daten
+#
+# WICHTIG:
+# ----------
+# RAW ist nur Referenz
+# NICHT auswählbar im Frontend
+# ------------------------------------------------------------
+
+run_method(
+  "RAW",
+
+  quote(
+    preprocessRaw(filtered_rgset)
+  )
+)
+
+# ------------------------------------------------------------
+# NOOB
+# ------------------------------------------------------------
+
+run_method(
+  "NOOB",
+
+  quote(
+    preprocessNoob(filtered_rgset)
+  )
+)
+
+# ------------------------------------------------------------
+# QUANTILE
+# ------------------------------------------------------------
+#
+# HINWEIS:
+# ----------
+# Kann bei kleinen Datensätzen
+# fehlschlagen
+# ------------------------------------------------------------
+
+run_method(
+  "QUANTILE",
+
+  quote(
+    preprocessQuantile(filtered_rgset)
+  )
+)
 
 # ------------------------------------------------------------
 # SWAN
 # ------------------------------------------------------------
-tryCatch({
+#
+# GEÄNDERT:
+# ----------
+# ALT:
+#   preprocessSWAN(filtered_rgset)
+#
+# FALSCH!
+#
+# NEU:
+#   preprocessSWAN(rgSet, mSet)
+#
+# WARUM?
+# -------
+# SWAN benötigt:
+#   1. RGChannelSet
+#   2. preprocessRaw() Ergebnis
+# ------------------------------------------------------------
 
-  cat("Running: SWAN\n")
+run_method(
+  "SWAN",
 
-  stop("SWAN requires RGChannelSet input")
+  quote({
 
-}, error = function(e) {
+    # ------------------------------------------------------
+    # preprocessRaw() zuerst
+    # ------------------------------------------------------
 
-  create_error_png(file.path(job_dir, "norm_swan.png"), e$message)
-  cat(toJSON(list(type = "plot", file = file.path(job_dir, "norm_swan.png")), auto_unbox = TRUE), "\n")
+    mset_raw <- preprocessRaw(
+      filtered_rgset
+    )
 
-})
+    # ------------------------------------------------------
+    # SWAN korrekt ausführen
+    # ------------------------------------------------------
 
-cat("PROGRESS:80\n")
-flush.console()
+    preprocessSWAN(
+      filtered_rgset,
+      mset_raw
+    )
+  })
+)
 
 # ------------------------------------------------------------
 # FUNNORM
 # ------------------------------------------------------------
-run_method("FUNNORM",  quote(preprocessFunnorm(data)),  file.path(job_dir, "norm_funnorm.png"),  100)
+#
+# GEÄNDERT:
+# ----------
+# nPCs = 2 hinzugefügt
+#
+# WARUM?
+# -------
+# reduziert Fehler:
+#   "initial centers are not distinct"
+#
+# besonders bei kleinen Datensätzen
+# ------------------------------------------------------------
 
-cat("=== NORMALIZATION FINISHED ===\n")
+run_method(
+  "FUNNORM",
+
+  quote(
+    preprocessFunnorm(
+      filtered_rgset,
+      nPCs = 2
+    )
+  )
+)
+
+# ------------------------------------------------------------
+# DONE
+# ------------------------------------------------------------
+
+cat(
+  "=== NORMALIZATION PREVIEW FINISHED ===\n"
+)
+
+flush.console()
