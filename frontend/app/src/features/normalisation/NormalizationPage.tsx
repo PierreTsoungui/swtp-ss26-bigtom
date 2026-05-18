@@ -58,34 +58,39 @@ export function NormalizationPage() {
 
             {/* 5 Plots nebeneinander */}
             <div className="grid grid-cols-5 gap-4 mb-8">
-                {data.methods.map((method) => {
-                    const plot = data.plots[method];
+                {data?.plots?.map((p) => {
                     return (
                         <label
-                            key={method}
+                            key={p.method}
                             className={`cursor-pointer rounded-lg border-2 p-3 transition-colors ${
-                                selected === method
+                                 p.method === "raw"
+                                   ? "cursor-not-allowed opacity-60 border-slate-200 bg-slate-100"
+                                :selected ===p.method
                                     ? "border-blue-500 bg-blue-50"
                                     : "border-slate-200 bg-white"
                             }`}
                         >
                             <img
-                                src={`data:image/png;base64,${plot.plot_base64}`}
-                                alt={`Normalisierung: ${method}`}
+                                src={p.url}
+                                alt={`Normalisierung: ${p.method}`}
                                 className="w-full rounded"
                             />
                             <div className="mt-2 flex items-center gap-2">
                                 <input
                                     type="radio"
                                     name="normalization"
-                                    value={method}
-                                    checked={selected === method}
-                                    onChange={() => setSelected(method)}
+                                    value={p.method}
+                                    checked={selected ===p.method}
+                                    onChange={() =>{ 
+                                        if(p.method!="raw"){
+                                        setSelected(p.method);
+                                    }
+                                    }}
                                 />
-                                <span className="text-sm font-medium">{method}</span>
-                                {plot.quality_score !== undefined && (
+                                <span className="text-sm font-medium">{p.method}</span>
+                                {p.quality_score != undefined && (
                                     <span className="ml-auto text-xs text-slate-400">
-                    {plot.quality_score.toFixed(2)}
+                    {p.quality_score.toFixed(2)}
                   </span>
                                 )}
                             </div>

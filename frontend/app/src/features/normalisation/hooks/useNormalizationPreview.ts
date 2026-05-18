@@ -22,7 +22,7 @@ export function useNormalizationPreview(jobId: string | null): Result {
             setError(null);
             try {
                 const res = await fetch(
-                    `/api/v1/normalization/${jobId}`,
+                    `/api/v1/preview/normalization/${jobId}`,
                     { signal: controller.signal }
                 );
                 if (!res.ok) throw new Error(`Fehler: ${res.status}`);

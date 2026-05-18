@@ -1,15 +1,19 @@
 
-export type NormalizationMethod = "raw" | "funnorm" | "bmiq" | "dasen";
+export type NormalizationMethod =
+  | "raw"
+  | "noob"
+  | "quantile"
+  | "swan"
+  | "funnorm";
 
 export interface NormalizationMethodPlot {
     method: NormalizationMethod;
-    plot_base64: string;       // PNG als Base64
+    url: string;       //  url wird gesendet
     quality_score?: number;    // nur bei non-raw Methoden
     density_data?: unknown;    // nur bei raw
 }
 
 export interface NormalizationPreview {
-    methods: NormalizationMethod[];
-    plots: Record<NormalizationMethod, NormalizationMethodPlot>;
+    plots: NormalizationMethodPlot[];
     recommendation: NormalizationMethod;
 }
