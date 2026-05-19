@@ -53,3 +53,6 @@ RUN R -e "install.packages('tidyverse', repos='https://cloud.r-project.org')"
 
 # Verifikation
 RUN R -e "cat('All R packages installed successfully\n')"
+
+# RhpcBLASctl ermöglicht die Kontrolle über die Anzahl der Threads, die von BLAS/LAPACK-Bibliotheken verwendet werden, was die Leistung bei der Verarbeitung großer Datenmengen verbessern kann.
+RUN R -e "install.packages('RhpcBLASctl', repos='https://cloud.r-project.org')"

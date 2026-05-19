@@ -64,6 +64,22 @@ suppressPackageStartupMessages({
 # ------------------------------------------------------------
 register(SerialParam())
 
+
+message("RhpcBLASctl available: ", requireNamespace("RhpcBLASctl", quietly = TRUE))
+message("OMP_NUM_THREADS: ", Sys.getenv("OMP_NUM_THREADS"))
+message("OPENBLAS_NUM_THREADS: ", Sys.getenv("OPENBLAS_NUM_THREADS"))
+
+# ------------------------------------------------------------
+# BLAS/OpenMP-Threads hart begrenzen
+# (manche BLAS-Bibliotheken ignorieren Umgebungsvariablen)
+# ------------------------------------------------------------
+if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+  RhpcBLASctl::blas_set_num_threads(1)
+  RhpcBLASctl::omp_set_num_threads(1)
+  message("BLAS/OpenMP threads forced to 1")
+}
+
+
 # ------------------------------------------------------------
 # INPUT CHECK
 # ------------------------------------------------------------
@@ -395,9 +411,10 @@ run_method(
 run_method(
   "QUANTILE",
 
-  quote(
+  quote({
+    BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
     preprocessQuantile(filtered_rgset)
-  )
+  })
 )
 
 # ------------------------------------------------------------
@@ -464,12 +481,13 @@ run_method(
 run_method(
   "FUNNORM",
 
-  quote(
+  quote({
+    BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
     preprocessFunnorm(
       filtered_rgset,
       nPCs = 2
     )
-  )
+  })
 )
 
 # ------------------------------------------------------------
