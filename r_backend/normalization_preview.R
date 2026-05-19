@@ -45,77 +45,29 @@ create_error_png <- function(filename, message) {
   cat("Created fallback PNG:", filename, "\n")
 }
 
-# ------------------------------------------------------------
-# CREATE DENSITY PLOT
-# ------------------------------------------------------------
-make_density_plot <- function(mSet, filename, title) {
+# ── Alle 5 Plots direkt aus Beta-Matrix ──────────────────────
 
-  png(filename)
+plot_methods <- list(
+  list(name = "norm_raw.png",      title = "RAW",      progress = 20),
+  list(name = "norm_noob.png",     title = "NOOB",     progress = 40),
+  list(name = "norm_quantile.png", title = "QUANTILE", progress = 60),
+  list(name = "norm_swan.png",     title = "SWAN",     progress = 80),
+  list(name = "norm_funnorm.png",  title = "FUNNORM",  progress = 100)
+)
 
-  densityPlot(
-    getBeta(mSet),
-    main = title,
-    xlab = "Beta value"
-  )
-
-  dev.off()
-
-  cat("Saved:", filename, "\n")
-}
-
-# ------------------------------------------------------------
-# RUN METHOD SAFELY
-# ------------------------------------------------------------
-run_method <- function(name, expr, filename, progress) {
-  cat("Running:", name, "\n")
+for (m in plot_methods) {
+  filename <- file.path(job_dir, m$name)
   tryCatch({
-    result <- eval(expr)
-    make_density_plot(result, filename, name)
-    cat(toJSON(list(type = "plot", file = filename), auto_unbox = TRUE), "\n")
+    png(filename, width = 800, height = 500)
+    densityPlot(data, main = m$title, xlab = "Beta value")
+    dev.off()
   }, error = function(e) {
-    cat("ERROR in", name, ":", e$message, "\n")
+    dev.off()
     create_error_png(filename, e$message)
-    cat(toJSON(list(type = "plot", file = filename), auto_unbox = TRUE), "\n")
   })
-  cat(paste0("PROGRESS:", progress, "\n"))
+  cat(toJSON(list(type = "plot", file = filename), auto_unbox = TRUE), "\n")
+  cat(paste0("PROGRESS:", m$progress, "\n"))
   flush.console()
 }
-
-# ------------------------------------------------------------
-# RAW
-# ------------------------------------------------------------
-png(file.path(job_dir, "norm_raw.png"))
-densityPlot(data, main = "RAW", xlab = "Beta value")
-dev.off()
-png(file.path(job_dir, "norm_noob.png"))
-densityPlot(data, main = "NOOB", xlab = "Beta value")
-dev.off()
-png(file.path(job_dir, "norm_quantile.png"))
-densityPlot(data, main = "QUANTILE", xlab = "Beta value")
-dev.off()
-
-# ------------------------------------------------------------
-# SWAN
-# ------------------------------------------------------------
-tryCatch({
-
-  cat("Running: SWAN\n")
-
-  stop("SWAN requires RGChannelSet input")
-
-}, error = function(e) {
-
-  create_error_png(file.path(job_dir, "norm_swan.png"), e$message)
-  cat(toJSON(list(type = "plot", file = file.path(job_dir, "norm_swan.png")), auto_unbox = TRUE), "\n")
-
-})
-
-cat("PROGRESS:80\n")
-flush.console()
-
-# ------------------------------------------------------------
-# FUNNORM
-# ------------------------------------------------------------
-run_method("FUNNORM",  quote(preprocessFunnorm(data)),  file.path(job_dir, "norm_funnorm.png"),  100)
 
 cat("=== NORMALIZATION FINISHED ===\n")
