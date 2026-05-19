@@ -27,11 +27,11 @@ async def upload_files(
     sample_sheet: UploadFile = File(...)
 ):
     # Validierung
+  # Décommenter ces lignes :
     idat_valid, idat_result = validate_idat_files(idat_files)
     if not idat_valid:
         print(f"[DEBUG] IDAT Validierung fehlgeschlagen: {idat_result}")
         raise HTTPException(status_code=400, detail=idat_result)
-    
     sheet_valid, sheet_result = validate_sample_sheet(sample_sheet)
     if not sheet_valid:
         print(f"[DEBUG] Sample Sheet Validierung fehlgeschlagen: {sheet_result}")
@@ -109,6 +109,9 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
         
        
         if result["returncode"] != 0:
+            job = get_job(job_id)
+            if job and job.status == "canceled":
+                return  # ← Ne pas écraser le status canceled
             update_job(
                 job_id,
                 status="failed",

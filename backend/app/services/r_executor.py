@@ -4,6 +4,8 @@ import asyncio
 import json
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
+# NEU: import oben hinzufügen
+from app.services import job_manager
 
 R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
 
@@ -46,7 +48,7 @@ async def run_r_script(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-
+        job_manager.register_process(job_id, process)   # ← NEU
         stdout_lines = []
         stderr_lines = []
         filter_stats = {}  
@@ -98,6 +100,7 @@ async def run_r_script(
         # Beide Streams parallel lesen
         await asyncio.gather(read_stdout(), read_stderr())
         returncode = await process.wait()
+        job_manager.unregister_process(job_id) 
 
         stdout_str = "\n".join(stdout_lines)
         stderr_str = "\n".join(stderr_lines)
