@@ -38,6 +38,16 @@
 # ------------------------------------------------------------
 
 # ------------------------------------------------------------
+# THREADING LIMITIEREN
+# ------------------------------------------------------------
+
+#Sys.setenv(OMP_NUM_THREADS = "1")
+#Sys.setenv(OPENBLAS_NUM_THREADS = "1")
+#Sys.setenv(MKL_NUM_THREADS = "1")
+#Sys.setenv(NUMEXPR_NUM_THREADS = "1")
+#Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
+
+# ------------------------------------------------------------
 # LIBRARIES
 # ------------------------------------------------------------
 
@@ -46,7 +56,13 @@ suppressPackageStartupMessages({
   library(minfi)
   library(ggplot2)
   library(jsonlite)
+  library(BiocParallel)
 })
+
+# ------------------------------------------------------------
+# PARALLELVERARBEITUNG DEAKTIVIEREN
+# ------------------------------------------------------------
+register(SerialParam())
 
 # ------------------------------------------------------------
 # INPUT CHECK
@@ -133,9 +149,10 @@ create_error_png <- function(filename, message, method) {
 
   png(
     filename,
-    width = 1400,
-    height = 800,
-    res = 150
+    width = 800, # Vorher: 1400
+    height = 500, # Vorher: 800
+    res = 96, # Vorher: 150
+    type = "cairo"
   )
 
   plot.new()
@@ -177,9 +194,10 @@ make_density_plot <- function(beta_values, filename, title) {
 
   png(
     filename,
-    width = 1600,
-    height = 1000,
-    res = 150
+    width = 800, # Vorher: 1600
+    height = 500, # Vorher: 1000
+    res = 96, # Vorher: 150
+    type = "cairo" # Cairo-Rendering ohne X11-Interaktion
   )
 
   # --------------------------------------------------------
@@ -216,6 +234,10 @@ make_density_plot <- function(beta_values, filename, title) {
   )
 
   dev.off()
+
+  while(!is.null(dev.list())) {
+    dev.off()
+  }
 
   cat(
     "Saved:",
@@ -294,6 +316,8 @@ run_method <- function(method_name, normalization_expr) {
       filename
     )
 
+     rm(normalized, beta) # Speicher freigeben
+
   }, error = function(e) {
 
     cat(
@@ -316,6 +340,8 @@ run_method <- function(method_name, normalization_expr) {
       method_name
     )
   })
+
+  gc(verbose = FALSE, full = TRUE) # Freigabe von Speicher nach jeder Methode
 }
 
 # ------------------------------------------------------------

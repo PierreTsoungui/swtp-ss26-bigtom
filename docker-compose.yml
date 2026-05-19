@@ -21,6 +21,21 @@ services:
 
   r_worker:
     build: ./r_backend
+    security_opt:
+      - seccomp:unconfined
+
+    environment:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+      VECLIB_MAXIMUM_THREADS: "1"
+
+    ulimits:
+      nproc:
+        soft: 65536
+        hard: 65536
+
     volumes:
       - ./r_backend:/app/r_backend
       - ./data:/app/data
