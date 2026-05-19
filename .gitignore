@@ -6,3 +6,14 @@ backend/app/api/routes/__pycache__
 jobs/*.RData
 .Rhistory
 *.swp
+
+# Fichiers générés par Vite/Tailwind
+*.css
+*.js
+*.map
+
+# Jobs générés par BigTom
+jobs/
+*.rds
+*.png
+*.csv
