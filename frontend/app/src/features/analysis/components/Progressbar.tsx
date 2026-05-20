@@ -3,6 +3,7 @@ import type { JobStatus } from '../utils/types';
 import CancelButton from './CancelButton';
 import {useJobCancel} from "../hooks/useJobCancel.ts";
 import ErrorMessage from "../../../shared/error-handling/components/ErrorMessage.tsx";
+import {useNavigate} from "react-router";
 
 /**
  * Props, die an die Progressbar übergeben werden
@@ -23,14 +24,18 @@ type ProgressbarProps = {
  * @returns Die gerenderte Fortschrittsanzeige
  */
 function Progressbar({ jobStatus }: ProgressbarProps) {
-    const { cancelJob, isLoading, error: cancelError } = useJobCancel(jobStatus.job_id);
+    const navigate = useNavigate();
+    const handleCancelSuccess = () => {
+        navigate("/upload");
+    }
+    const { cancelJob, isLoading: isLoadingJobAbort, error: cancelError } = useJobCancel(jobStatus.job_id, handleCancelSuccess);
 
     return (
         <div className="w-9/12 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             {/* Error PopUp Snackbar */}
             {cancelError && (
                 <ErrorMessage
-                    open={!!cancelJob}
+                    open={true}
                     error={cancelError}
                     vertical={"top"}
                     horizontal={"center"}
@@ -65,6 +70,11 @@ function Progressbar({ jobStatus }: ProgressbarProps) {
                 />
             </div>
 
+            {/* Cancel Status*/}
+            {isLoadingJobAbort && (
+                <p className="text-sm text-gray-500 mb-3">Job wird abgebrochen...</p>
+            )}
+
             {/* Infos */}
             <div className="space-y-3 text-sm text-gray-700">
                 <div className="flex flex-col gap-1">
@@ -90,8 +100,8 @@ function Progressbar({ jobStatus }: ProgressbarProps) {
 
             <div className="mt-6 flex justify-center">
                 <CancelButton
-                    onCancel={() => cancelJob()}
-                    disabled={isLoading}
+                    onCancel={cancelJob}
+                    disabled={isLoadingJobAbort}
                 />
             </div>
         </div>
