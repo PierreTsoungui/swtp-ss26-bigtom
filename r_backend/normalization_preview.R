@@ -38,6 +38,16 @@
 # ------------------------------------------------------------
 
 # ------------------------------------------------------------
+# THREADING LIMITIEREN
+# ------------------------------------------------------------
+
+Sys.setenv(OMP_NUM_THREADS = "1")
+Sys.setenv(OPENBLAS_NUM_THREADS = "1")
+Sys.setenv(MKL_NUM_THREADS = "1")
+Sys.setenv(NUMEXPR_NUM_THREADS = "1")
+Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
+
+# ------------------------------------------------------------
 # LIBRARIES
 # ------------------------------------------------------------
 
@@ -46,7 +56,32 @@ suppressPackageStartupMessages({
   library(minfi)
   library(ggplot2)
   library(jsonlite)
+  library(BiocParallel)
 })
+
+BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
+options(mc.cores = 1)
+
+# ------------------------------------------------------------
+# PARALLELVERARBEITUNG DEAKTIVIEREN
+# ------------------------------------------------------------
+register(SerialParam())
+
+
+message("RhpcBLASctl available: ", requireNamespace("RhpcBLASctl", quietly = TRUE))
+message("OMP_NUM_THREADS: ", Sys.getenv("OMP_NUM_THREADS"))
+message("OPENBLAS_NUM_THREADS: ", Sys.getenv("OPENBLAS_NUM_THREADS"))
+
+# ------------------------------------------------------------
+# BLAS/OpenMP-Threads hart begrenzen
+# (manche BLAS-Bibliotheken ignorieren Umgebungsvariablen)
+# ------------------------------------------------------------
+if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
+  RhpcBLASctl::blas_set_num_threads(1)
+  RhpcBLASctl::omp_set_num_threads(1)
+  message("BLAS/OpenMP threads forced to 1")
+}
+
 
 # ------------------------------------------------------------
 # INPUT CHECK
@@ -133,9 +168,10 @@ create_error_png <- function(filename, message, method) {
 
   png(
     filename,
-    width = 1400,
-    height = 800,
-    res = 150
+    width = 800, # Vorher: 1400
+    height = 500, # Vorher: 800
+    res = 96, # Vorher: 150
+    type = "cairo"
   )
 
   plot.new()
@@ -177,9 +213,10 @@ make_density_plot <- function(beta_values, filename, title) {
 
   png(
     filename,
-    width = 1600,
-    height = 1000,
-    res = 150
+    width = 800, # Vorher: 1600
+    height = 500, # Vorher: 1000
+    res = 96, # Vorher: 150
+    type = "cairo" # Cairo-Rendering ohne X11-Interaktion
   )
 
   # --------------------------------------------------------
@@ -216,6 +253,10 @@ make_density_plot <- function(beta_values, filename, title) {
   )
 
   dev.off()
+
+  while(!is.null(dev.list())) {
+    dev.off()
+  }
 
   cat(
     "Saved:",
@@ -294,6 +335,8 @@ run_method <- function(method_name, normalization_expr) {
       filename
     )
 
+     rm(normalized, beta) # Speicher freigeben
+
   }, error = function(e) {
 
     cat(
@@ -316,6 +359,8 @@ run_method <- function(method_name, normalization_expr) {
       method_name
     )
   })
+
+  gc(verbose = FALSE, full = TRUE) # Freigabe von Speicher nach jeder Methode
 }
 
 # ------------------------------------------------------------
@@ -369,9 +414,10 @@ run_method(
 run_method(
   "QUANTILE",
 
-  quote(
+  quote({
+    BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
     preprocessQuantile(filtered_rgset)
-  )
+  })
 )
 
 # ------------------------------------------------------------
@@ -438,12 +484,13 @@ run_method(
 run_method(
   "FUNNORM",
 
-  quote(
+  quote({
+    BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
     preprocessFunnorm(
       filtered_rgset,
       nPCs = 2
     )
-  )
+  })
 )
 
 # ------------------------------------------------------------
