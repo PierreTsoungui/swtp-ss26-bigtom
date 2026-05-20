@@ -1,8 +1,8 @@
-import './App.css'
 import { Route, Routes } from 'react-router';
 import UploadView from './features/upload/UploadView';
 import { AnalysisPage } from './features/analysis/AnalysisPage';
 import {NormalizationPage} from "./features/normalisation/NormalizationPage.tsx";
+import "./App.css";
 
 
 /**

@@ -8,13 +8,12 @@ interface ErrorMessageProps extends SnackbarOrigin {
 }
 
 function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) {
-
     const [isOpen, setisOpen] = useState(open);
 
-    const handleClose = () => {
-        setisOpen(false)
-    };
-    
+    useEffect(() => {
+        setisOpen(open);
+    }, [open, error]);
+
     // Nach 10 Sekunden automatisch schließen
     useEffect(() => {
         if (isOpen) {
@@ -24,7 +23,11 @@ function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) 
             return () => clearTimeout(timer);
         }
     }, [isOpen]);
-    // Error titel und detail angeben
+
+    const handleClose = () => {
+        setisOpen(false)
+    };
+
     return (
         <Snackbar
         anchorOrigin={{ vertical, horizontal }}

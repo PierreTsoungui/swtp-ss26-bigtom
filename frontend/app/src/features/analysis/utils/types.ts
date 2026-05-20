@@ -83,3 +83,22 @@ export interface ResultsTableSorting {
   column: string;
   order: SortOrder;
 }
+
+export type ResetStatusTpe = {
+  reset: boolean;
+  status: JobStatusValue;
+}
+
+
+// Typdefinition für eine einzelne Methylierungs-Zeile
+export type MethylationRow = {
+  cpgId: string;           // ID des CpG-Sites
+  geneSymbol: string;      // Name des zugehörigen Gens
+  deltaBeta: number;       // Differenz der Beta-Werte (behandelt vs. Kontrolle)
+  pValue: number;          // Statistische Signifikanz
+  region: string;          // Genregion (Promotor, Körper, etc.)
+  status: string;          // Status (signifikant/nicht signifikant)
+  chromosome: string;      // Chromosomen-Nummer
+  position: number;        // Genomische Position
+  geneDescription?: string; // Optionale Genbeschreibung
+};

@@ -1,6 +1,8 @@
 import LinearProgress from '@mui/material/LinearProgress';
 import type { JobStatus } from '../utils/types';
 import CancelButton from './CancelButton';
+import {useJobCancel} from "../hooks/useJobCancel.ts";
+import ErrorMessage from "../../../shared/error-handling/components/ErrorMessage.tsx";
 
 /**
  * Props, die an die Progressbar übergeben werden
@@ -21,8 +23,19 @@ type ProgressbarProps = {
  * @returns Die gerenderte Fortschrittsanzeige
  */
 function Progressbar({ jobStatus }: ProgressbarProps) {
+    const { cancelJob, isLoading, error: cancelError } = useJobCancel(jobStatus.job_id);
+
     return (
         <div className="w-9/12 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            {/* Error PopUp Snackbar */}
+            {cancelError && (
+                <ErrorMessage
+                    open={!!cancelJob}
+                    error={cancelError}
+                    vertical={"top"}
+                    horizontal={"center"}
+                />
+            )}
 
             {/* Header */}
             <div className="mb-4 flex items-center justify-between">
@@ -74,15 +87,11 @@ function Progressbar({ jobStatus }: ProgressbarProps) {
             </div>
 
             {/* Footer */}
-            {/*
-                TODO: (FÜR MAXIM!!!) onCancel Funktion implementieren, die den Request zum Abbrechen der Analyse an die API sendet.
-                Warten bis Backend die Route implementiert hat
-                Route müsste POST /reset/{job_id} sein
-            */}
 
             <div className="mt-6 flex justify-center">
                 <CancelButton
-                    onCancel={() => console.log('Not yet implemented')}
+                    onCancel={() => cancelJob()}
+                    disabled={isLoading}
                 />
             </div>
         </div>

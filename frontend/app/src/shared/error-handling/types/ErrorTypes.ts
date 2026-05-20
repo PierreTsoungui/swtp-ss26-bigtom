@@ -15,3 +15,13 @@ export interface ProblemDetail {
   instance: string;
   errors?: Record<string, string[]>;
 }
+
+
+/**
+ * Zusätzlicher Type für Error Responses, da im Backend aktuell die Fehlermeldungen
+ * zusätzlich in einem weiteren details Feld verschachtelt sind
+ * @property details ProblemDetail Typ das dem RFC 7807 entspricht.
+ */
+export type ApiProblemDetail = {
+  details: ProblemDetail;
+}
