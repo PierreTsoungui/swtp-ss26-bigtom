@@ -9,9 +9,6 @@ const TERMINAL_STATES: JobStatusValue[] = [
   "canceled",
   "filtering_done",
 ];
-/**
-
- */
 
 /**
  * Custom Hook, der den Status eines Jobs überwacht, indem er regelmäßig die API abfragt.
@@ -23,8 +20,6 @@ export function useJobPolling(jobId: string | null): JobStatus | null {
 
   useEffect(() => {
     if (!jobId) return;
-    console.log(`[POLLING] Starting job polling for job ID: ${jobId}`);
-    console.log(`[POLLING] Initial job status: ${JSON.stringify(jobStatus)}`);
 
     intervalRef.current = setInterval(async () => {
       try {

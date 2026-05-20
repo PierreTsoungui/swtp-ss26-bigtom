@@ -26,9 +26,7 @@ type ProgressbarProps = {
 function Progressbar({ jobStatus }: ProgressbarProps) {
     const navigate = useNavigate();
     const handleCancelSuccess = () => {
-        setTimeout(() => {
-            navigate("/upload");
-        }, 800);
+        navigate("/upload");
     };
 
     const { cancelJob, isLoading: isLoadingJobAbort, error: cancelError } = useJobCancel(jobStatus.job_id, handleCancelSuccess);
