@@ -1,6 +1,4 @@
-
 services:
-
   frontend:
     build: ./frontend
     ports:
@@ -23,19 +21,21 @@ services:
     build: ./r_backend
     security_opt:
       - seccomp:unconfined
-
-    environment:
-      OMP_NUM_THREADS: "1"
-      OPENBLAS_NUM_THREADS: "1"
-      MKL_NUM_THREADS: "1"
-      NUMEXPR_NUM_THREADS: "1"
-      VECLIB_MAXIMUM_THREADS: "1"
-
     ulimits:
       nproc:
         soft: 65536
         hard: 65536
-
+      nofile:
+        soft: 65536
+        hard: 65536
+      stack: 67108864
+    environment:
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - BLAS_NUM_THREADS=1
+      - BIOCPARALLEL_WORKER_NUMBER=1
+      - R_BIOC_PARALLEL_WORKERS=1
     volumes:
       - ./r_backend:/app/r_backend
       - ./data:/app/data

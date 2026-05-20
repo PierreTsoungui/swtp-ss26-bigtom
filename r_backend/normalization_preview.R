@@ -41,11 +41,11 @@
 # THREADING LIMITIEREN
 # ------------------------------------------------------------
 
-#Sys.setenv(OMP_NUM_THREADS = "1")
-#Sys.setenv(OPENBLAS_NUM_THREADS = "1")
-#Sys.setenv(MKL_NUM_THREADS = "1")
-#Sys.setenv(NUMEXPR_NUM_THREADS = "1")
-#Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
+Sys.setenv(OMP_NUM_THREADS = "1")
+Sys.setenv(OPENBLAS_NUM_THREADS = "1")
+Sys.setenv(MKL_NUM_THREADS = "1")
+Sys.setenv(NUMEXPR_NUM_THREADS = "1")
+Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
 
 # ------------------------------------------------------------
 # LIBRARIES
@@ -58,6 +58,9 @@ suppressPackageStartupMessages({
   library(jsonlite)
   library(BiocParallel)
 })
+
+BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
+options(mc.cores = 1)
 
 # ------------------------------------------------------------
 # PARALLELVERARBEITUNG DEAKTIVIEREN
