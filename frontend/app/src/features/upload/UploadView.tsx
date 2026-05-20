@@ -7,10 +7,6 @@ import IdatUpload from "./components/IdatUpload";
 import { useUpload } from "./hooks/useUpload";
 import { useNavigate } from "react-router";
 
-// TODOS:
-// - Testen mit echten Dateien (auch ungültige Dateien!)
-// - Backend-Integration (API-Call mit FormData)
-// - (Optional): Drag & Drop Unterstützung für beide Uploads
 
 /**
  * Komponente für den Upload von IDAT-Dateien und einem Sample Sheet.

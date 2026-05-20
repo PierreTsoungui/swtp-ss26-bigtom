@@ -14,7 +14,7 @@ export function NormalizationPage() {
         if (!selected || !job_id) return;
         setIsSubmitting(true);
         try {
-            const res = await fetch(`normalize/${job_id}`, {
+            const res = await fetch(`/api/v1/normalize/${job_id}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ method: selected }),

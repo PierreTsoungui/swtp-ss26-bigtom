@@ -88,15 +88,15 @@ async def upload_files(
         sample_sheet.filename
     )
     return UploadResponse(job_id=job_id, status="queued")
- 
-    
+
+
     # Callback für Fortschritts-Updates aus R
 async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
     """
     Hintergrundverarbeitung für die Filterung.
     """
     try:
-       
+
         update_job(
             job_id,
             status="running",
@@ -104,8 +104,8 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             progress_percent=0,
             current_step="Starte Filterung der Rohdaten..."
         )
-        
-       
+
+
         async def on_progress(progress_data: dict):
             update_job(
                 job_id,
@@ -116,7 +116,7 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             )
             print(f"[FILTERING] Job {job_id}: {progress_data['progress']}% - {progress_data['step']}")
 
-       
+
         result = await run_r_script(
             script="init_filter.R",
             job_id=job_id,
@@ -125,18 +125,21 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             on_progress=on_progress
         )
 
-        
+
         if result["returncode"] != 0:
+            job = get_job(job_id)
+            if job and job.status == "canceled":
+                return
             update_job(
                 job_id,
                 status="failed",
                 phase="filtering",
-                progress_percent=0,
+                progress_percent=job.progress_percent if job else 0,
                 error_message=result["stderr"]
             )
             return
 
-        
+
         stats_path = Path(job_dir) / "filter_stats.json"
         if not stats_path.exists():
             update_job(
@@ -154,7 +157,7 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
         # Im Job-Manager speichern
         save_filter_stats(job_id, filter_stats)
 
-      
+
         update_job(
             job_id,
             status="running",
@@ -179,4 +182,3 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             error_message=str(e)
         )
         print(f"[FILTERING] Job {job_id}: Fehler - {str(e)}")
-        

@@ -1,7 +1,7 @@
 import {type NavigateFunction, useNavigate, useParams} from "react-router";
-import { ResultsTable } from "./components/ResultsTable";
+// import { ResultsTable } from "./components/ResultsTable";
 import { useJobPolling } from "./hooks/useJobPolling";
-import { useResultsTable } from "./hooks/useResultsTable";
+// import { useResultsTable } from "./hooks/useResultsTable";
 import type {FilteringStatsType,  JobStatus} from "./utils/types";
 import Progressbar from "./components/Progressbar.tsx";
 import {useEffect, useRef} from "react";
@@ -17,7 +17,7 @@ import {convertBackendFilterStats} from "./utils/helpers.ts";
 export function AnalysisPage() {
   const { job_id } = useParams<{ job_id: string }>();
   const jobStatus : JobStatus | null = useJobPolling(job_id ?? null);
-  const resultsTable = useResultsTable(job_id ?? null, jobStatus?.status);
+  // const resultsTable = useResultsTable(job_id ?? null, jobStatus?.status);
   const navigate : NavigateFunction = useNavigate();
 
   // ── Filter Stats cachen ───────────────────────────────────────
@@ -98,7 +98,7 @@ export function AnalysisPage() {
       );
     }
   }
-
+  /*
   if (jobStatus?.status === "normalization_done") {
     if (resultsTable.error) {
       return (
@@ -144,7 +144,7 @@ export function AnalysisPage() {
         />
       </main>
     );
-  }
+  }*/
 
   return (
     <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">

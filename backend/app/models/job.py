@@ -1,5 +1,3 @@
-# job.py
-
 from datetime import datetime
 from typing import Optional, Dict, List
 from pydantic import BaseModel
@@ -19,7 +17,7 @@ class JobStatus(BaseModel):
     created_at: datetime
     expires_at: datetime
     preview_plots: List[str] = []
-    
+
 class UploadResponse(BaseModel):
     job_id: str
     status: str

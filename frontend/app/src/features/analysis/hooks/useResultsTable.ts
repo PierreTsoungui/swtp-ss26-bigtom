@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { resultsTableMock } from "../mocks/resultsTableMock";
+
+
+/**
+ * Might be deleted in future
+ * @Deprecated
+ **/
+
+
 import type {
   JobStatusValue,
   ResultsTableCellValue,
@@ -56,11 +63,11 @@ export function useResultsTable(
       } catch (caughtError) {
         if (controller.signal.aborted) return;
 
-        if (shouldUseMockFallback()) {
+        /*if (shouldUseMockFallback()) {
           setData(resultsTableMock);
           setError(null);
           return;
-        }
+        }*/
 
         setData(null);
         setError(toErrorMessage(caughtError));
@@ -163,9 +170,9 @@ function isNonNegativeInteger(value: unknown): value is number {
   return Number.isInteger(value) && typeof value === "number" && value >= 0;
 }
 
-function shouldUseMockFallback(): boolean {
+/*function shouldUseMockFallback(): boolean {
   return import.meta.env.DEV && import.meta.env.VITE_USE_RESULTS_TABLE_MOCK === "true";
-}
+}*/
 
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {

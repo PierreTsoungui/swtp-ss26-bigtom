@@ -6,6 +6,8 @@
 # ─── Jobs (Patientendaten – niemals ins Repo) ────────
 jobs/*/
 !jobs/.gitkeep
+jobs/*.idat
+jobs/
 
 
 # ─── Python ──────────────────────────────────────────
@@ -35,6 +37,8 @@ env/
 ENV/
 backend/venv/
 backend/.venv/
+backend/app/__pycache__
+backend/app/api/routes/__pycache__
 
 # pytest
 .pytest_cache/
@@ -63,7 +67,6 @@ htmlcov/
 # ─── Node / Frontend ─────────────────────────────────
 node_modules/
 frontend/app/node_modules/
-dist/
 frontend/app/dist/
 *.local
 
