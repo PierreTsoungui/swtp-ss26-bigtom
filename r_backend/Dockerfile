@@ -37,7 +37,7 @@ RUN R -e "BiocManager::install(c( \
 # ChAMP installieren (installiert minfi, limma, sva, DMRcate automatisch mit)
 RUN R -e "BiocManager::install('ChAMP', dependencies=TRUE, ask=FALSE)"
 
-# Visualisierung und klassische Datenverarbeitung nachladen (remotes hier direkt mit rein)
+# Visualisierung und kllassische Datenverarbeitung nachladen (remotes hier direkt mit rein)
 RUN R -e "BiocManager::install('ComplexHeatmap', ask=FALSE)"
 RUN R -e "install.packages(c( \
     'data.table','readxl','logger','progressr','tidyverse','RhpcBLASctl', 'remotes' \
