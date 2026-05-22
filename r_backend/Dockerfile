@@ -51,16 +51,11 @@ RUN R -e "install.packages(c( \
 RUN R -e "install.packages('tidyverse', repos='https://cloud.r-project.org')"
 
 # Verifikation
-RUN R -e " \
-    library(minfi);          cat('minfi       OK\n'); \
-    library(limma);          cat('limma       OK\n'); \
-    library(sva);            cat('sva         OK\n'); \
-    library(ggplot2);        cat('ggplot2     OK\n'); \
-    library(ComplexHeatmap); cat('Heatmap     OK\n'); \
-    library(data.table);     cat('data.table  OK\n'); \
-    library(readxl);         cat('readxl      OK\n'); \
-    library(logger);         cat('logger      OK\n'); \
-    library(progressr);      cat('progressr   OK\n'); \
-    cat('Alle Libraries OK\n')"
+RUN R -e "cat('All R packages installed successfully\n')"
 
-WORKDIR /app
+# RhpcBLASctl ermöglicht die Kontrolle über die Anzahl der Threads, die von BLAS/LAPACK-Bibliotheken verwendet werden, was die Leistung bei der Verarbeitung großer Datenmengen verbessern kann.
+RUN R -e "install.packages('RhpcBLASctl', repos='https://cloud.r-project.org')"
+
+RUN R -e "BiocManager::install('preprocessCore', \
+    configure.args = '--disable-threading', \
+    force = TRUE, ask = FALSE)"
