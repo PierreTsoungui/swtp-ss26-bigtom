@@ -1,23 +1,26 @@
 # app/api/routes/upload.py
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request, Form
 from typing import List
 from pathlib import Path
 import uuid
 import json
 
+from pydantic import ValidationError
+from app.core.error_types import ErrorTypes, problem_detail
 from app.services.normalization_preview_service import run_normalization_preview
 from app.services.job_manager import create_job, get_job, save_filter_stats, update_job
 from app.services.file_handler import (
     ensure_upload_dir,
     save_idat_files,
     save_sample_sheet,
+    save_filter_settings,
     validate_idat_files,
     validate_sample_sheet,
     clean_job_files
 )
 from app.services.r_executor import run_r_script
-from app.models.job import UploadResponse
+from app.models.job import UploadResponse, FilterSettings
 
 router = APIRouter()
 
@@ -27,7 +30,8 @@ async def upload_files(
     request: Request,
     background_tasks: BackgroundTasks,
     idat_files: List[UploadFile] = File(...),
-    sample_sheet: UploadFile = File(...)
+    sample_sheet: UploadFile = File(...),
+    filter_settings: str = Form(None)
 ):
     idat_valid, idat_result = validate_idat_files(idat_files)
     if not idat_valid:
@@ -62,9 +66,59 @@ async def upload_files(
     job_id = str(uuid.uuid4())
     job_dir = ensure_upload_dir(job_id)
 
+    # Optionales Filter-JSON parsen und validieren
+    filter_settings_model = None
+
+    if filter_settings is not None and filter_settings.strip() != "":
+
+        # JSON string -> dict
+        try:
+            parsed_filter = json.loads(filter_settings)
+
+            parsed_filter = parsed_filter["filter_settings"]
+
+        except json.JSONDecodeError as e:
+            clean_job_files(job_id)
+            raise HTTPException(
+                status_code=ErrorTypes.INVALID_FILTER_JSON.status,
+                detail=problem_detail(
+                    ErrorTypes.INVALID_FILTER_JSON,
+                    f"Fehler beim Parsen von filter_settings: {str(e)}",
+                    request.url.path,
+                    job_id=job_id
+                )
+            )
+
+        # VALIDATION
+        filter_settings_model = FilterSettings.model_validate(parsed_filter)
+
+    else:
+        # Defaults
+        filter_settings_model = FilterSettings()
+
+
+
     try:
         save_idat_files(idat_files, job_dir)
         save_sample_sheet(sample_sheet, job_dir)
+
+        try:
+            save_filter_settings(filter_settings_model.model_dump(), job_dir)
+
+        except Exception as e:
+            clean_job_files(job_id)
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "type": "/errors/save-failed",
+                    "title": "Save failed",
+                    "status": 500,
+                    "detail": f"Fehler beim Speichern von filter_settings.json: {str(e)}",
+                    "instance": request.url.path,
+                    "job_id": job_id
+                }
+            )
+
     except Exception as e:
         clean_job_files(job_id)
         raise HTTPException(
@@ -79,16 +133,24 @@ async def upload_files(
             }
         )
 
+
+    # Job erstellen (IMMER)
     create_job(job_id, str(job_dir))
 
+
+    # Background Task starten (IMMER)
     background_tasks.add_task(
         process_upload_background,
         job_id,
         job_dir,
         sample_sheet.filename
     )
-    return UploadResponse(job_id=job_id, status="queued")
 
+    return UploadResponse(
+        job_id=job_id,
+        status="queued",
+        filter_settings=filter_settings_model.model_dump()
+    )
 
     # Callback für Fortschritts-Updates aus R
 async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
