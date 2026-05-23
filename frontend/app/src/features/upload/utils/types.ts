@@ -59,25 +59,105 @@ export type BeadCountFilter = {
     sample_fraction: number;
 }
 
+/**
+ * Filter-Einstellungen für den Non-CpG Filter.
+ */
 export type NonCpgFilter = {
+    /**
+     * Gibt an, ob der Non-Cpg Filter aktiv ist.
+     *
+     * @defaultValue true
+     */
     enabled: boolean;
 }
 
+/**
+ * Filter-Einstellungen für den SNP Filter.
+ */
 export type SnpFilter = {
+    /**
+     * Gibt an ob der SNP Filter aktiv ist.
+     */
     enabled: boolean;
+
+    /**
+     * Minor Allele Frequency (MAF) Schwellenwert.
+     *
+     * Proben werden entfernt, wenn der zugehörige SNP eine MAF
+     * **größer oder gleich** diesem Wert in der Referenzpopulation hat.
+     * Ein Wert von `0.05` entfernt alle Proben mit SNPs, die in mindestens
+     * 5 % der Population vorkommen.
+     *
+     * - **Minimum:** `0.0` — entfernt alle Proben mit irgendeinem bekannten SNP
+     * - **Maximum:** `0.5` — theoretisches Maximum (MAF kann per Definition nie > 0.5 sein)
+     * - **Schritt:** `0.01`
+     *
+     * @defaultValue 0.05
+     */
     maf: number;
 }
 
+/**
+ * Filter-Einstellungen für den Multi-Hit Filter.
+ */
 export type MultiHitFilter = {
+    /**
+     * Gibt an ob Multi-Hit Filer aktiv ist.
+     *
+     * @defaultValue true
+     */
     enabled: boolean;
 }
 
+/**
+ * Gesamte Filter-Konfiguration für den Upload-Schritt
+ *
+ * Wird als optionales JSON-Feld im `multipart/form-data` Request an
+ * `POST /api/v1/upload` übergeben. Wenn nicht angegeben, verwendet
+ * das Backend die Standard-Werte aller Filter.
+ *
+ * @example
+ * ```typescript
+ * const filter_settings: FilterSettings = {
+ *   filter_settings: {
+ *     det_p:         { enabled: true, cutoff: 0.01 },
+ *     bead_count:    { enabled: true, min_beads: 3, sample_fraction: 0.05 },
+ *     non_cpg:       { enabled: true },
+ *     snp:           { enabled: true, maf: 0.05 },
+ *     multi_hit:     { enabled: true }
+ *   }
+ * };
+ * ```
+ */
 export type FilterSettings = {
     filter_settings : {
+        /** {@link DetPFilter} **/
         det_p : DetPFilter,
+
+        /** {@link BeadCountFilter} **/
         bead_count : BeadCountFilter,
+
+        /** {@link NonCpgFilter} **/
         non_cpg : NonCpgFilter,
+
+        /** {@link SnpFilter} **/
         snp : SnpFilter,
+
+        /** {@link MultiHitFilter} **/
         multi_hit : MultiHitFilter,
     }
 }
+
+/**
+ * Standard-Filterkonfiguration die verwendet wird wenn der Nutzer
+ * keine eigenen Einstellungen vorgenommen hat.
+ */
+export const DEFAULT_FILTER_SETTINGS: FilterSettings = {
+    filter_settings: {
+        det_p:          { enabled: true,  cutoff: 0.01 },
+        bead_count:     { enabled: true,  min_beads: 3, sample_fraction: 0.05 },
+        non_cpg:        { enabled: true },
+        snp:            { enabled: true,  maf: 0.05 },
+        multi_hit:      { enabled: true }
+    },
+};
