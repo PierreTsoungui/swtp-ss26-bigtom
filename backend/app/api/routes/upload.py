@@ -75,6 +75,9 @@ async def upload_files(
         try:
             parsed_filter = json.loads(filter_settings)
 
+            print("RAW FILTER_SETTINGS STRING:", filter_settings)
+            print("PARSED FILTER:", parsed_filter)
+
             parsed_filter = parsed_filter["filter_settings"]
 
         except json.JSONDecodeError as e:
@@ -89,8 +92,31 @@ async def upload_files(
                 )
             )
 
+        except KeyError:
+            raise HTTPException(
+                status_code=400,
+                detail=problem_detail(
+                    ErrorTypes.INVALID_FILTER_JSON,
+                    "filter_settings fehlt im Request-Body. "
+                    "Erwartet: {\"filter_settings\": {...}}",
+                    request.url.path,
+                ),
+            )
+
         # VALIDATION
-        filter_settings_model = FilterSettings.model_validate(parsed_filter)
+        try:
+            filter_settings_model = FilterSettings.model_validate(parsed_filter)
+
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=problem_detail(
+                    ErrorTypes.INVALID_FILTER_PARAM,
+                    str(e),
+                    request.url.path,
+                    job_id=job_id
+                )
+            )
 
     else:
         # Defaults
@@ -119,6 +145,10 @@ async def upload_files(
                 }
             )
 
+    except HTTPException:
+        # Bereits formatierte HTTPException nicht nochmal wrappen
+        raise
+
     except Exception as e:
         clean_job_files(job_id)
         raise HTTPException(
@@ -143,7 +173,8 @@ async def upload_files(
         process_upload_background,
         job_id,
         job_dir,
-        sample_sheet.filename
+        sample_sheet.filename,
+        filter_settings_model
     )
 
     return UploadResponse(
@@ -153,7 +184,12 @@ async def upload_files(
     )
 
     # Callback für Fortschritts-Updates aus R
-async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_filename: str):
+async def process_upload_background(
+    job_id: str,
+    job_dir: Path,
+    sample_sheet_filename: str,
+    filter_settings_model: FilterSettings
+):
     """
     Hintergrundverarbeitung für die Filterung.
     """
@@ -179,11 +215,14 @@ async def process_upload_background(job_id: str, job_dir: Path, sample_sheet_fil
             print(f"[FILTERING] Job {job_id}: {progress_data['progress']}% - {progress_data['step']}")
 
 
+        filter_json = json.dumps(filter_settings_model.model_dump())
+
         result = await run_r_script(
             script="init_filter.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet=sample_sheet_filename,
+            script_args=[filter_json],
             on_progress=on_progress
         )
 

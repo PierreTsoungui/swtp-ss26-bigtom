@@ -69,7 +69,8 @@ async def run_r_script(
             script_path,
 
             f"{docker_job_dir}/{sample_sheet}",
-            docker_job_dir
+            docker_job_dir,
+            *script_args
         ]
 
     print(

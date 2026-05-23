@@ -16,6 +16,7 @@ async def mock_run_r_script(
     job_id: str,
     sample_sheet: str,
     job_dir: str,
+    script_args: list = None,
     on_progress=None
 ):
     """

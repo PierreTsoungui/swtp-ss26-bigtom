@@ -14,6 +14,7 @@ class JobStatus(BaseModel):
     estimated_seconds_remaining: Optional[int] = None
     normalization_method: str= None
     temp_dir: Optional[str] = None
+    error_message: Optional[str] = None
     created_at: datetime
     expires_at: datetime
     preview_plots: List[str] = []
