@@ -6,7 +6,8 @@ import SampleSheetUpload from "./components/SampleSheetUpload";
 import IdatUpload from "./components/IdatUpload";
 import { useUpload } from "./hooks/useUpload";
 import { useNavigate } from "react-router";
-
+import FilterPanel from "./components/FilterPanel.tsx";
+import {DEFAULT_FILTER_SETTINGS, type FilterSettings} from "./utils/types.ts";
 
 /**
  * Komponente für den Upload von IDAT-Dateien und einem Sample Sheet.
@@ -22,8 +23,9 @@ function UploadView() : JSX.Element {
   const [idatErrors, setIdatErrors] = useState<string[]>([]);
   const [sampleSheetError, setSampleSheetError] = useState<string>("");
 
-  const navigate = useNavigate();
+  const [filterSettings, setFilterSettings] = useState<FilterSettings>(DEFAULT_FILTER_SETTINGS);
 
+  const navigate = useNavigate();
 
   // Analyse-Button nur aktiv wenn keine Fehler und beide Felder befüllt
   const canSubmit = idatFiles.length > 0 && sampleSheet !== null &&
@@ -34,7 +36,7 @@ function UploadView() : JSX.Element {
   const handleUpload = async () => {
     if (!canSubmit || !sampleSheet) return;
 
-    const jobId = await upload(idatFiles, sampleSheet);
+    const jobId = await upload(idatFiles, sampleSheet, filterSettings);
 
     if (jobId) {
       void navigate(`/analysis/${jobId}`);
@@ -126,6 +128,9 @@ function UploadView() : JSX.Element {
           onSampleSheetChange={handleSampleSheetChange}
         />
       </div>
+
+      {/* Filtereinstellungen */}
+      <FilterPanel filterSettings={filterSettings} onFilterSettingsChange={setFilterSettings} />
 
       {/* Analyse-starten Button */}
       <SubmitButton
