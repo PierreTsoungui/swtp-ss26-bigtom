@@ -19,6 +19,8 @@ class ErrorTypes:
     INVALID_NORMALIZATION_METHOD = ErrorType("/errors/invalid-normalization-method", 400, "Invalid normalization method")
     NORMALIZATION_NOT_ALLOWED = ErrorType("/errors/normalization-not-allowed", 409, "Normalization not allowed")
     NORMALIZATION_FAILED = ErrorType("/errors/normalization-failed", 500, "Normalization failed")
+    INVALID_FILTER_PARAM = ErrorType("/errors/invalid-filter-param", 400, "Invalid filter parameter")
+    INVALID_FILTER_JSON = ErrorType("/errors/invalid-filter-json", 400, "Invalid filter JSON")
 
 def problem_detail(
     error_type: ErrorType,
