@@ -521,13 +521,17 @@ run_filtering <- function(rgset, job_dir, cfg) {
   # Finales Subsetting des RGChannelSet mit allen verbleibenden Probes
   raw_filtered <- raw_data[probe_keep, ]
 
+  # [ADDED] WURDE HINZUGEFÜGT, UM MÖGLICHEN BUG ZU FIXEN
+  # rgset_filtered <- rgset[probe_keep, ]
+
   # sample_quality vor total_end/total_removed
   filter_stats$sample_quality <- sq_stats_pending
 
   filter_stats$total_end     <- length(probe_keep)
   filter_stats$total_removed <- total_start - length(probe_keep)
 
-  list(filtered_data = raw_filtered, filter_stats = filter_stats)
+  # [ADDED/CONFIGURED] WURDE UM filtered_rgset erweitert, UM MÖGLICHEN BUG ZU FIXEN
+  list(filtered_data = raw_filtered, filtered_rgset = rgset, filter_stats = filter_stats)
 }
 
 # ── Entry Point ──────────────────────────────────────────────────────────────
@@ -593,17 +597,22 @@ result <- tryCatch(
 )
 
 filtered_data <- result$filtered_data
+# [ADDED] WURDE HINZUGEFÜGT, UM MÖGLICHEN BUG ZU FIXEN
+filtered_rgset <- result$filtered_rgset
+
 filter_stats  <- result$filter_stats
 
 # 6. Speichern
 emit_progress(95, "Speichern")
 
-saveRDS(filtered_data, file.path(job_dir, "filtered_data.rds"))
+# [ADDED] WURDE HINZUGEFÜGT, UM MÖGLICHEN BUG ZU FIXEN – Jetzt wird filtered_rgset gespeichert, damit die Probe-IDs erhalten bleiben
+saveRDS(filtered_rgset, file.path(job_dir, "filtered_data.rds"))
 
 write(
   toJSON(filter_stats, auto_unbox = TRUE, pretty = TRUE),
   file.path(job_dir, "filter_stats.json")
 )
+
 
 cat("Gespeichert:", job_dir, "\n"); flush.console()
 
