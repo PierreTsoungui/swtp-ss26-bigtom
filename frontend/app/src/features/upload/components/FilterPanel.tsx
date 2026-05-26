@@ -1,5 +1,5 @@
 import {
-    type BeadCountFilterType,
+    type BeadCountFilterType, DEFAULT_FILTER_SETTINGS,
     type DetPFilterType,
     type FilterSettings, type MultiHitFilterType,
     type NonCpgFilterType, type SampleQualityFilterType, type SnpFilterType, type XYChromosomesFilterType
@@ -7,7 +7,7 @@ import {
 import {
     Accordion,
     AccordionDetails,
-    AccordionSummary,
+    AccordionSummary, IconButton, Tooltip,
     Typography
 } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -18,6 +18,7 @@ import SnpFilter from "./SnpFilter.tsx";
 import MultiHitFilter from "./MultiHitFilter.tsx";
 import XYChromosomesFilter from "./XYChromosomesFilter.tsx";
 import {SampleQuality} from "./SampleQuality.tsx";
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 
 type FilterPanelProps = {
     filterSettings: FilterSettings;
@@ -100,9 +101,22 @@ function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProp
         <div className="max-w-4/6 mx-auto mt-2">
             <Accordion>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="filter-settings-content" id="filter-settings-header">
-                    <Typography>
-                        Filtereinstellungen anpassen (optional)
-                    </Typography>
+                    <div className={"flex items-center justify-between w-full"}>
+                        <Typography>
+                            Customize filter settings (optional)
+                        </Typography>
+                        <Tooltip title="Reset to default settings">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onFilterSettingsChange(structuredClone(DEFAULT_FILTER_SETTINGS));
+                                }}
+                            >
+                                <RestartAltIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </div>
                 </AccordionSummary>
 
                 <AccordionDetails>
