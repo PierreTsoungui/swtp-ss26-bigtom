@@ -1,15 +1,23 @@
-import { type FilterSettings } from "../utils/types.ts";  // ← FIX: Pfad korrigiert
+import {
+    type BeadCountFilterType,
+    type DetPFilterType,
+    type FilterSettings, type MultiHitFilterType,
+    type NonCpgFilterType, type SampleQualityFilterType, type SnpFilterType, type XYChromosomesFilterType
+} from "../utils/types.ts";
 import {
     Accordion,
     AccordionDetails,
     AccordionSummary,
-    Stack,
-    Switch,
-    TextField,
     Typography
 } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import * as React from "react";
+import {DetPValueFilter} from "./DetPValueFilter.tsx";
+import {BeadCountFilter} from "./BeadCountFilter.tsx";
+import NonCpgFilter from "./NonCpgFilter.tsx";
+import SnpFilter from "./SnpFilter.tsx";
+import MultiHitFilter from "./MultiHitFilter.tsx";
+import XYChromosomesFilter from "./XYChromosomesFilter.tsx";
+import {SampleQuality} from "./SampleQuality.tsx";
 
 type FilterPanelProps = {
     filterSettings: FilterSettings;
@@ -18,31 +26,75 @@ type FilterPanelProps = {
 
 function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProps) {
 
-    const handleDetPEnabledChange = (enabled: boolean) => {
+
+    const handleDetPChange = (updated: DetPFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                det_p: {
-                    ...filterSettings.filter_settings.det_p,
-                    enabled,
-                },
+                det_p: updated,
             },
         });
     };
 
-    const handleDetPCutoffChange = (cutoff: number) => {
+    const handleBeadCountChange = (updated: BeadCountFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                det_p: {
-                    ...filterSettings.filter_settings.det_p,
-                    cutoff,
-                },
-            },
-        });
-    };
+                bead_count: updated
+            }
+        })
+    }
+
+    const handleNonCpgChange = (updated: NonCpgFilterType) => {
+        onFilterSettingsChange({
+            ...filterSettings,
+            filter_settings: {
+                ...filterSettings.filter_settings,
+                non_cpg: updated
+            }
+        })
+    }
+
+    const handleSnpChange = (updated: SnpFilterType) => {
+        onFilterSettingsChange({
+            ...filterSettings,
+            filter_settings: {
+                ...filterSettings.filter_settings,
+                snp: updated
+            }
+        })
+    }
+    const handleMultiHitChange = (updated: MultiHitFilterType) => {
+        onFilterSettingsChange({
+            ...filterSettings,
+            filter_settings: {
+                ...filterSettings.filter_settings,
+                multi_hit: updated
+            }
+        })
+    }
+
+    const handleXYChromosomesChange = (updated: XYChromosomesFilterType) => {
+        onFilterSettingsChange({
+            ...filterSettings,
+            filter_settings: {
+                ...filterSettings.filter_settings,
+                xy_chromosomes: updated
+            }
+        })
+    }
+
+    const handleSampleQualityChange = (updated: SampleQualityFilterType) => {
+        onFilterSettingsChange({
+            ...filterSettings,
+            filter_settings: {
+                ...filterSettings.filter_settings,
+                sample_quality: updated
+            }
+        })
+    }
 
     return (
         <div className="max-w-4/6 mx-auto mt-2">
@@ -54,154 +106,13 @@ function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProp
                 </AccordionSummary>
 
                 <AccordionDetails>
-                    <Accordion>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <div className="flex items-center justify-between w-full">
-
-                                <div>
-                                    <Typography sx={{ fontWeight: 600 }}>
-                                        Detection P-Value Filter
-                                    </Typography>
-                                </div>
-
-                                <Switch
-                                    checked={filterSettings.filter_settings.det_p.enabled}
-                                    onChange={(e) => handleDetPEnabledChange(e.target.checked)}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                        </AccordionSummary>
-
-                        <AccordionDetails>
-                            <Stack spacing={2}>
-                                <TextField
-                                    type="number"
-                                    label="Cutoff"
-                                    value={filterSettings.filter_settings.det_p.cutoff}
-                                    onChange={(e) => handleDetPCutoffChange(Number(e.target.value))}
-                                    size="small"
-                                    fullWidth
-                                    disabled={!filterSettings.filter_settings.det_p.enabled}
-                                />
-                            </Stack>
-                        </AccordionDetails>
-                    </Accordion>
-
-
-                    <Accordion>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <div className="flex items-center justify-between w-full">
-
-                                <div>
-                                    <Typography sx={{ fontWeight: 600 }}>
-                                        Beadcount Filter
-                                    </Typography>
-                                </div>
-
-                                <Switch
-                                    checked={filterSettings.filter_settings.det_p.enabled}
-                                    onChange={(e) => handleDetPEnabledChange(e.target.checked)}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                        </AccordionSummary>
-
-                        <AccordionDetails>
-                            <Stack spacing={2}>
-                                <TextField
-                                    type="number"
-                                    label="Minimum Beads per Sample"
-                                    value={filterSettings.filter_settings.det_p.cutoff}
-                                    onChange={(e) => handleDetPCutoffChange(Number(e.target.value))}
-                                    size="small"
-                                    fullWidth
-                                    disabled={!filterSettings.filter_settings.det_p.enabled}
-                                />
-                                <TextField
-                                    type="number"
-                                    label="Maximum Allowed Failed Samples"
-                                    value={filterSettings.filter_settings.det_p.cutoff}
-                                    onChange={(e) => handleDetPCutoffChange(Number(e.target.value))}
-                                    size="small"
-                                    fullWidth
-                                    disabled={!filterSettings.filter_settings.det_p.enabled}
-                                />
-                            </Stack>
-                        </AccordionDetails>
-                    </Accordion>
-
-                    <Accordion expanded={false} slots={{ transition: React.Fragment}}>
-                        <AccordionSummary expandIcon={<div style={{ width: 24, height: 24}}> </div>}>
-                            <div className="flex items-center justify-between w-full">
-
-                                <div>
-                                    <Typography sx={{ fontWeight: 600 }}>
-                                        Non-CpG Filter
-                                    </Typography>
-                                </div>
-
-                                <Switch
-                                    checked={filterSettings.filter_settings.det_p.enabled}
-                                    onChange={(e) => handleDetPEnabledChange(e.target.checked)}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                        </AccordionSummary>
-                    </Accordion>
-
-
-                    <Accordion>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                            <div className="flex items-center justify-between w-full">
-
-                                <div>
-                                    <Typography sx={{ fontWeight: 600 }}>
-                                        SNP Filter
-                                    </Typography>
-                                </div>
-
-                                <Switch
-                                    checked={filterSettings.filter_settings.det_p.enabled}
-                                    onChange={(e) => handleDetPEnabledChange(e.target.checked)}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                        </AccordionSummary>
-
-                        <AccordionDetails>
-                            <Stack spacing={2}>
-                                <TextField
-                                    type="number"
-                                    label="Minor Allele Frequency (MAF)"
-                                    value={filterSettings.filter_settings.det_p.cutoff}
-                                    onChange={(e) => handleDetPCutoffChange(Number(e.target.value))}
-                                    size="small"
-                                    fullWidth
-                                    disabled={!filterSettings.filter_settings.det_p.enabled}
-                                />
-                            </Stack>
-                        </AccordionDetails>
-                    </Accordion>
-
-                    <Accordion expanded={false} slots={{ transition: React.Fragment}}>
-                        <AccordionSummary expandIcon={<div style={{ width: 24, height: 24}}> </div>}>
-                            <div className="flex items-center justify-between w-full">
-
-                                <div>
-                                    <Typography sx={{ fontWeight: 600 }}>
-                                        Multi-hit Filter
-                                    </Typography>
-                                </div>
-
-                                <Switch
-                                    checked={filterSettings.filter_settings.det_p.enabled}
-                                    onChange={(e) => handleDetPEnabledChange(e.target.checked)}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </div>
-                        </AccordionSummary>
-                    </Accordion>
-
+                    <DetPValueFilter value={filterSettings.filter_settings.det_p} onChange={handleDetPChange} />
+                    <BeadCountFilter value={filterSettings.filter_settings.bead_count} onChange={handleBeadCountChange} />
+                    <NonCpgFilter value={filterSettings.filter_settings.non_cpg} onChange={handleNonCpgChange} />
+                    <SnpFilter value={filterSettings.filter_settings.snp} onChange={handleSnpChange} />
+                    <MultiHitFilter value={filterSettings.filter_settings.multi_hit} onChange={handleMultiHitChange} />
+                    <XYChromosomesFilter value={filterSettings.filter_settings.xy_chromosomes} onChange={handleXYChromosomesChange} />
+                    <SampleQuality value={filterSettings.filter_settings.sample_quality} onChange={handleSampleQualityChange} />
                 </AccordionDetails>
             </Accordion>
         </div>

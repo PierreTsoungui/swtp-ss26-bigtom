@@ -1,4 +1,5 @@
 import Chip from "@mui/material/Chip";
+import * as React from "react";
 
 /**
  * Typdefinition für die Props der FileViewList-Komponente
