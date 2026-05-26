@@ -17,7 +17,7 @@ export function SampleQuality({ value, onChange }: SampleQualityProps) {
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <div className="flex items-center justify-between w-full">
                     <Typography sx={{ fontWeight: 600 }}>
-                        Detection P-Value Filter
+                       Sample Quality
                     </Typography>
                     <Switch
                         checked={value.enabled}

@@ -1,6 +1,7 @@
-import { Accordion, AccordionDetails, AccordionSummary, Switch, TextField, Typography, Stack } from "@mui/material";
+import {Accordion, AccordionDetails, AccordionSummary, Switch, TextField, Typography, Stack} from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type {DetPFilterType} from "../utils/types.ts";
+import {clampValue, FILTER_CONSTRAINTS, validateFilterValue} from "../utils/filterValidation.ts";
 
 type DetPValueFilterProps = {
     value: DetPFilterType;
@@ -8,6 +9,16 @@ type DetPValueFilterProps = {
 }
 
 export function DetPValueFilter({ value, onChange }: DetPValueFilterProps) {
+    const constraints = FILTER_CONSTRAINTS.det_p.cutoff;
+    const validation = validateFilterValue(value.cutoff, constraints.min, constraints.max);
+
+    const handleCutoffChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = Number(e.target.value);
+        // Wert clampen statt zu verbieten
+        const clampedValue = clampValue(newValue, constraints.min, constraints.max);
+        onChange({ ...value, cutoff: clampedValue });
+    };
+
     return (
         <Accordion>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -27,13 +38,25 @@ export function DetPValueFilter({ value, onChange }: DetPValueFilterProps) {
                 <Stack spacing={2}>
                     <TextField
                         type="number"
-                        label="Cutoff"
+                        label={constraints.label}
                         value={value.cutoff}
-                        onChange={(e) => onChange({ ...value, cutoff: Number(e.target.value) })}
+                        onChange={handleCutoffChange}
                         size="small"
                         fullWidth
                         disabled={!value.enabled}
+                        slotProps={{
+                            htmlInput: {
+                                step: constraints.step,
+                                min: constraints.min,
+                                max: constraints.max
+                            }
+                        }}
+                        error={!validation.isValid}
+                        helperText={validation.error || constraints.description}
                     />
+                    {/*<Box sx={{ fontSize: "0.75rem", color: "text.secondary" }}>
+                        Valid: {constraints.min} - {constraints.max}
+                    </Box>*/}
                 </Stack>
             </AccordionDetails>
         </Accordion>

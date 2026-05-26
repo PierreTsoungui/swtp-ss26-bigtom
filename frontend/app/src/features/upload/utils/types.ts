@@ -16,7 +16,7 @@ export type DetPFilterType = {
      *
      * Proben mit einem P-Value größer diesem Schwellenwert werden ausgeschlossen.
      *
-     * - **Minimum:** `0.0001` - sehr streng, entfernt viele Proben
+     * - **Minimum:** `0.01` - sehr streng, entfernt viele Proben
      * - **Maximum:** `0.05` - Standard-Signifikanzniveau
      *
      * @defaultValue 0.01
@@ -31,7 +31,7 @@ export type BeadCountFilterType = {
     /**
      * Gibt an, ob der Bead Count Filter aktiviert ist.
      *
-     * @defaultValue true
+     * @defaultValue false
      */
     enabled: boolean;
 
@@ -39,7 +39,7 @@ export type BeadCountFilterType = {
      * Maximal erlaubter Anteil schlechter Samples pro Probe
      *
      * - **Minimum:** `0.0`
-     * - **Maximum:** `0.2`
+     * - **Maximum:** `1.0`
      * - **Schritt:** `0.01`
      *
      * @defaultValue 0.05
@@ -54,7 +54,7 @@ export type NonCpgFilterType = {
     /**
      * Gibt an, ob der Non-Cpg Filter aktiv ist.
      *
-     * @defaultValue true
+     * @defaultValue false
      */
     enabled: boolean;
 }
@@ -65,6 +65,8 @@ export type NonCpgFilterType = {
 export type SnpFilterType = {
     /**
      * Gibt an ob der SNP Filter aktiv ist.
+     *
+     * @defaultValue false
      */
     enabled: boolean;
 
@@ -92,7 +94,7 @@ export type MultiHitFilterType = {
     /**
      * Gibt an ob Multi-Hit Filer aktiv ist.
      *
-     * @defaultValue true
+     * @defaultValue false
      */
     enabled: boolean;
 }
@@ -134,9 +136,9 @@ export type SampleQualityFilterType = {
      * nicht ums direkte Entfernen von Sonden.
      *
      * - **Minimum:** `0.01`
-     * - **Maximum:** `0.5`
+     * - **Maximum:** `0.05`
      *
-     * @defaultValue 0.1
+     * @defaultValue 0.01
      */
     detection_p_cutoff: number;
 
@@ -146,10 +148,10 @@ export type SampleQualityFilterType = {
      * Überschreitet ein Sample diesen Anteil, wird es als
      * qualitativ unzureichend markiert.
      *
-     * - **Minimum:** `0.001` (0.1%)
-     * - **Maximum:** `0.1`  (10%)
+     * - **Minimum:** `0.05` (0.1%)
+     * - **Maximum:** `0.2`  (20%)
      *
-     * @defaultValue 0.01
+     * @defaultValue 0.1
      */
     sample_failure_rate: number;
 
@@ -158,7 +160,7 @@ export type SampleQualityFilterType = {
      * Wenn `false`: fehlerhafte Samples werden nur als Warnung angezeigt,
      * die Biologin entscheidet selbst ob sie entfernt werden sollen.
      *
-     * @defaultValue false
+     * @defaultValue true
      */
     remove_failed_samples: boolean;
 
@@ -181,13 +183,21 @@ export type SampleQualityFilterType = {
  * @example
  * ```typescript
  * const filter_settings: FilterSettings = {
- *   filter_settings: {
- *     det_p:         { enabled: true, cutoff: 0.01 },
- *     bead_count:    { enabled: true, min_beads: 3, sample_fraction: 0.05 },
- *     non_cpg:       { enabled: true },
- *     snp:           { enabled: true, maf: 0.05 },
- *     multi_hit:     { enabled: true }
- *   }
+ *    filter_settings: {
+ *         det_p:          { enabled: true,  cutoff: 0.01 },
+ *         bead_count:     { enabled: false, bead_cutoff: 0.05 },
+ *         non_cpg:        { enabled: false },
+ *         snp:            { enabled: false,  maf_cutoff: 0.05 },
+ *         multi_hit:      { enabled: false },
+ *         xy_chromosomes: { enabled: false },
+ *         sample_quality: {
+ *             enabled: true,
+ *             detection_p_cutoff: 0.1,
+ *             sample_failure_rate: 0.01,
+ *             remove_failed_samples: true,
+ *             enable_pca_outlier_detection: true
+ *         }
+ *     }
  * };
  * ```
  */
@@ -223,57 +233,18 @@ export type FilterSettings = {
 export const DEFAULT_FILTER_SETTINGS: FilterSettings = {
     filter_settings: {
         det_p:          { enabled: true,  cutoff: 0.01 },
-        bead_count:     { enabled: true, bead_cutoff: 0.05 },
-        non_cpg:        { enabled: true },
-        snp:            { enabled: true,  maf_cutoff: 0.05 },
-        multi_hit:      { enabled: true },
+        bead_count:     { enabled: false, bead_cutoff: 0.05 },
+        non_cpg:        { enabled: false },
+        snp:            { enabled: false,  maf_cutoff: 0.05 },
+        multi_hit:      { enabled: false },
         xy_chromosomes: { enabled: false },
         sample_quality: {
             enabled: true,
             detection_p_cutoff: 0.1,
             sample_failure_rate: 0.01,
-            remove_failed_samples: false,
+            remove_failed_samples: true,
             enable_pca_outlier_detection: true
         }
     },
 };
 
-
-/*
-curl -X POST http://localhost:8000/api/v1/upload \
-  -F "idat_files=@jobs/76c92999-faab-48ec-97de-974cec4854cc/206891110002_R02C01_Grn.idat" \
-  -F "idat_files=@jobs/76c92999-faab-48ec-97de-974cec4854cc/206891110002_R02C01_Red.idat" \
-  -F "sample_sheet=@jobs/76c92999-faab-48ec-97de-974cec4854cc/Demo_EPIC-8v2-0_A1_SampleSheet_16.csv" \
-  -F 'filter_settings={
-    "filter_settings": {
-      "det_p": {
-        "enabled": true,
-        "cutoff": 1000
-      },
-      "bead_count": {
-        "enabled": true,
-        "bead_cutoff": 0.05
-      },
-      "non_cpg": {
-        "enabled": true
-      },
-      "snp": {
-        "enabled": true,
-        "maf_cutoff": 0.05
-      },
-      "multi_hit": {
-        "enabled": true
-      },
-      "xy_chromosomes": {
-        "enabled": true
-      },
-      "sample_quality": {
-        "enabled": true,
-        "detection_p_cutoff": 0.1,
-        "sample_failure_rate": 0.01,
-        "remove_failed_samples": false,
-        "enable_pca_outlier_detection": true
-      }
-    }
-  }'
- */

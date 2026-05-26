@@ -27,7 +27,7 @@ export function BeadCountFilter({ value, onChange }: BeadCountFilterProps) {
                 <Stack spacing={2}>
                     <TextField
                         type="number"
-                        label="Sample Fraction"
+                        label="Bead Count Cutoff"
                         value={value.bead_cutoff}
                         onChange={(e) => onChange({ ...value, bead_cutoff: Number(e.target.value) })}
                         size="small"
