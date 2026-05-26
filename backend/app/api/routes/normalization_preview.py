@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from datetime import datetime
 from fastapi.responses import FileResponse
@@ -57,6 +59,7 @@ async def start_preview(
         "status": "accepted"
     }
 
+
 @router.get("/preview/normalization/{job_id}")
 async def get_preview(job_id: str):
 
@@ -74,34 +77,44 @@ async def get_preview(job_id: str):
             detail={"error": "SESSION_EXPIRED", "message": "Session expired"}
         )
 
-    #  preview_plots aus Job holen 
     preview_plots = getattr(job, "preview_plots", [])
+   
     return {
         "job_id": job_id,
         "plots": [
-        {
-            "method": p["method"].lower(),
-            "url": f"/api/v1/preview/normalization/{job_id}/{p['file']}",
-            "quality_score": None
-        }
-        for p in preview_plots
-        ],
-        "recommendation": preview_plots[0]["method"].lower() if preview_plots else "raw"
+            {
+                "method": method,
+                "plots": [
+                    {
+                    "plot_kind": p["plot_kind"].lower(),
+                    "url": f"/api/v1/preview/normalization/{job_id}/{p['file']}"
+                    }
+                    for p in items
+             ]
+            }
+            for method, items in preview_plots.items()
+        ]
     }
-
 @router.get("/preview/normalization/{job_id}/{plot_name}")
 async def get_plot_image(job_id: str, plot_name: str):
-    allowed = {"norm_raw.png", "norm_noob.png", "norm_quantile.png",
-               "norm_swan.png", "norm_funnorm.png"}
-    if plot_name not in allowed:
-        raise HTTPException(status_code=400, detail="Unknown plot")
-    
+
     job = get_job(job_id)
+
     if not job:
         raise HTTPException(status_code=404)
-    
+
+    allowed_prefixes = (
+        "density_",
+        "pca_"
+    )
+
+    if not plot_name.startswith(allowed_prefixes):
+        raise HTTPException(status_code=400, detail="Invalid plot name")
+
+   
     path = Path(job.temp_dir) / plot_name
+
     if not path.exists():
         raise HTTPException(status_code=404, detail="Plot not found")
-    
+
     return FileResponse(path, media_type="image/png")
