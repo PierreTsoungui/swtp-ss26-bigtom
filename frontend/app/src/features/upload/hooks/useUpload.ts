@@ -37,7 +37,6 @@ export function useUpload() : UploadState {
     formData.append("sample_sheet", sampleSheet)
     formData.append("filter_settings", JSON.stringify(filterSettings))
 
-
     try {
       const response = await fetch("/api/v1/upload", {
         method: "POST",
