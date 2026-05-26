@@ -1,8 +1,10 @@
 # app/services/r_executor.py
 
 import asyncio
+from collections import defaultdict
 import json
 
+import re
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 
@@ -103,7 +105,8 @@ async def run_r_script(
         stderr_lines = []
 
         filter_stats = {}
-        preview_plots = []
+         # FIX 1: KEINE LISTE MEHR → strukturierte Sammlung
+        preview_plots = defaultdict(list)
 
         # ------------------------------------------------------------
         # READ STDOUT
@@ -160,58 +163,39 @@ async def run_r_script(
 
                     except Exception:
                         pass
-
+                 # ----------------------------------------------------
+                # FIX 2: MULTI-JSON HANDLING (WICHTIGSTER FIX)
                 # ----------------------------------------------------
-                # JSON EVENTS
-                # ----------------------------------------------------
 
-                try:
+                json_objects = re.findall(r'\{.*?\}', decoded)
 
-                    data = json.loads(decoded)
+                for obj in json_objects:
 
-                    # ------------------------------------------------
-                    # JSON PROGRESS
-                    # ------------------------------------------------
+                    try:
+                        data = json.loads(obj)
 
-                    if "progress" in data:
-
-                        if on_progress:
-
+                        # progress JSON
+                        if "progress" in data and on_progress:
                             await on_progress(data)
+                      
+                      # filtering stats
+                        if mode == "filtering":
+                            if "filter_stats" in data:
+                                filter_stats.update(data["filter_stats"])
+                  
+                        # normalization preview plots
+                        
+                        if mode == "normalization_preview":
 
-                    # ------------------------------------------------
-                    # FILTERING
-                    # ------------------------------------------------
+                            if data.get("type") == "plot":
 
-                    if mode == "filtering":
+                                preview_plots[data["method"].lower()].append({
+                                    "plot_kind": data["plot_kind"],
+                                    "file": data["file"]
+                                })
 
-                        if "filter_stats" in data:
-
-                            filter_stats.update(
-                                data["filter_stats"]
-                            )
-
-                            print(
-                                f"[R_EXECUTOR] Filter stats received: {data['filter_stats']}",
-                                flush=True
-                            )
-
-                    # ------------------------------------------------
-                    # NORMALIZATION PREVIEW
-                    # ------------------------------------------------
-
-                    if mode == "normalization_preview":
-
-                        if data.get("type") == "plot":
-
-                            preview_plots.append({
-
-                                "method": data["method"],
-                                "file": data["file"]
-                            })
-
-                except json.JSONDecodeError:
-                    pass
+                    except json.JSONDecodeError:
+                        pass
 
         # ------------------------------------------------------------
         # READ STDERR
@@ -317,7 +301,7 @@ async def run_r_script(
         # ------------------------------------------------------------
         # RETURN NORMALIZATION PREVIEW
         # ------------------------------------------------------------
-
+         # FIX 3: KEIN slicing mehr -> keine Datenverluste
         if mode == "normalization_preview":
 
             return {
@@ -325,8 +309,7 @@ async def run_r_script(
                 "returncode": returncode,
                 "stdout": stdout_str,
                 "stderr": stderr_str,
-
-                "preview_plots": preview_plots[:5]
+                "preview_plots": dict(preview_plots)
             }
 
         # ------------------------------------------------------------
