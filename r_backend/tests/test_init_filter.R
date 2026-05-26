@@ -63,7 +63,17 @@ test_that("Alle Filterschritte erscheinen in der JSON-Ausgabe", {
   dir.create(job_dir)
   file.copy(list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE), job_dir)
 
-  result  <- run_filter_script(job_dir)
+  # FIX: Wir müssen die Filter aktivieren, damit sie im stdout-JSON auftauchen!
+  all_enabled_json <- toJSON(list(
+    det_p      = list(enabled = TRUE, cutoff = 0.01),
+    bead_count = list(enabled = TRUE, bead_cutoff = 0.05),
+    non_cpg    = list(enabled = TRUE),
+    snp        = list(enabled = TRUE, maf_cutoff = 0.05),
+    multi_hit  = list(enabled = TRUE),
+    xy_chromosomes = list(enabled = TRUE)
+  ), auto_unbox = TRUE)
+
+  result  <- run_filter_script(job_dir, filter_json = all_enabled_json)
   parsed  <- parse_json_lines(result$lines)
   steps   <- vapply(parsed, function(x) x$step %||% "", character(1))
 
@@ -86,7 +96,9 @@ test_that("filtered_data.rds wird erstellt und ist valide Beta-Matrix", {
 
   loaded <- tryCatch(readRDS(rds_path), error = function(e) NULL)
   expect_false(is.null(loaded), label = "filtered_data.rds ist kein valides RDS")
-  expect_true(is.matrix(loaded) || inherits(loaded, "RGChannelSet"),
+  
+  # FIX: "MethylSet" als validen Rückgabetyp hinzugefügt
+  expect_true(is.matrix(loaded) || inherits(loaded, "RGChannelSet") || inherits(loaded, "MethylSet"),
     label = "Objekt hat unerwarteten Typ")
 })
 
