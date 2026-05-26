@@ -7,7 +7,8 @@ from app.api.routes import (
     stats,
     normalization_preview,
     normalize,
-    reset
+    reset,
+    batch
 )
 
 from app.api.routes.table import router as table_router
@@ -72,6 +73,12 @@ app.include_router(
 app.include_router(
     table_router,
     prefix="/api/v1"
+)
+
+app.include_router(
+    batch.router,
+    prefix="/api/v1/batch",
+    tags=["Batch Correction"]
 )
 
 @app.get("/")
