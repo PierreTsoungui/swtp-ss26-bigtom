@@ -41,14 +41,20 @@ assert_probes_remain <- function(n, step_name) {
 
 parse_filter_config <- function(json_str) {
 
-  # Defaults — werden überschrieben wenn JSON vorhanden
   cfg <- list(
-    det_p          = list(enabled = TRUE,  cutoff = 0.01),
-    bead_count     = list(enabled = TRUE,  sample_fraction = 0.05),
-    non_cpg        = list(enabled = TRUE),
-    snp            = list(enabled = TRUE,  maf = 0.05),
-    multi_hit      = list(enabled = TRUE),
-    xy_chromosomes = list(enabled = FALSE)
+    det_p          = list(enabled = FALSE, cutoff = 0.01),
+    bead_count     = list(enabled = FALSE, bead_cutoff = 0.05),
+    non_cpg        = list(enabled = FALSE),
+    snp            = list(enabled = FALSE, maf_cutoff = 0.05),
+    multi_hit      = list(enabled = FALSE),
+    xy_chromosomes = list(enabled = FALSE),
+    sample_quality = list(
+      enabled                    = FALSE,
+      detection_p_cutoff         = 0.01,
+      sample_failure_rate        = 0.10,
+      remove_failed_samples      = TRUE,
+      enable_pca_outlier_detection = TRUE
+    )
   )
 
   if (is.null(json_str) || nchar(trimws(json_str)) == 0) {
@@ -57,8 +63,6 @@ parse_filter_config <- function(json_str) {
     return(cfg)
   }
 
-  # simplifyVector=TRUE: skalare Typen (TRUE/FALSE, 0.01) bleiben skalare R-Werte.
-  # simplifyVector=FALSE würde alles in Listen wickeln, was isTRUE() bricht.
   raw <- tryCatch(
     fromJSON(json_str, simplifyVector = TRUE),
     error = function(e) {
@@ -69,9 +73,6 @@ parse_filter_config <- function(json_str) {
   cat("[CONFIG] JSON-Schlüssel:", paste(names(raw), collapse = ", "), "\n")
   flush.console()
 
-  # Jeden Block explizit auflösen.
-  # as.logical() stellt sicher dass FALSE/false/"false" alle gleich behandelt werden.
-
   if (!is.null(raw$det_p)) {
     cfg$det_p$enabled <- isTRUE(as.logical(raw$det_p[["enabled"]]))
     if (!is.null(raw$det_p[["cutoff"]]))
@@ -80,8 +81,8 @@ parse_filter_config <- function(json_str) {
 
   if (!is.null(raw$bead_count)) {
     cfg$bead_count$enabled <- isTRUE(as.logical(raw$bead_count[["enabled"]]))
-    if (!is.null(raw$bead_count[["sample_fraction"]]))
-      cfg$bead_count$sample_fraction <- as.numeric(raw$bead_count[["sample_fraction"]])
+    if (!is.null(raw$bead_count[["bead_cutoff"]]))
+      cfg$bead_count$bead_cutoff <- as.numeric(raw$bead_count[["bead_cutoff"]])
   }
 
   if (!is.null(raw$non_cpg)) {
@@ -90,8 +91,8 @@ parse_filter_config <- function(json_str) {
 
   if (!is.null(raw$snp)) {
     cfg$snp$enabled <- isTRUE(as.logical(raw$snp[["enabled"]]))
-    if (!is.null(raw$snp[["maf"]]))
-      cfg$snp$maf <- as.numeric(raw$snp[["maf"]])
+    if (!is.null(raw$snp[["maf_cutoff"]]))
+      cfg$snp$maf_cutoff <- as.numeric(raw$snp[["maf_cutoff"]])
   }
 
   if (!is.null(raw$multi_hit)) {
@@ -102,22 +103,47 @@ parse_filter_config <- function(json_str) {
     cfg$xy_chromosomes$enabled <- isTRUE(as.logical(raw$xy_chromosomes[["enabled"]]))
   }
 
-  # Validierung
-  if (!is.na(cfg$det_p$cutoff) && (cfg$det_p$cutoff <= 0 || cfg$det_p$cutoff >= 1))
-    emit_error_and_quit("det_p.cutoff muss zwischen 0 und 1 liegen.")
-  if (!is.na(cfg$snp$maf) && (cfg$snp$maf < 0 || cfg$snp$maf > 1))
-    emit_error_and_quit("snp.maf muss zwischen 0 und 1 liegen.")
+  if (!is.null(raw$sample_quality)) {
+    cfg$sample_quality$enabled <- isTRUE(as.logical(raw$sample_quality[["enabled"]]))
+    if (!is.null(raw$sample_quality[["detection_p_cutoff"]]))
+      cfg$sample_quality$detection_p_cutoff <- as.numeric(raw$sample_quality[["detection_p_cutoff"]])
+    if (!is.null(raw$sample_quality[["sample_failure_rate"]]))
+      cfg$sample_quality$sample_failure_rate <- as.numeric(raw$sample_quality[["sample_failure_rate"]])
+    if (!is.null(raw$sample_quality[["remove_failed_samples"]]))
+      cfg$sample_quality$remove_failed_samples <- isTRUE(as.logical(raw$sample_quality[["remove_failed_samples"]]))
+    if (!is.null(raw$sample_quality[["enable_pca_outlier_detection"]]))
+      cfg$sample_quality$enable_pca_outlier_detection <- isTRUE(as.logical(raw$sample_quality[["enable_pca_outlier_detection"]]))
+  }
 
-  # Aufgelöste Konfiguration ausgeben — so sieht man sofort ob die Werte ankamen
+  # Validierung
+  if (!is.na(cfg$det_p$cutoff) && (cfg$det_p$cutoff < 0.01 || cfg$det_p$cutoff > 0.05))
+    emit_error_and_quit("det_p.cutoff muss zwischen 0.01 und 0.05 liegen.")
+  if (!is.na(cfg$bead_count$bead_cutoff) && (cfg$bead_count$bead_cutoff < 0.01 || cfg$bead_count$bead_cutoff > 0.1))
+    emit_error_and_quit("bead_count.bead_cutoff muss zwischen 0.01 und 0.1 liegen.")
+  if (!is.na(cfg$snp$maf_cutoff) && (cfg$snp$maf_cutoff < 0.01 || cfg$snp$maf_cutoff > 0.1))
+    emit_error_and_quit("snp.maf_cutoff muss zwischen 0.01 und 0.1 liegen.")
+  if (!is.na(cfg$sample_quality$detection_p_cutoff) &&
+      (cfg$sample_quality$detection_p_cutoff < 0.01 || cfg$sample_quality$detection_p_cutoff > 0.05))
+    emit_error_and_quit("sample_quality.detection_p_cutoff muss zwischen 0.01 und 0.05 liegen.")
+  if (!is.na(cfg$sample_quality$sample_failure_rate) &&
+      (cfg$sample_quality$sample_failure_rate < 0.05 || cfg$sample_quality$sample_failure_rate > 0.2))
+    emit_error_and_quit("sample_quality.sample_failure_rate muss zwischen 0.05 und 0.2 liegen.")
+
   cat(sprintf("[CONFIG] det_p:          enabled=%-5s cutoff=%.4f\n",
               cfg$det_p$enabled, cfg$det_p$cutoff))
-  cat(sprintf("[CONFIG] bead_count:     enabled=%-5s sample_fraction=%.4f\n",
-              cfg$bead_count$enabled, cfg$bead_count$sample_fraction))
+  cat(sprintf("[CONFIG] bead_count:     enabled=%-5s bead_cutoff=%.4f\n",
+              cfg$bead_count$enabled, cfg$bead_count$bead_cutoff))
   cat(sprintf("[CONFIG] non_cpg:        enabled=%s\n", cfg$non_cpg$enabled))
-  cat(sprintf("[CONFIG] snp:            enabled=%-5s maf=%.4f\n",
-              cfg$snp$enabled, cfg$snp$maf))
+  cat(sprintf("[CONFIG] snp:            enabled=%-5s maf_cutoff=%.4f\n",
+              cfg$snp$enabled, cfg$snp$maf_cutoff))
   cat(sprintf("[CONFIG] multi_hit:      enabled=%s\n", cfg$multi_hit$enabled))
   cat(sprintf("[CONFIG] xy_chromosomes: enabled=%s\n", cfg$xy_chromosomes$enabled))
+  cat(sprintf("[CONFIG] sample_quality: enabled=%-5s detection_p_cutoff=%.4f sample_failure_rate=%.4f remove_failed=%s pca_outlier=%s\n",
+              cfg$sample_quality$enabled,
+              cfg$sample_quality$detection_p_cutoff,
+              cfg$sample_quality$sample_failure_rate,
+              cfg$sample_quality$remove_failed_samples,
+              cfg$sample_quality$enable_pca_outlier_detection))
   flush.console()
 
   cfg
@@ -167,19 +193,19 @@ prepare_targets <- function(sheet, job_dir) {
 
 # ── Filterfunktionen ─────────────────────────────────────────────────────────
 
-filter_detp <- function(raw_data, remove_set, cutoff = 0.01) {
-  det_p  <- detectionP(raw_data)
+filter_detp <- function(det_p, remove_set, cutoff = 0.01) {
+  if (is.null(det_p)) return(remove_set)
   failed <- rownames(det_p)[
     apply(det_p, 1, function(x) any(x > cutoff, na.rm = TRUE))
   ]
   union(remove_set, failed)
 }
 
-filter_beadcount <- function(raw_data, remove_set, sample_fraction = 0.05) {
+filter_beadcount <- function(det_p, remove_set, bead_cutoff = 0.05) {
+  if (is.null(det_p)) return(remove_set)
   tryCatch({
-    det_p  <- detectionP(raw_data)
     failed <- rownames(det_p)[
-      apply(det_p, 1, function(x) mean(x > 0.01, na.rm = TRUE) > sample_fraction)
+      apply(det_p, 1, function(x) mean(x > 0.01, na.rm = TRUE) > bead_cutoff)
     ]
     union(remove_set, failed)
   }, error = function(e) {
@@ -194,12 +220,12 @@ filter_non_cpg <- function(rgset, ann) {
   rgset[!rownames(rgset) %in% non_cpg, ]
 }
 
-filter_snp <- function(rgset, ann, maf = 0.05) {
+filter_snp <- function(rgset, ann, maf_cutoff = 0.05) {
   if (is.null(ann)) return(rgset)
   failed <- rownames(ann)[
-    (!is.na(ann$CpG_maf)   & ann$CpG_maf   >= maf) |
-    (!is.na(ann$SBE_maf)   & ann$SBE_maf   >= maf) |
-    (!is.na(ann$Probe_maf) & ann$Probe_maf >= maf)
+    (!is.na(ann$CpG_maf)   & ann$CpG_maf   >= maf_cutoff) |
+    (!is.na(ann$SBE_maf)   & ann$SBE_maf   >= maf_cutoff) |
+    (!is.na(ann$Probe_maf) & ann$Probe_maf >= maf_cutoff)
   ]
   rgset[!rownames(rgset) %in% failed, ]
 }
@@ -221,11 +247,138 @@ filter_xy <- function(rgset, ann) {
   rgset[!rownames(rgset) %in% xy_probes, ]
 }
 
+filter_sample_quality <- function(raw_data, cfg_sq) {
+  # Gibt eine Liste zurück: $rgset (gefiltertes RGChannelSet), $removed_samples (Vektor)
+  removed_samples <- character(0)
+
+  det_p <- tryCatch(detectionP(raw_data), error = function(e) NULL)
+
+  if (is.null(det_p)) {
+    warning("Sample Quality Filter: Detection-P-Werte konnten nicht berechnet werden.")
+    return(list(rgset = raw_data, removed_samples = removed_samples))
+  }
+
+  # Schritt 1: Samples mit zu hoher Probe-Fehlerrate entfernen
+  if (isTRUE(cfg_sq$remove_failed_samples)) {
+    failure_rates <- colMeans(det_p > cfg_sq$detection_p_cutoff, na.rm = TRUE)
+    bad_samples   <- names(failure_rates)[failure_rates > cfg_sq$sample_failure_rate]
+
+    if (length(bad_samples) > 0) {
+      cat(sprintf("[SAMPLE QC] Entferne %d Sample(s) wegen hoher Fehlerrate: %s\n",
+                  length(bad_samples), paste(bad_samples, collapse = ", ")))
+      flush.console()
+      removed_samples <- union(removed_samples, bad_samples)
+    }
+  }
+
+  # Schritt 2: PCA-basierte Ausreißererkennung
+  if (isTRUE(cfg_sq$enable_pca_outlier_detection)) {
+    tryCatch({
+      beta_mat <- getBeta(raw_data)
+
+      # Nur Samples behalten, die noch nicht entfernt wurden
+      keep_cols <- setdiff(colnames(beta_mat), removed_samples)
+      if (length(keep_cols) >= 3) {
+        beta_sub  <- beta_mat[, keep_cols, drop = FALSE]
+
+        # Zeilen mit NA entfernen für PCA
+        beta_complete <- beta_sub[complete.cases(beta_sub), ]
+
+        if (nrow(beta_complete) > 10) {
+          pca_res <- prcomp(t(beta_complete), center = TRUE, scale. = FALSE)
+          scores  <- pca_res$x[, 1:min(2, ncol(pca_res$x)), drop = FALSE]
+
+          # Mahalanobis-Distanz für Ausreißer
+          center  <- colMeans(scores)
+          cov_mat <- cov(scores)
+
+          if (det(cov_mat) > 1e-10) {
+            distances   <- mahalanobis(scores, center, cov_mat)
+            threshold   <- qchisq(0.975, df = ncol(scores))
+            outliers    <- rownames(scores)[distances > threshold]
+
+            if (length(outliers) > 0) {
+              cat(sprintf("[SAMPLE QC] PCA-Ausreißer erkannt (%d): %s\n",
+                          length(outliers), paste(outliers, collapse = ", ")))
+              flush.console()
+              removed_samples <- union(removed_samples, outliers)
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      warning("PCA-Ausreißererkennung fehlgeschlagen: ", conditionMessage(e))
+    })
+  }
+
+  # Samples entfernen
+  keep_samples <- setdiff(colnames(raw_data), removed_samples)
+
+  if (length(keep_samples) == 0) {
+    emit_error_and_quit("Keine Samples nach Sample Quality Filter übrig!")
+  }
+
+  list(
+    rgset           = raw_data[, keep_samples],
+    removed_samples = removed_samples
+  )
+}
+
 # ── Haupt-Filterfunktion ─────────────────────────────────────────────────────
 
-run_filtering <- function(raw_data, job_dir, cfg) {
+run_filtering <- function(rgset, job_dir, cfg) {
 
-  total_start  <- nrow(raw_data)
+  # 1. Detection P-Werte EINMALIG für das gesamte RGChannelSet berechnen
+  cat("Berechne Detection P-Werte...\n"); flush.console()
+  det_p <- tryCatch(detectionP(rgset), error = function(e) NULL)
+
+  sq_stats_pending <- NULL
+
+  # ── Sample Quality Filter (Arbeitet auf Sample-Ebene / Spalten) ─────────────
+  if (isTRUE(cfg$sample_quality$enabled)) {
+    cat("[FILTER] Sample Quality AKTIV\n"); flush.console()
+    emit_progress(25, "Sample Quality Filter")
+
+    samples_before  <- ncol(rgset)
+    # filter_sample_quality arbeitet auf dem rgset
+    sq_result       <- filter_sample_quality(rgset, cfg$sample_quality) 
+    rgset           <- sq_result$rgset
+    
+    # det_p Matrix auf verbleibende Samples einschränken
+    if (!is.null(det_p)) {
+      det_p <- det_p[, colnames(rgset), drop = FALSE]
+    }
+    
+    samples_after   <- ncol(rgset)
+    samples_removed <- length(sq_result$removed_samples)
+
+    sq_stats_pending <- list(
+      enabled                      = TRUE,
+      detection_p_cutoff           = cfg$sample_quality$detection_p_cutoff,
+      sample_failure_rate          = cfg$sample_quality$sample_failure_rate,
+      remove_failed_samples        = cfg$sample_quality$remove_failed_samples,
+      enable_pca_outlier_detection = cfg$sample_quality$enable_pca_outlier_detection,
+      samples_before               = samples_before,
+      samples_after                = samples_after,
+      samples_removed              = samples_removed
+    )
+    emit_progress(28, "Sample Quality Filter",
+      before = samples_before, after = samples_after, removed = samples_removed)
+  } else {
+    cat("[FILTER] Sample Quality DEAKTIVIERT\n"); flush.console()
+    sq_stats_pending <- list(
+      enabled         = FALSE,
+      samples_removed = 0,
+      samples_after   = ncol(rgset)
+    )
+  }
+
+  # ── KONVERTIERUNG ZU PROBE-EBENE (MethylSet) ───────────────────────────────
+  # Hier passiert die Magie: rownames wechseln von Adressen zu cg-IDs!
+  cat("Konvertiere RGChannelSet zu MethylSet...\n"); flush.console()
+  raw_data <- preprocessRaw(rgset) 
+
+  total_start  <- nrow(raw_data) # Das ist jetzt die echte Anzahl biologischer Probes!
   filter_stats <- list(total_start = total_start)
   remove_set   <- character(0)
 
@@ -236,7 +389,7 @@ run_filtering <- function(raw_data, job_dir, cfg) {
     cat("[FILTER] Detection P-Value AKTIV (cutoff =", cfg$det_p$cutoff, ")\n"); flush.console()
     emit_progress(30, "Detection P-Value")
     before     <- length(remove_set)
-    remove_set <- filter_detp(raw_data, remove_set, cutoff = cfg$det_p$cutoff)
+    remove_set <- filter_detp(det_p, remove_set, cutoff = cfg$det_p$cutoff)
     removed    <- length(remove_set) - before
     filter_stats$det_p <- list(
       enabled = TRUE, cutoff = cfg$det_p$cutoff,
@@ -252,15 +405,15 @@ run_filtering <- function(raw_data, job_dir, cfg) {
 
   # ── Bead Count ─────────────────────────────────────────────────────────────
   if (isTRUE(cfg$bead_count$enabled)) {
-    cat("[FILTER] Bead Count AKTIV (sample_fraction =", cfg$bead_count$sample_fraction, ")\n")
+    cat("[FILTER] Bead Count AKTIV (bead_cutoff =", cfg$bead_count$bead_cutoff, ")\n")
     flush.console()
     emit_progress(40, "Bead Count")
     before     <- length(remove_set)
-    remove_set <- filter_beadcount(raw_data, remove_set,
-                                   sample_fraction = cfg$bead_count$sample_fraction)
+    remove_set <- filter_beadcount(det_p, remove_set,
+                                   bead_cutoff = cfg$bead_count$bead_cutoff)
     removed    <- length(remove_set) - before
     filter_stats$bead_count <- list(
-      enabled = TRUE, sample_fraction = cfg$bead_count$sample_fraction,
+      enabled = TRUE, bead_cutoff = cfg$bead_count$bead_cutoff,
       removed = removed, after = total_start - length(remove_set)
     )
     emit_progress(50, "Bead Count",
@@ -271,79 +424,108 @@ run_filtering <- function(raw_data, job_dir, cfg) {
                                     after = total_start - length(remove_set))
   }
 
-  # Gefilterte Probes aus RGChannelSet entfernen
-  keep <- setdiff(rownames(raw_data), remove_set)
-  assert_probes_remain(length(keep), "Pre-QC")
-  raw_filtered <- raw_data[keep, ]
-
+  # Annotation laden (jetzt direkt auf dem MethylSet möglich)
   emit_progress(60, "Annotation laden")
-  ann <- tryCatch(getAnnotation(raw_filtered), error = function(e) NULL)
+  ann <- tryCatch(getAnnotation(raw_data), error = function(e) NULL)
+
+  # Ab hier funktioniert das Zusammenspiel reibungslos, da alles auf cg... IDs basiert
+  probe_keep <- setdiff(rownames(raw_data), remove_set)
+  cat(sprintf("[DEBUG] remove_set: %d | probe_keep: %d\n", length(remove_set), length(probe_keep))); flush.console()
+  assert_probes_remain(length(probe_keep), "Pre-QC")
+  if (!is.null(ann)) ann <- ann[rownames(ann) %in% probe_keep, , drop = FALSE]
 
   # ── Non-CpG ────────────────────────────────────────────────────────────────
   if (isTRUE(cfg$non_cpg$enabled)) {
     cat("[FILTER] Non-CpG AKTIV\n"); flush.console()
-    before       <- nrow(raw_filtered)
-    raw_filtered <- filter_non_cpg(raw_filtered, ann)
-    assert_probes_remain(nrow(raw_filtered), "Non-CpG")
-    removed <- before - nrow(raw_filtered)
-    filter_stats$non_cpg <- list(enabled = TRUE, removed = removed, after = nrow(raw_filtered))
+    before_n   <- length(probe_keep)
+    non_cpg    <- if (!is.null(ann)) rownames(ann)[grepl("^ch\\.", rownames(ann))] else character(0)
+    probe_keep <- setdiff(probe_keep, non_cpg)
+    assert_probes_remain(length(probe_keep), "Non-CpG")
+    if (!is.null(ann)) ann <- ann[rownames(ann) %in% probe_keep, , drop = FALSE]
+    removed <- before_n - length(probe_keep)
+    filter_stats$non_cpg <- list(enabled = TRUE, removed = removed, after = length(probe_keep))
     emit_progress(70, "Non-CpG",
-      before = total_start, after = nrow(raw_filtered), removed = removed)
+      before = total_start, after = length(probe_keep), removed = removed)
   } else {
     cat("[FILTER] Non-CpG DEAKTIVIERT\n"); flush.console()
-    filter_stats$non_cpg <- list(enabled = FALSE, removed = 0, after = nrow(raw_filtered))
+    filter_stats$non_cpg <- list(enabled = FALSE, removed = 0, after = length(probe_keep))
   }
 
   # ── SNP ────────────────────────────────────────────────────────────────────
   if (isTRUE(cfg$snp$enabled)) {
-    cat("[FILTER] SNP AKTIV (maf =", cfg$snp$maf, ")\n"); flush.console()
-    before       <- nrow(raw_filtered)
-    raw_filtered <- filter_snp(raw_filtered, ann, maf = cfg$snp$maf)
-    assert_probes_remain(nrow(raw_filtered), "SNP")
-    removed <- before - nrow(raw_filtered)
-    filter_stats$snp <- list(enabled = TRUE, maf = cfg$snp$maf,
-                             removed = removed, after = nrow(raw_filtered))
+    cat("[FILTER] SNP AKTIV (maf_cutoff =", cfg$snp$maf_cutoff, ")\n"); flush.console()
+    before_n <- length(probe_keep)
+    if (!is.null(ann)) {
+      maf      <- cfg$snp$maf_cutoff
+      snp_fail <- rownames(ann)[
+        (!is.na(ann$CpG_maf)   & ann$CpG_maf   >= maf) |
+        (!is.na(ann$SBE_maf)   & ann$SBE_maf   >= maf) |
+        (!is.na(ann$Probe_maf) & ann$Probe_maf >= maf)
+      ]
+      probe_keep <- setdiff(probe_keep, snp_fail)
+      ann        <- ann[rownames(ann) %in% probe_keep, , drop = FALSE]
+    }
+    assert_probes_remain(length(probe_keep), "SNP")
+    removed <- before_n - length(probe_keep)
+    filter_stats$snp <- list(enabled = TRUE, maf_cutoff = cfg$snp$maf_cutoff,
+                             removed = removed, after = length(probe_keep))
     emit_progress(80, "SNP",
-      before = total_start, after = nrow(raw_filtered), removed = removed)
+      before = total_start, after = length(probe_keep), removed = removed)
   } else {
     cat("[FILTER] SNP DEAKTIVIERT\n"); flush.console()
-    filter_stats$snp <- list(enabled = FALSE, removed = 0, after = nrow(raw_filtered))
+    filter_stats$snp <- list(enabled = FALSE, removed = 0, after = length(probe_keep))
   }
 
   # ── Multi-Hit ──────────────────────────────────────────────────────────────
   if (isTRUE(cfg$multi_hit$enabled)) {
     cat("[FILTER] Multi-Hit AKTIV\n"); flush.console()
-    before       <- nrow(raw_filtered)
-    raw_filtered <- filter_multi_hit(raw_filtered, job_dir)
-    assert_probes_remain(nrow(raw_filtered), "Multi-Hit")
-    removed <- before - nrow(raw_filtered)
-    filter_stats$multi_hit <- list(enabled = TRUE, removed = removed, after = nrow(raw_filtered))
+    before_n <- length(probe_keep)
+    mh_file  <- file.path(job_dir, "multi_hit_probes.txt")
+    if (file.exists(mh_file)) {
+      mh         <- trimws(readLines(mh_file))
+      mh         <- mh[nchar(mh) > 0]
+      probe_keep <- setdiff(probe_keep, mh)
+    } else {
+      message("Multi-Hit-Datei nicht gefunden – Schritt übersprungen.")
+    }
+    assert_probes_remain(length(probe_keep), "Multi-Hit")
+    removed <- before_n - length(probe_keep)
+    filter_stats$multi_hit <- list(enabled = TRUE, removed = removed, after = length(probe_keep))
     emit_progress(85, "Multi-Hit",
-      before = total_start, after = nrow(raw_filtered), removed = removed)
+      before = total_start, after = length(probe_keep), removed = removed)
   } else {
     cat("[FILTER] Multi-Hit DEAKTIVIERT\n"); flush.console()
-    filter_stats$multi_hit <- list(enabled = FALSE, removed = 0, after = nrow(raw_filtered))
+    filter_stats$multi_hit <- list(enabled = FALSE, removed = 0, after = length(probe_keep))
   }
 
   # ── XY-Chromosomen ─────────────────────────────────────────────────────────
   if (isTRUE(cfg$xy_chromosomes$enabled)) {
     cat("[FILTER] XY-Chromosomen AKTIV\n"); flush.console()
-    before       <- nrow(raw_filtered)
-    raw_filtered <- filter_xy(raw_filtered, ann)
-    assert_probes_remain(nrow(raw_filtered), "XY-Chromosomen")
-    removed <- before - nrow(raw_filtered)
+    before_n <- length(probe_keep)
+    if (!is.null(ann)) {
+      xy_probes  <- rownames(ann)[ann$chr %in% c("chrX", "chrY")]
+      probe_keep <- setdiff(probe_keep, xy_probes)
+    }
+    assert_probes_remain(length(probe_keep), "XY-Chromosomen")
+    removed <- before_n - length(probe_keep)
     filter_stats$xy_chromosomes <- list(enabled = TRUE, removed = removed,
-                                        after = nrow(raw_filtered))
+                                        after = length(probe_keep))
     emit_progress(90, "XY-Chromosomen",
-      before = total_start, after = nrow(raw_filtered), removed = removed)
+      before = total_start, after = length(probe_keep), removed = removed)
   } else {
     cat("[FILTER] XY-Chromosomen DEAKTIVIERT\n"); flush.console()
     filter_stats$xy_chromosomes <- list(enabled = FALSE, removed = 0,
-                                        after = nrow(raw_filtered))
+                                        after = length(probe_keep))
   }
 
-  filter_stats$total_end     <- nrow(raw_filtered)
-  filter_stats$total_removed <- total_start - nrow(raw_filtered)
+  # Finales Subsetting des RGChannelSet mit allen verbleibenden Probes
+  raw_filtered <- raw_data[probe_keep, ]
+
+  # sample_quality vor total_end/total_removed
+  filter_stats$sample_quality <- sq_stats_pending
+
+  filter_stats$total_end     <- length(probe_keep)
+  filter_stats$total_removed <- total_start - length(probe_keep)
 
   list(filtered_data = raw_filtered, filter_stats = filter_stats)
 }
