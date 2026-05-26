@@ -1,85 +1,90 @@
-import type { ChangeEvent } from "react";
+import React, { useState } from 'react';
+import type { BatchSettings } from '../utils/types';
 
 interface BatchFormProps {
-  batchVariable: string;
-  covariates: string;
-  onBatchVariableChange: (value: string) => void;
-  onCovariatesChange: (value: string) => void;
-  onStart: () => void;
-  onSkip: () => void;
-  submitLabel: string;
-  skipLabel: string;
+  onExecuteBatch: (settings: BatchSettings) => void;
+  onSkipToAnalysis: () => void;
   disabled: boolean;
-  isSubmitting: boolean;
-  isReadyForBatch: boolean;
 }
 
-export function BatchForm({
-  batchVariable,
-  covariates,
-  onBatchVariableChange,
-  onCovariatesChange,
-  onStart,
-  onSkip,
-  submitLabel,
-  skipLabel,
-  disabled,
-  isSubmitting,
-  isReadyForBatch,
-}: BatchFormProps) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-5 rounded-2xl bg-slate-50 p-4">
-        <p className="text-sm text-slate-600">
-          Bitte wählen Sie hier die Batch-Variable und geben Sie biologische Kovariaten an.
-        </p>
-      </div>
+export const BatchForm: React.FC<BatchFormProps> = ({ onExecuteBatch, onSkipToAnalysis, disabled }) => {
+  const [batchVariable, setBatchVariable] = useState('');
+  const [covariatesInput, setCovariatesInput] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
-      <div className="space-y-4">
-        <label className="block">
-          <span className="text-sm font-medium text-slate-900">Batch-Variable</span>
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+
+    if (!batchVariable.trim()) {
+      setLocalError('Bitte gib eine Batch-Variable an.');
+      return;
+    }
+
+    const covariates = covariatesInput
+      .split(',')
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
+
+    if (covariates.includes(batchVariable.trim())) {
+      setLocalError('Die Batch-Variable darf nicht gleichzeitig als Kovariable genutzt werden.');
+      return;
+    }
+
+    onExecuteBatch({
+      batch_variable: batchVariable.trim(),
+      covariates,
+    });
+  };
+
+  return (
+    <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f9f9f9' }}>
+      <h3>Batch-Parameter</h3>
+      <form onSubmit={handleSubmit}>
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Batch-Variable (Pflicht):</label>
           <input
             type="text"
+            placeholder="z.B. Slide"
             value={batchVariable}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => onBatchVariableChange(event.target.value)}
-            className="mt-2 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            placeholder="Slide"
+            onChange={(e) => setBatchVariable(e.target.value)}
+            disabled={disabled}
+            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
           />
-        </label>
+        </div>
 
-        <label className="block">
-          <span className="text-sm font-medium text-slate-900">Kovariaten</span>
-          <textarea
-            value={covariates}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onCovariatesChange(event.target.value)}
-            className="mt-2 min-h-[110px] w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-            placeholder="Sample_Group, Sex, Age"
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Kovariablen (optional, Komma-getrennt):</label>
+          <input
+            type="text"
+            placeholder="z.B. Sample_Group, Age"
+            value={covariatesInput}
+            onChange={(e) => setCovariatesInput(e.target.value)}
+            disabled={disabled}
+            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
           />
-          <p className="mt-2 text-xs text-slate-500">
-            Kommagetrennte Liste biologischer Spalten, die nicht entfernt werden dürfen.
-          </p>
-        </label>
-      </div>
+        </div>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button
-          type="button"
-          onClick={onStart}
-          disabled={disabled}
-          className="rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          {isSubmitting ? "Wird gestartet..." : submitLabel}
-        </button>
+        {localError && <div style={{ color: 'red', marginBottom: '15px' }}>{localError}</div>}
 
-        <button
-          type="button"
-          onClick={onSkip}
-          disabled={!isReadyForBatch || isSubmitting}
-          className="rounded-full border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-        >
-          {skipLabel}
-        </button>
-      </div>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+          <button
+            type="submit"
+            disabled={disabled}
+            style={{ flex: 1, padding: '10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: disabled ? 'not-allowed' : 'pointer' }}
+          >
+            Korrektur ausführen
+          </button>
+          <button
+            type="button"
+            onClick={onSkipToAnalysis}
+            disabled={disabled}
+            style={{ flex: 1, padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: disabled ? 'not-allowed' : 'pointer' }}
+          >
+            ANALYSE (Überspringen)
+          </button>
+        </div>
+      </form>
     </div>
   );
-}
+};

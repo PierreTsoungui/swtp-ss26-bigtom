@@ -1,38 +1,52 @@
-import { useEffect, useState } from "react";
+import React from 'react';
+import type { BatchRound } from '../utils/types';
 
 interface SvdPlotProps {
-  jobId: string | undefined;
+  rounds: BatchRound[];
 }
 
-export function SvdPlot({ jobId }: SvdPlotProps) {
-  const [available, setAvailable] = useState<boolean | null>(null);
+export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
+  if (rounds.length === 0) return <p>Keine SVD-Plots verfügbar.</p>;
 
-  useEffect(() => {
-    if (!jobId) {
-      setAvailable(null);
-      return;
-    }
+  const initialPlot = rounds.find((r) => r.type === 'initial');
+  // Hole das letzte Element für den aktuellen Zustand, aber nur wenn es nicht der initiale Plot selbst ist
+  const latestPlot = rounds[rounds.length - 1];
+  const hasCorrection = rounds.length > 1;
 
-    const url = `/api/v1/batch/${jobId}/svd-plot`;
-    fetch(url, { method: "HEAD" })
-      .then((res) => setAvailable(res.ok))
-      .catch(() => setAvailable(false));
-  }, [jobId]);
-
-  if (available === null) {
-    return <p className="text-sm text-slate-500">Prüfe Plot-Verfügbarkeit …</p>;
-  }
-
-  if (!available) {
-    return <p className="text-sm text-slate-500">SVD-Plot ist derzeit nicht verfügbar.</p>;
-  }
+  const imageHost = 'http://localhost:8000'; // Dein Backend-Host
 
   return (
-    <img
-      src={`/api/v1/batch/${jobId}/svd-plot`}
-      alt="SVD Plot"
-      className="mt-3 w-full rounded-3xl border border-slate-200 bg-white object-contain"
-      loading="lazy"
-    />
+    <div>
+      <h3>SVD Diagnostik-Plots</h3>
+      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+        {/* Initialer Plot (Immer sichtbar) */}
+        {initialPlot && (
+          <div style={{ flex: '1 1 45%', minWidth: '300px', border: '1px solid #eee', padding: '10px', borderRadius: '4px' }}>
+            <h4>Vor Korrektur (Runde 0)</h4>
+            <img
+              src={`${imageHost}${initialPlot.svd_plot}`}
+              alt="SVD Plot Initial"
+              style={{ width: '100%', height: 'auto', display: 'block' }}
+            />
+          </div>
+        )}
+
+        {/* Nachher-Plot (Nur sichtbar nach mindestens einem Batch-Run) */}
+        {hasCorrection && latestPlot && (
+          <div style={{ flex: '1 1 45%', minWidth: '300px', border: '1px solid #eee', padding: '10px', borderRadius: '4px', backgroundColor: '#f0fff4' }}>
+            <h4>Nach Korrektur (Runde {latestPlot.round})</h4>
+            <img
+              src={`${imageHost}${latestPlot.svd_plot}`}
+              alt={`SVD Plot Runde ${latestPlot.round}`}
+              style={{ width: '100%', height: 'auto', display: 'block' }}
+            />
+            <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#555' }}>
+              <strong>Angewendet:</strong> Variable: {latestPlot.settings_used?.batch_variable} | Kovariablen:{' '}
+              {latestPlot.settings_used?.covariates.join(', ') || 'Keine'}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
-}
+};

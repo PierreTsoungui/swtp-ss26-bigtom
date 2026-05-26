@@ -1,35 +1,29 @@
-import type { JobStatusValue } from "../analysis/utils/types";
+import React from 'react';
 
-interface BatchStatusProps {
-  status: string | undefined;
-  phase: string | undefined;
-  currentStep: string | undefined;
-  error: string | null;
-  jobStatus: JobStatusValue | undefined;
-}
-
-export function BatchStatus({ status, phase, currentStep, error, jobStatus }: BatchStatusProps) {
+export const BatchStatus: React.FC = () => {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Job-Status</p>
-          <p className="mt-1 text-xs text-slate-500">Aktueller Status: {jobStatus ?? "unbekannt"}</p>
-        </div>
-        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">{status ?? "idle"}</span>
+    <div style={{ textAlign: 'center', padding: '40px', border: '1px solid #ccf', borderRadius: '8px', backgroundColor: '#eef' }}>
+      <h3 style={{ margin: 0, color: '#004085' }}>Batch-Korrektur wird berechnet...</h3>
+      <p style={{ margin: '10px 0 20px 0' }}>Bitte hab einen Moment Geduld. Das R-Skript führt ComBat aus und berechnet die neuen SVD-Plots.</p>
+      
+      {/* Einfache CSS-Progressbar Animation */}
+      <div style={{ width: '100%', height: '10px', backgroundColor: '#ddd', borderRadius: '5px', overflow: 'hidden' }}>
+        <div style={{
+          width: '50%',
+          height: '100%',
+          backgroundColor: '#0056b3',
+          borderRadius: '5px',
+          animation: 'moving-progress 1.5s infinite ease-in-out'
+        }} />
       </div>
 
-      <div className="mt-4 space-y-2 text-sm text-slate-700">
-        <p><strong>Phase:</strong> {phase ?? "-"}</p>
-        <p><strong>Schritt:</strong> {currentStep ?? "Warte auf Benutzereingaben"}</p>
-      </div>
-
-      {error ? (
-        <div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700">
-          <p className="font-semibold">Fehler</p>
-          <p>{error}</p>
-        </div>
-      ) : null}
+      <style>{`
+        @keyframes moving-progress {
+          0% { transform: translateX(-100%); width: 30%; }
+          50% { width: 60%; }
+          100% { transform: translateX(350%); width: 20%; }
+        }
+      `}</style>
     </div>
   );
-}
+};
