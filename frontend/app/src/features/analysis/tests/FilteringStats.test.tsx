@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+/*import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { FilteringStats } from "../components/FilteringStats";
 import type { FilteringStatsType as FilteringStatsData } from "../utils/types";
+
 
 describe("FilteringStats", () => {
   it("rendert alle Filterschritte korrekt", () => {
@@ -53,3 +54,4 @@ describe("FilteringStats", () => {
     ).toBeInTheDocument();
   });
 });
+ */

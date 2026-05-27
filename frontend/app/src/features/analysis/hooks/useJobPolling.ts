@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
-import type { FilterStats, JobPhase, JobStatus, JobStatusValue } from "../utils/types";
+import type {FilteringStatsType, JobPhase, JobStatus, JobStatusValue} from "../utils/types";
 
 const TERMINAL_STATES: JobStatusValue[] = [
-  "normalization_done",
   "completed",
   "failed",
   "canceled",
-  "filtering_done",
 ];
 
 /**
@@ -16,45 +14,71 @@ const TERMINAL_STATES: JobStatusValue[] = [
  */
 export function useJobPolling(jobId: string | null): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failCountRef = useRef<number>(0);
+  const MAX_FAILURES = 3;
 
   useEffect(() => {
     if (!jobId) return;
 
-    intervalRef.current = setInterval(async () => {
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
       try {
         const res = await fetch(`/api/v1/status/${jobId}`);
+
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
         const body: unknown = await res.json();
+        console.log("[RAW STATUS RESPONSE]", body);
         const data = parseJobStatus(body);
+        failCountRef.current = 0; // Reset failure count on success
         setJobStatus(data);
 
-        const isWaitingForSelection =
-          data.status === "waiting" && data.phase === "waiting_selection";
+        const isWaitingForSelection: boolean = data.status === "waiting" && data.phase === "waiting_selection";
 
-        if (TERMINAL_STATES.includes(data.status) || isWaitingForSelection) {
-          clearInterval(intervalRef.current!);
+        const shouldStop = TERMINAL_STATES.includes(data.status) || isWaitingForSelection;
+
+        if (!shouldStop && !cancelled) {
+          timeoutId = setTimeout(poll, 1500);
         }
-      } catch {
-        setJobStatus((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "failed",
-                error: {
-                  type: "http://localhost:3000/analysis/errors#connection-error",
-                  title: "Verbindungsfehler",
-                  status: 503,
-                  detail: "Verbindung zum Server unterbrochen.",
-                  instance: `/api/v1/status/${jobId}`,
-                },
-              }
-            : null
-        );
-        clearInterval(intervalRef.current!);
-      }
-    }, 1500);
+      } catch (err) {
+        failCountRef.current += 1;
+        console.warn(`[POLLING] Anfrage fehlgeschlagen (${failCountRef.current}/${MAX_FAILURES})`, err);
+        if (failCountRef.current >= MAX_FAILURES) {
+          setJobStatus((prev) =>
+              prev
+                  ? {
+                    ...prev,
+                    status: "failed",
+                    error: {
+                      type: "http://localhost:3000/analysis/errors#connection-error",
+                      title: "Verbindungsfehler",
+                      status: 503,
+                      detail: "Verbindung zum Server nach 3 Versuchen unterbrochen.",
+                      instance: `/api/v1/status/${jobId}`,
+                    },
+                  }
+                  : null
+          );
 
-    return () => clearInterval(intervalRef.current!);
+        } else if (!cancelled) {
+          timeoutId = setTimeout(poll, 1500 * failCountRef.current); // Exponentielles Backoff
+        }
+      }
+    };
+
+    poll();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [jobId]);
 
   return jobStatus;
@@ -62,6 +86,7 @@ export function useJobPolling(jobId: string | null): JobStatus | null {
 
 function parseJobStatus(value: unknown): JobStatus {
   if (!isRecord(value)) {
+    console.error("[PARSING ERROR] (parseJobStatus) Expected an object but got:", value);
     throw new Error("Invalid job status response");
   }
 
@@ -89,6 +114,7 @@ function parseJobStatus(value: unknown): JobStatus {
     !isFilterStatsOrNull(filter_stats) ||
     !isNullableNonNegativeNumber(estimated_seconds_remaining)
   ) {
+    console.error("[PARSING ERROR] (parseJobStatus) Invalid field types in response:", value);
     throw new Error("Invalid job status response");
   }
 
@@ -107,17 +133,7 @@ function parseJobStatus(value: unknown): JobStatus {
 }
 
 function isJobStatusValue(value: unknown): value is JobStatusValue {
-  return (
-    value === "queued" ||
-    value === "running" ||
-    value === "waiting" ||
-    value === "filtering" ||
-    value === "filtering_done" ||
-    value === "normalization_done" ||
-    value === "completed" ||
-    value === "failed" ||
-    value === "canceled"
-  );
+  return typeof value === "string";
 }
 
 function isJobPhase(value: unknown): value is JobPhase {
@@ -136,23 +152,28 @@ function isJobPhase(value: unknown): value is JobPhase {
   );
 }
 
-function isFilterStatsOrNull(value: unknown): value is FilterStats | null {
+function isFilterStatsOrNull(value: unknown): value is FilteringStatsType | null {
   if (value === null) return true;
-  if (!isRecord(value) || !Array.isArray(value.steps)) return false;
+  if (!isRecord(value)) return false;
+  console.log("[FILTER_STATS]", value);
+  console.log("[FILTER_STEPS]", value.steps);
+  // Prüfe die Hauptfelder, die immer vorhanden sein müssen
+  const hasTotalStart = isNonNegativeNumber(value.total_start);
+  const hasTotalEnd = isNonNegativeNumber(value.total_end);
+  const hasTotalRemoved = isNonNegativeNumber(value.total_removed);
 
-  return (
-    isNonNegativeNumber(value.total_before) &&
-    value.steps.every(isFilterStep) &&
-    isNonNegativeNumber(value.remaining)
-  );
-}
+  // Optional: Prüfe, dass die Unterobjekte existieren (aber nicht zwingend ihre Werte)
+  const hasBeadCount = isRecord(value.bead_count);
+  const hasDetP = isRecord(value.det_p);
+  const hasMultiHit = isRecord(value.multi_hit);
+  const hasNonCpg = isRecord(value.non_cpg);
+  const hasSnp = isRecord(value.snp);
+  const hasXy = isRecord(value.xy_chromosomes);
+  const hasSampleQuality = isRecord(value.sample_quality);
 
-function isFilterStep(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    isNonNegativeNumber(value.removed)
-  );
+  return hasTotalStart && hasTotalEnd && hasTotalRemoved &&
+      hasBeadCount && hasDetP && hasMultiHit &&
+      hasNonCpg && hasSnp && hasXy && hasSampleQuality;
 }
 
 function isProblemDetail(value: unknown): value is ProblemDetail {
