@@ -11,6 +11,9 @@ import {useNavigate} from "react-router";
  */
 type ProgressbarProps = {
     jobStatus: JobStatus;
+    showNextButton?: boolean;
+    nextDisabled?: boolean;
+    onNext?: () => void;
 };
 
 /**
@@ -23,7 +26,7 @@ type ProgressbarProps = {
  * @param props.jobStatus - Aktueller Status des Analysejobs
  * @returns Die gerenderte Fortschrittsanzeige
  */
-function Progressbar({ jobStatus }: ProgressbarProps) {
+function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, onNext }: ProgressbarProps) {
     const navigate = useNavigate();
     const handleCancelSuccess = () => {
         navigate("/upload");
@@ -47,7 +50,9 @@ function Progressbar({ jobStatus }: ProgressbarProps) {
             <div className="mb-4 flex items-center justify-between">
                 <div>
                     <h2 className="text-lg font-semibold text-gray-800">
-                        Analyse läuft
+                        {jobStatus.phase === "normalization_preview"
+                            ? "Normalisierungsvorschau wird erstellt"
+                            : "Analyse läuft"}
                     </h2>
                     <p className="text-sm text-gray-500">
                         Schritte {jobStatus.steps_completed} von {jobStatus.steps_total}
@@ -64,10 +69,7 @@ function Progressbar({ jobStatus }: ProgressbarProps) {
                 <LinearProgress
                     variant="determinate"
                     value={jobStatus.progress_percent}
-                    sx={{
-                        height: 10,
-                        borderRadius: 9999,
-                    }}
+                    sx={{height: 10, borderRadius: 9999,}}
                 />
             </div>
 
@@ -99,11 +101,21 @@ function Progressbar({ jobStatus }: ProgressbarProps) {
 
             {/* Footer */}
 
-            <div className="mt-6 flex justify-center">
+            <div className="mt-6 flex justify-center gap-3">
                 <CancelButton
                     onCancel={cancelJob}
                     disabled={isLoadingJobAbort}
                 />
+
+                {showNextButton && (
+                    <button
+                    onClick={onNext}
+                    disabled={nextDisabled}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:bg-gray-300"
+                    >
+                    Next
+                    </button>
+                )}
             </div>
         </div>
     );

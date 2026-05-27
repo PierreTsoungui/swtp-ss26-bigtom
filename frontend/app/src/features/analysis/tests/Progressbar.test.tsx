@@ -75,6 +75,55 @@ describe("Progressbar", () => {
             render(<Progressbar jobStatus={buildJobStatus({ progress_percent: 75 })} />);
             expect(screen.getByText("75%")).toBeInTheDocument();
         });
+
+        it("zeigt Next Button an", () => {
+            render(<Progressbar jobStatus={buildJobStatus()} showNextButton />);
+            expect(screen.getByText("Next")).toBeInTheDocument();
+        });
+
+        it("deaktiviert Next während Verarbeitung", () => {
+            render(
+                <Progressbar
+                jobStatus={buildJobStatus()}
+                showNextButton
+                nextDisabled={true}
+                />
+            );
+
+            expect(screen.getByText("Next")).toBeDisabled();
+        });
+
+        it("aktiviert Next wenn Preview bereit ist", () => {
+            render(
+                <Progressbar
+                jobStatus={buildJobStatus({
+                    status: "waiting",
+                    phase: "waiting_selection",
+                })}
+                showNextButton
+                nextDisabled={false}
+                />
+            );
+
+            expect(screen.getByText("Next")).not.toBeDisabled();
+        });
+
+        it("ruft onNext auf beim Klick", () => {
+            const onNext = vi.fn();
+
+            render(
+                <Progressbar
+                jobStatus={buildJobStatus()}
+                showNextButton={true}
+                nextDisabled={false}
+                onNext={onNext}
+                />
+            );
+
+            screen.getByText("Next").click();
+
+            expect(onNext).toHaveBeenCalled();
+        });
     });
 
     describe("Fortschrittsbalken", () => {
@@ -95,6 +144,7 @@ describe("Progressbar", () => {
             expect(screen.getByText("100%")).toBeInTheDocument();
             expect(screen.getByTestId("linear-progress")).toHaveAttribute("aria-valuenow", "100");
         });
+
     });
 
     describe("Verbleibende Zeit", () => {

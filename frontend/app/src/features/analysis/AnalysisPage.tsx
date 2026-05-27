@@ -6,7 +6,7 @@ import type {FilteringStatsType,  JobStatus} from "./utils/types";
 import Progressbar from "./components/Progressbar.tsx";
 import {useEffect, useRef} from "react";
 import {FilteringStats} from "./components/FilteringStats";
-import CircularProgress from '@mui/material/CircularProgress';
+//import CircularProgress from '@mui/material/CircularProgress';
 import {convertBackendFilterStats} from "./utils/helpers.ts";
 
 /**
@@ -27,14 +27,18 @@ export function AnalysisPage() {
   if (jobStatus?.filter_stats && !cachedFilterStats.current) {
     cachedFilterStats.current = convertBackendFilterStats(jobStatus.filter_stats);
   }
+  const isPreviewReady =
+  jobStatus?.status === "waiting"
+  && jobStatus?.phase === "waiting_selection";
 
   useEffect(() => {
     if (!jobStatus) return;
-
+    // ich kommentiere die if-Anweisung um nicht direkt zu navigieren ohne progressbar anzuzeigen
     // Spezialfall: Normalisierungsvorschau bereit
-    if (jobStatus.status === "waiting" && jobStatus.phase === "waiting_selection") {
-      navigate(`/normalization/${job_id}`);
-    }
+    //if (jobStatus.status === "waiting" && jobStatus.phase === "waiting_selection") {
+    //  navigate(`/normalization/${job_id}`);
+    //}
+
 
     // Pipeline komplett abgeschlossen
     /*if (jobStatus.status === "completed") {
@@ -62,13 +66,23 @@ export function AnalysisPage() {
     );
   }
   // Filterstatistik anzeigen!
-  if ((jobStatus.status === "running" && jobStatus.phase === "filtering") || jobStatus.status === "queued") {
-    return (
-        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-          <Progressbar jobStatus={jobStatus} />
-        </main>
-    );
-  }
+  //if ((jobStatus.status === "running" && jobStatus.phase === "filtering") || jobStatus.status === "queued") {
+  //  return (
+  //      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+  //        <Progressbar jobStatus={jobStatus} />
+  //      </main>
+  //  );
+  //}
+
+
+    const shouldShowProgress =
+  jobStatus?.status === "queued"
+  || jobStatus?.status === "running"
+  || (
+      jobStatus?.status === "waiting"
+      && jobStatus?.phase === "waiting_selection"
+  );
+
 
   if (jobStatus.status === "failed") {
     // Wenn wir bereits Filterstatistiken haben → weiter anzeigen
@@ -148,41 +162,52 @@ export function AnalysisPage() {
 
   return (
     <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
-      <div className="w-full max-w-4xl space-y-4">
+        <div className="w-full max-w-4xl space-y-6">
 
-        {jobStatus.phase === "normalization_preview"
-            && jobStatus.status === "running" && (
+            {/* Progressbar bleibt sichtbar */}
+            {shouldShowProgress  && (
+                <div data-testid="preview-progress">
+                    <Progressbar
+                        jobStatus={jobStatus}
+                        showNextButton={true}
+                        nextDisabled={!isPreviewReady}
+                        onNext={() => navigate(`/normalization/${job_id}`)}
+                    />
+                </div>
+            )}
+
+            {/* Fehlerbanner */}
+            {jobStatus.status === "failed" && (
                 <section
-                    className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900"
-                    aria-live="polite"
+                    className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-900"
+                    role="alert"
                 >
-                  <div className="flex items-center gap-3">
-                    <CircularProgress aria-label="Loading…" />
-                    <div>
-                      <p className="font-semibold">
-                        Normalisierungsvorschau wird berechnet...
-                      </p>
-                      <p className="text-sm mt-1">
-                        Sie werden automatisch weitergeleitet sobald alle
-                        Methoden berechnet wurden.
-                      </p>
-                    </div>
-                  </div>
+                    <p className="font-semibold">
+                        Normalisierungsvorschau fehlgeschlagen
+                    </p>
+
+                    <p className="text-sm mt-1">
+                        {jobStatus.error?.detail ??
+                            "Die Vorschau konnte nicht berechnet werden."}
+                    </p>
                 </section>
-        )}
+            )}
 
+            {/* Filterstatistik */}
+            {cachedFilterStats.current ? (
+                <div data-testid="filtering-stats">
+                    <FilteringStats stats={cachedFilterStats.current} />
+                </div>
+            ) : (
+                <InfoPanel
+                    title="Analyse"
+                    message="Keine Filterstatistiken für diesen Job verfügbar."
+                />
+            )}
 
-        { cachedFilterStats.current ? (
-          <FilteringStats stats={cachedFilterStats.current} />
-        ) : (
-          <InfoPanel
-            title="Analyse"
-            message="Keine Filterstatistiken für diesen Job verfügbar."
-          />
-        )}
-      </div>
+        </div>
     </main>
-  );
+);
 }
 
 interface InfoPanelProps {
@@ -260,4 +285,3 @@ return (
   </div>
 );
    */
-
