@@ -12,17 +12,20 @@ export type NormalizationMethod =
   | "funnorm";
 
 
-/**
- *
- */
-export interface NormalizationMethodPlot {
-    method: NormalizationMethod;
-    url: string;       //  url wird gesendet
-    quality_score?: number;    // nur bei non-raw Methoden
-    density_data?: unknown;    // nur bei raw
-}
 
 export interface NormalizationPreview {
-    plots: NormalizationMethodPlot[];
+    plots: MethodPlotGroup[];
     recommendation: NormalizationMethod;
+}
+
+
+export interface PlotItem {
+  plot_kind: "density" | "pca";
+  url: string;
+}
+
+export interface MethodPlotGroup {
+  method: NormalizationMethod;
+  plots: PlotItem[];
+
 }
