@@ -6,46 +6,63 @@ interface SvdPlotProps {
 }
 
 export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
-  if (rounds.length === 0) return <p>Keine SVD-Plots verfügbar.</p>;
+  if (rounds.length === 0) return <p>No SVD plots available.</p>;
 
-  const initialPlot = rounds.find((r) => r.type === 'initial');
-  // Hole das letzte Element für den aktuellen Zustand, aber nur wenn es nicht der initiale Plot selbst ist
-  const latestPlot = rounds[rounds.length - 1];
-  const hasCorrection = rounds.length > 1;
-
-  const imageHost = 'http://localhost:8000'; // Dein Backend-Host
+  const imageHost = 'http://localhost:8000'; // Your backend host
 
   return (
     <div>
-      <h3>SVD Diagnostik-Plots</h3>
+      <h3>SVD Diagnostic Plots</h3>
       <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-        {/* Initialer Plot (Immer sichtbar) */}
-        {initialPlot && (
-          <div style={{ flex: '1 1 45%', minWidth: '300px', border: '1px solid #eee', padding: '10px', borderRadius: '4px' }}>
-            <h4>Vor Korrektur (Runde 0)</h4>
-            <img
-              src={`${imageHost}${initialPlot.svd_plot}`}
-              alt="SVD Plot Initial"
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-            />
-          </div>
-        )}
+        {rounds.map((round) => (
+          <div 
+            key={round.round} 
+            style={{ 
+              // flex: '0 1 400px' verhindert das unendliche Aufblähen bei wenigen Elementen
+              flex: '0 1 400px', 
+              border: '1px solid #ddd', 
+              padding: '15px', 
+              borderRadius: '8px',
+              backgroundColor: round.type === 'initial' ? '#f9f9f9' : '#f0fff4'
+            }}
+          >
+            {/* Plot Title */}
+            <h4 style={{ margin: '0 0 10px 0', color: '#333' }}>
+              {round.type === 'initial' ? 'Before Correction' : 'After Correction'} (Round {round.round})
+            </h4>
 
-        {/* Nachher-Plot (Nur sichtbar nach mindestens einem Batch-Run) */}
-        {hasCorrection && latestPlot && (
-          <div style={{ flex: '1 1 45%', minWidth: '300px', border: '1px solid #eee', padding: '10px', borderRadius: '4px', backgroundColor: '#f0fff4' }}>
-            <h4>Nach Korrektur (Runde {latestPlot.round})</h4>
+            {/* Plot Image */}
             <img
-              src={`${imageHost}${latestPlot.svd_plot}`}
-              alt={`SVD Plot Runde ${latestPlot.round}`}
-              style={{ width: '100%', height: 'auto', display: 'block' }}
+              src={`${imageHost}${round.svd_plot}`}
+              alt={`SVD Plot Round ${round.round}`}
+              style={{ 
+                width: '100%', 
+                height: 'auto', 
+                display: 'block',
+                borderRadius: '4px',
+                marginBottom: '10px'
+              }}
             />
-            <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#555' }}>
-              <strong>Angewendet:</strong> Variable: {latestPlot.settings_used?.batch_variable} | Kovariablen:{' '}
-              {latestPlot.settings_used?.covariates.join(', ') || 'Keine'}
+
+            {/* Plot Info */}
+            <div style={{ fontSize: '0.9em', color: '#666', borderTop: '1px solid #ddd', paddingTop: '10px' }}>
+              <div style={{ marginBottom: '8px' }}>
+                <strong>Timestamp:</strong> {new Date(round.timestamp).toLocaleString('en-US')}
+              </div>
+              
+              {round.settings_used && (
+                <>
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong>Batch Variable:</strong> {round.settings_used.batch_variable}
+                  </div>
+                  <div>
+                    <strong>Covariates:</strong> {round.settings_used.covariates.length > 0 ? round.settings_used.covariates.join(', ') : 'None'}
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );

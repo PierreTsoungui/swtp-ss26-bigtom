@@ -1,65 +1,67 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom'; // navigate entfernt
 import { useBatchCorrection } from './hooks/useBatchCorrection';
 import { BatchForm } from './components/BatchForm';
 import { SvdPlot } from './components/SvdPlot';
-import { BatchStatus } from './components/BatchStatus';
+import Progressbar from './components/Progressbar';
 
 const BatchPage: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
-  const navigate = useNavigate();
 
-  // Callback bei erfolgreichem Skip -> Weiterleitung zur Analyse-Seite
-  const handleSkipSuccess = () => {
-    navigate(`/analysis/${jobId}`);
+  const handleAnalysisSuccess = () => {
+    // Isoliertes Testen ohne Navigation
   };
 
-  const { history, globalStatus, loading, error, runBatch, skipBatch } = useBatchCorrection(
+  const { history, globalStatus, jobStatus, loading, error, runBatch, skipBatch } = useBatchCorrection(
     jobId,
-    handleSkipSuccess
+    handleAnalysisSuccess
   );
 
   if (loading) {
-    return <div style={{ padding: '20px' }}>Lade Batch-Korrektur-Status...</div>;
+    return <div style={{ padding: '20px' }}>Loading batch correction status...</div>;
   }
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-      <h2>Schritt 3: Batch-Effekt-Korrektur</h2>
-      <p style={{ color: '#666' }}>Job-ID: {jobId}</p>
+      <h2>Step 3: Batch Effect Correction</h2>
+      <p style={{ color: '#666' }}>Job ID: {jobId}</p>
 
-      {/* Backend-Fehlermeldungen strukturiert anzeigen */}
+      {/* Backend Error Display */}
       {error && (
         <div style={{ padding: '15px', backgroundColor: '#f8d7da', color: '#721c24', borderRadius: '4px', marginBottom: '20px' }}>
-          <strong>Fehler [{error.error}]:</strong> {error.message}
+          <strong>Error [{error.error}]:</strong> {error.message}
           {error.detail?.available && (
             <div style={{ marginTop: '5px', fontSize: '0.9em' }}>
-              Verfügbare Spalten im Samplesheet: <em>{error.detail.available.join(', ')}</em>
+              Available columns in samplesheet: <em>{error.detail.available.join(', ')}</em>
             </div>
           )}
         </div>
       )}
 
-      {/* Wenn Korrektur läuft, zeige den Loader anstelle des Formulars */}
-      {globalStatus === 'running' ? (
-        <BatchStatus />
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px', marginTop: '20px' }}>
-          {/* Linke Spalte: Steuer-Formular */}
-          <div>
-            <BatchForm
-              onExecuteBatch={runBatch}
-              onSkipToAnalysis={skipBatch}
-              disabled={globalStatus === 'running'}
-            />
-          </div>
-
-          {/* Rechte Spalte: Die Plots */}
-          <div>
-            {history && <SvdPlot rounds={history.rounds} />}
-          </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', marginTop: '20px' }}>
+        
+        {/* 1. SVD Plots */}
+        <div>
+          {history && <SvdPlot rounds={history.rounds} />}
         </div>
-      )}
+
+        {/* 2. Progressbar (Fehler mit 'my: 2' behoben) */}
+        {globalStatus === 'running' && jobStatus && (
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
+            <Progressbar jobStatus={jobStatus} />
+          </div>
+        )}
+
+        {/* 3. Batch Form */}
+        <div>
+          <BatchForm
+            onExecuteBatch={runBatch}
+            onSkipToAnalysis={skipBatch}
+            disabled={globalStatus === 'running'}
+          />
+        </div>
+        
+      </div>
     </div>
   );
 };

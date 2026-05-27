@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import type { BatchSettings } from '../utils/types';
 
 interface BatchFormProps {
-  onExecuteBatch: (settings: BatchSettings) => void;
+  // Wir passen den Typ hier flexibel an, damit das Nesting für das Backend stimmt
+  onExecuteBatch: (settings: any) => void;
   onSkipToAnalysis: () => void;
   disabled: boolean;
 }
@@ -17,7 +17,7 @@ export const BatchForm: React.FC<BatchFormProps> = ({ onExecuteBatch, onSkipToAn
     setLocalError(null);
 
     if (!batchVariable.trim()) {
-      setLocalError('Bitte gib eine Batch-Variable an.');
+      setLocalError('Please provide a batch variable.');
       return;
     }
 
@@ -27,25 +27,28 @@ export const BatchForm: React.FC<BatchFormProps> = ({ onExecuteBatch, onSkipToAn
       .filter((c) => c.length > 0);
 
     if (covariates.includes(batchVariable.trim())) {
-      setLocalError('Die Batch-Variable darf nicht gleichzeitig als Kovariable genutzt werden.');
+      setLocalError('The batch variable cannot be used as a covariate at the same time.');
       return;
     }
 
+    // ── HIER WAR DER FEHLER: Das Backend braucht das Nesting in "batch_correction" ──
     onExecuteBatch({
-      batch_variable: batchVariable.trim(),
-      covariates,
+      batch_correction: {
+        batch_variable: batchVariable.trim(),
+        covariates,
+      }
     });
   };
 
   return (
     <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f9f9f9' }}>
-      <h3>Batch-Parameter</h3>
+      <h3>Batch Parameters</h3>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Batch-Variable (Pflicht):</label>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Batch Variable (Required):</label>
           <input
             type="text"
-            placeholder="z.B. Slide"
+            placeholder="e.g., Slide"
             value={batchVariable}
             onChange={(e) => setBatchVariable(e.target.value)}
             disabled={disabled}
@@ -54,10 +57,10 @@ export const BatchForm: React.FC<BatchFormProps> = ({ onExecuteBatch, onSkipToAn
         </div>
 
         <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Kovariablen (optional, Komma-getrennt):</label>
+          <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Covariates (Optional, comma-separated):</label>
           <input
             type="text"
-            placeholder="z.B. Sample_Group, Age"
+            placeholder="e.g., Sample_Group, Age"
             value={covariatesInput}
             onChange={(e) => setCovariatesInput(e.target.value)}
             disabled={disabled}
@@ -67,21 +70,40 @@ export const BatchForm: React.FC<BatchFormProps> = ({ onExecuteBatch, onSkipToAn
 
         {localError && <div style={{ color: 'red', marginBottom: '15px' }}>{localError}</div>}
 
+        {/* Buttons: Beide grün, auf Englisch ("Batch" & "Skip") */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
           <button
             type="submit"
             disabled={disabled}
-            style={{ flex: 1, padding: '10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: disabled ? 'not-allowed' : 'pointer' }}
+            style={{ 
+              flex: 1, 
+              padding: '10px', 
+              backgroundColor: '#28a745', // Schönes Grün
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px', 
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold'
+            }}
           >
-            Korrektur ausführen
+            Batch
           </button>
           <button
             type="button"
             onClick={onSkipToAnalysis}
             disabled={disabled}
-            style={{ flex: 1, padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: disabled ? 'not-allowed' : 'pointer' }}
+            style={{ 
+              flex: 1, 
+              padding: '10px', 
+              backgroundColor: '#1e7e34', // Etwas dunkleres Grün zur optischen Trennung
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px', 
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold'
+            }}
           >
-            ANALYSE (Überspringen)
+            Skip
           </button>
         </div>
       </form>
