@@ -1,13 +1,12 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime
+# app/models/batch.py
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
 
 class BatchSettingsInner(BaseModel):
     batch_variable: str
     covariates: List[str] = []
 
 class BatchSettingsPayload(BaseModel):
-    """Erfüllt das Format: {"rounds": {"batch_variable": "...", "covariates": [...]}}"""
     batch_correction: BatchSettingsInner
 
 class BatchRound(BaseModel):

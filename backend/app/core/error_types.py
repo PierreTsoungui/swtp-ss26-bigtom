@@ -1,5 +1,7 @@
 # app/core/error_types.py
 from typing import Dict, Any, Optional
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 
 class ErrorType:
     def __init__(self, path: str, status: int, title: str):
@@ -16,9 +18,16 @@ class ErrorTypes:
     FILTERING_NOT_FINISHED = ErrorType("/errors/filtering-not-finished", 409, "Filtering not finished")
     NO_STATS_AVAILABLE = ErrorType("/errors/no-stats-available", 404, "No stats available")
     
+    # Normalization Errors
     INVALID_NORMALIZATION_METHOD = ErrorType("/errors/invalid-normalization-method", 400, "Invalid normalization method")
     NORMALIZATION_NOT_ALLOWED = ErrorType("/errors/normalization-not-allowed", 409, "Normalization not allowed")
     NORMALIZATION_FAILED = ErrorType("/errors/normalization-failed", 500, "Normalization failed")
+
+    # ── BATCH CORRECTION ERRORS (400, 404, 409) ───────────────────────
+    PLOT_NOT_FOUND = ErrorType("/errors/plot-not-found", 404, "SVD plot not found")
+    INVALID_BATCH_VARIABLE = ErrorType("/errors/invalid-batch-variable", 400, "Invalid batch variable")
+    COVARIATE_EQUALS_BATCH = ErrorType("/errors/covariate-equals-batch", 400, "Covariate equals batch variable")
+    BATCH_NOT_ALLOWED = ErrorType("/errors/batch-not-allowed", 409, "Batch correction not allowed")
 
 def problem_detail(
     error_type: ErrorType,
@@ -37,3 +46,22 @@ def problem_detail(
         body["instance"] = instance
     body.update(extras)
     return body
+
+class AppException(HTTPException):
+    """
+    Erlaubt es, Fehler direkt mit einem ErrorType-Objekt zu werfen.
+    Beispiel: raise AppException(ErrorTypes.INVALID_BATCH_VARIABLE, "Spalte fehlt", provided="X")
+    """
+    def __init__(self, error_type: ErrorType, detail: str, instance: Optional[str] = None, **extras):
+        self.error_body = problem_detail(error_type, detail, instance, **extras)
+        super().__init__(status_code=error_type.status, detail=detail)
+
+# Alias für dein Batch-Modul, damit wir dort keine Namen anpassen müssen
+BatchException = AppException
+
+def app_exception_handler(request, exc: AppException):
+    """Fängt die AppException ab und transformiert sie in gültiges RFC 9457 JSON"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=exc.error_body
+    )
