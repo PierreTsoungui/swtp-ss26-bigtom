@@ -21,7 +21,7 @@ export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
             });
 
             if (!response.ok) {
-                const errorData : ApiProblemDetail  = await response.json();
+                const errorData = (await response.json()) as ApiProblemDetail;
                 setError(errorData.details);
                 return;
             }
