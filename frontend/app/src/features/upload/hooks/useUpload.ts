@@ -10,10 +10,10 @@ import { useState } from "react"
  * @property {function} upload - Funktion zum Starten des Uploads, nimmt IDAT-Dateien und Sample Sheet als Argumente.
  */
 type UploadState = {
-  data: { job_id: string } | null
+  // data: { job_id: string } | null
   isLoading: boolean
   error: string | null
-  upload: (idatFiles: File[], sampleSheet: File) => Promise<void>
+  upload: (idatFiles: File[], sampleSheet: File) => Promise<string | null>
 }
 
 /**
@@ -22,14 +22,14 @@ type UploadState = {
  * @returns {UploadState} Der Upload-Status und die zugehörigen Funktionen.
  */
 export function useUpload() : UploadState {
-  const [data, setData] = useState<{ job_id: string } | null>(null)
+  // const [data, setData] = useState<{ job_id: string } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const upload = async (idatFiles: File[], sampleSheet: File) => {
+  const upload = async (idatFiles: File[], sampleSheet: File): Promise<string | null> => {
     setIsLoading(true)
     setError(null)
-    setData(null)
+    // setData(null)
 
     const formData = new FormData()
     idatFiles.forEach((file) => formData.append("idat_files", file))
@@ -42,20 +42,53 @@ export function useUpload() : UploadState {
       })
 
       if (!response.ok) {
-        const err = await response.json()
-        setError(err.detail || "Upload fehlgeschlagen")
-        return
+        const err: unknown = await response.json()
+        setError(getUploadErrorMessage(err))
+        return null;
+      }
+      const data: unknown = await response.json()
+      if (!isUploadResponse(data)) {
+        setError("Upload-Antwort konnte nicht verarbeitet werden")
+        return null
       }
 
-      const result = await response.json()
-      setData(result)
+      return data.job_id;
 
     } catch {
       setError("Server nicht erreichbar")
+      return null
     } finally {
       setIsLoading(false)
     }
   }
 
-  return { data, isLoading, error, upload }
+  return { isLoading, error, upload }
+}
+
+function getUploadErrorMessage(value: unknown): string {
+  if (!isRecord(value)) return "Upload fehlgeschlagen"
+
+  const detail = value.detail
+
+  if (typeof detail === "string") {
+    return detail
+  }
+
+  if (isRecord(detail) && typeof detail.message === "string") {
+    return detail.message
+  }
+
+  if (typeof value.message === "string") {
+    return value.message
+  }
+
+  return "Upload fehlgeschlagen"
+}
+
+function isUploadResponse(value: unknown): value is { job_id: string } {
+  return isRecord(value) && typeof value.job_id === "string"
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }

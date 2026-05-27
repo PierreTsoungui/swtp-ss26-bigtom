@@ -1,71 +1,399 @@
 # app/services/r_executor.py
-import asyncio
-from pathlib import Path
-from typing import Dict, Any
 
-R_SCRIPTS_DIR = Path("app/scripts")
+import asyncio
+import json
+
+from typing import Dict, Any, Optional, Callable
+from pathlib import Path
+
+from app.services import job_manager
+
+R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
+
+USE_MOCK_R = True
 
 
 async def run_r_script(
     script: str,
     job_id: str,
     job_dir: str,
-    sample_sheet: str
+    sample_sheet: str,
+    mode: str = "filtering",
+    script_args: list = [],
+    on_progress: Optional[Callable] = None
 ) -> Dict[str, Any]:
-    """
-    Ruft das R-Skript auf (geschrieben vom R-Team).
-    
-    Das R-Skript erwartet:
-        --job_id <id>
-        --idat_dir <pfad>
-        --sample_sheet <dateiname>
-    
-    Das R-Skript gibt bei Erfolg exit code 0 zurück.
-    Bei Fehler exit code != 0 und Fehlermeldung auf stderr.
-    """
-    
-    script_path = R_SCRIPTS_DIR / script
-    
-    # Prüfen ob Skript existiert (R-Team muss es liefern)
-    if not script_path.exists():
-        return {
-            "returncode": 1,
-            "stderr": f"R-Skript nicht gefunden: {script_path}. Bitte von R-Team bereitstellen."
-        }
-    
-    # Aufruf mit korrekten Dateipfaden
-    cmd = [
-        "Rscript", str(script_path),
-        "--job_id", job_id,
-        "--idat_dir", job_dir,
-        "--sample_sheet", sample_sheet
-    ]
-    
+
+    script_path = f"/app/r_backend/{script}"
+    docker_job_dir = f"/app/jobs/{job_id}"
+
+    print(f"[R_EXECUTOR] mode={mode}", flush=True)
+
+    # ------------------------------------------------------------
+    # COMMANDS
+    # ------------------------------------------------------------
+
+    if mode == "normalization_preview":
+
+        cmd = [
+            "docker", "exec",
+            R_WORKER_CONTAINER,
+
+            "Rscript",
+            script_path,
+
+            f"{docker_job_dir}/filtered_data.rds",
+            docker_job_dir
+        ]
+
+    elif mode == "normalization":
+
+        cmd = [
+            "docker", "exec",
+            R_WORKER_CONTAINER,
+
+            "Rscript",
+            script_path,
+
+            docker_job_dir,
+
+            *script_args
+        ]
+
+    else:  # filtering
+
+        cmd = [
+            "docker", "exec",
+            R_WORKER_CONTAINER,
+
+            "Rscript",
+            script_path,
+
+            f"{docker_job_dir}/{sample_sheet}",
+            docker_job_dir
+        ]
+
+    print(
+        f"[R_EXECUTOR] Starte: {' '.join(cmd)}",
+        flush=True
+    )
+
     try:
+
+        # ------------------------------------------------------------
+        # START PROCESS
+        # ------------------------------------------------------------
+
         process = await asyncio.create_subprocess_exec(
             *cmd,
+
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(), 
-            timeout=600  # 10 Minuten
+
+        # ------------------------------------------------------------
+        # REGISTER PROCESS
+        # ------------------------------------------------------------
+
+        job_manager.register_process(
+            job_id,
+            process
         )
-        
+
+        stdout_lines = []
+        stderr_lines = []
+
+        filter_stats = {}
+        preview_plots = []
+
+        # ------------------------------------------------------------
+        # READ STDOUT
+        # ------------------------------------------------------------
+
+        async def read_stdout():
+
+            nonlocal filter_stats
+            nonlocal preview_plots
+
+            while True:
+
+                line = await process.stdout.readline()
+
+                if not line:
+                    break
+
+                decoded = line.decode(
+                    "utf-8",
+                    errors="replace"
+                ).strip()
+
+                stdout_lines.append(decoded)
+
+                print(
+                    f"[R_STDOUT] {decoded}",
+                    flush=True
+                )
+
+                # ----------------------------------------------------
+                # LEGACY PROGRESS FORMAT
+                # ----------------------------------------------------
+                #
+                # PROGRESS:80
+                # ----------------------------------------------------
+
+                if decoded.startswith("PROGRESS:"):
+
+                    try:
+
+                        percent = int(
+                            decoded.replace(
+                                "PROGRESS:",
+                                ""
+                            ).strip()
+                        )
+
+                        if on_progress:
+
+                            await on_progress({
+                                "progress": percent,
+                                "step": "Processing..."
+                            })
+
+                    except Exception:
+                        pass
+
+                # ----------------------------------------------------
+                # JSON EVENTS
+                # ----------------------------------------------------
+
+                try:
+
+                    data = json.loads(decoded)
+
+                    # ------------------------------------------------
+                    # JSON PROGRESS
+                    # ------------------------------------------------
+
+                    if "progress" in data:
+
+                        if on_progress:
+
+                            await on_progress(data)
+
+                    # ------------------------------------------------
+                    # FILTERING
+                    # ------------------------------------------------
+
+                    if mode == "filtering":
+
+                        if "filter_stats" in data:
+
+                            filter_stats.update(
+                                data["filter_stats"]
+                            )
+
+                            print(
+                                f"[R_EXECUTOR] Filter stats received: {data['filter_stats']}",
+                                flush=True
+                            )
+
+                    # ------------------------------------------------
+                    # NORMALIZATION PREVIEW
+                    # ------------------------------------------------
+
+                    if mode == "normalization_preview":
+
+                        if data.get("type") == "plot":
+
+                            preview_plots.append({
+
+                                "method": data["method"],
+                                "file": data["file"]
+                            })
+
+                except json.JSONDecodeError:
+                    pass
+
+        # ------------------------------------------------------------
+        # READ STDERR
+        # ------------------------------------------------------------
+
+        async def read_stderr():
+
+            while True:
+
+                line = await process.stderr.readline()
+
+                if not line:
+                    break
+
+                decoded = line.decode(
+                    "utf-8",
+                    errors="replace"
+                ).strip()
+
+                stderr_lines.append(decoded)
+
+                print(
+                    f"[R_STDERR] {decoded}",
+                    flush=True
+                )
+
+        # ------------------------------------------------------------
+        # RUN READERS
+        # ------------------------------------------------------------
+
+        await asyncio.gather(
+            read_stdout(),
+            read_stderr()
+        )
+
+        # ------------------------------------------------------------
+        # WAIT WITH TIMEOUT
+        # ------------------------------------------------------------
+
+        returncode = await asyncio.wait_for(
+            process.wait(),
+            timeout=600
+        )
+
+        # ------------------------------------------------------------
+        # UNREGISTER PROCESS
+        # ------------------------------------------------------------
+
+        job_manager.unregister_process(job_id)
+
+        stdout_str = "\n".join(stdout_lines)
+        stderr_str = "\n".join(stderr_lines)
+
+        print(
+            f"[R_EXECUTOR] returncode: {returncode}",
+            flush=True
+        )
+
+        # ------------------------------------------------------------
+        # SAVE FILTER STATS
+        # ------------------------------------------------------------
+
+        if (
+            mode == "filtering"
+            and filter_stats
+            and returncode == 0
+        ):
+
+            stats_path = Path(job_dir) / "filter_stats.json"
+
+            stats_path.parent.mkdir(
+                parents=True,
+                exist_ok=True
+            )
+
+            with open(stats_path, "w") as f:
+
+                json.dump(
+                    filter_stats,
+                    f,
+                    indent=2
+                )
+
+            print(
+                f"[R_EXECUTOR] Filter stats saved: {stats_path}",
+                flush=True
+            )
+
+        # ------------------------------------------------------------
+        # RETURN FILTERING
+        # ------------------------------------------------------------
+
+        if mode == "filtering":
+
+            return {
+
+                "returncode": returncode,
+                "stdout": stdout_str,
+                "stderr": stderr_str,
+                "filter_stats": filter_stats
+            }
+
+        # ------------------------------------------------------------
+        # RETURN NORMALIZATION PREVIEW
+        # ------------------------------------------------------------
+
+        if mode == "normalization_preview":
+
+            return {
+
+                "returncode": returncode,
+                "stdout": stdout_str,
+                "stderr": stderr_str,
+
+                "preview_plots": preview_plots[:5]
+            }
+
+        # ------------------------------------------------------------
+        # RETURN NORMALIZATION
+        # ------------------------------------------------------------
+
+        if mode == "normalization":
+
+            return {
+
+                "returncode": returncode,
+                "stdout": stdout_str,
+                "stderr": stderr_str
+            }
+
+        # ------------------------------------------------------------
+        # DEFAULT RETURN
+        # ------------------------------------------------------------
+
         return {
-            "returncode": process.returncode,
-            "stdout": stdout.decode('utf-8', errors='replace'),
-            "stderr": stderr.decode('utf-8', errors='replace')
+
+            "returncode": returncode,
+            "stdout": stdout_str,
+            "stderr": stderr_str
         }
-        
+
+    # ------------------------------------------------------------
+    # TIMEOUT
+    # ------------------------------------------------------------
+
     except asyncio.TimeoutError:
+
+        print(
+            "[R_EXECUTOR] Timeout after 10 minutes",
+            flush=True
+        )
+
+        job_manager.unregister_process(job_id)
+
+        if 'process' in locals():
+
+            process.kill()
+            await process.wait()
+
         return {
+
             "returncode": 1,
-            "stderr": f"R-Skript {script} nach 10 Minuten abgebrochen"
+            "stdout": "",
+            "stderr": "R script timeout after 10 minutes"
         }
+
+    # ------------------------------------------------------------
+    # GENERAL ERROR
+    # ------------------------------------------------------------
+
     except Exception as e:
+
+        print(
+            f"[R_EXECUTOR] ERROR: {str(e)}",
+            flush=True
+        )
+
+        job_manager.unregister_process(job_id)
+
         return {
+
             "returncode": 1,
-            "stderr": f"Fehler beim Ausführen von R: {str(e)}"
+            "stdout": "",
+            "stderr": str(e)
         }

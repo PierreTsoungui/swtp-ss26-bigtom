@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-
   frontend:
     build: ./frontend
     ports:
@@ -11,6 +8,8 @@ services:
 
   backend:
     build: ./backend
+    environment:
+      - PYTHONUNBUFFERED=1
     ports:
       - "8000:8000"
     volumes:
@@ -20,8 +19,25 @@ services:
 
   r_worker:
     build: ./r_backend
+    security_opt:
+      - seccomp:unconfined
+    ulimits:
+      nproc:
+        soft: 65536
+        hard: 65536
+      nofile:
+        soft: 65536
+        hard: 65536
+      stack: 67108864
+    environment:
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - BLAS_NUM_THREADS=1
+      - BIOCPARALLEL_WORKER_NUMBER=1
+      - R_BIOC_PARALLEL_WORKERS=1
     volumes:
-      - ./jobs:/app/jobs
       - ./r_backend:/app/r_backend
-      - ./data:/data
-    command: tail -f /dev/null   # Container läuft im Hintergrund
+      - ./data:/app/data
+      - ./jobs:/app/jobs
+    command: tail -f /dev/null

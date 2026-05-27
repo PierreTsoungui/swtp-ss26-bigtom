@@ -5,11 +5,8 @@ import FileViewList from "./components/FileViewList";
 import SampleSheetUpload from "./components/SampleSheetUpload";
 import IdatUpload from "./components/IdatUpload";
 import { useUpload } from "./hooks/useUpload";
+import { useNavigate } from "react-router";
 
-// TODOS:
-// - Testen mit echten Dateien (auch ungültige Dateien!)
-// - Backend-Integration (API-Call mit FormData)
-// - (Optional): Drag & Drop Unterstützung für beide Uploads
 
 /**
  * Komponente für den Upload von IDAT-Dateien und einem Sample Sheet.
@@ -25,15 +22,22 @@ function UploadView() : JSX.Element {
   const [idatErrors, setIdatErrors] = useState<string[]>([]);
   const [sampleSheetError, setSampleSheetError] = useState<string>("");
 
+  const navigate = useNavigate();
+
+
   // Analyse-Button nur aktiv wenn keine Fehler und beide Felder befüllt
   const canSubmit = idatFiles.length > 0 && sampleSheet !== null &&
                     idatErrors.length === 0 && sampleSheetError === "";
 
-  const { data, isLoading, error, upload } = useUpload();
+  const { isLoading, error, upload } = useUpload();
   
   const handleUpload = async () => {
-    if (canSubmit) {
-      await upload(idatFiles, sampleSheet!);
+    if (!canSubmit || !sampleSheet) return;
+
+    const jobId = await upload(idatFiles, sampleSheet);
+
+    if (jobId) {
+      void navigate(`/analysis/${jobId}`);
     }
   }
 
@@ -70,7 +74,7 @@ function UploadView() : JSX.Element {
   };
 
   // ## Samplesheet Upload 
-  const handleSampleSheetChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSampleSheetChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -124,11 +128,14 @@ function UploadView() : JSX.Element {
       </div>
 
       {/* Analyse-starten Button */}
-      <SubmitButton canSubmit={canSubmit && !isLoading} onClick={handleUpload} />
+      <SubmitButton
+        canSubmit={canSubmit && !isLoading}
+        onClick={() => {
+          void handleUpload();
+        }}
+      />
       {isLoading && <p>Upload läuft...</p>}
       {error && <p className="text-red-500">{error}</p>}
-      {data && <p>Job erstellt: {data.job_id}</p>}
-
 
       {/* Dateiliste IDAT */}
       <FileViewList files={idatFiles} errors={idatErrors} onRemove={onRemoveIdatFile} />
