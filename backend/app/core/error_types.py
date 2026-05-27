@@ -1,6 +1,6 @@
 # app/core/error_types.py
 from typing import Dict, Any, Optional
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 class ErrorType:
@@ -47,19 +47,16 @@ def problem_detail(
     body.update(extras)
     return body
 
-class AppException(HTTPException):
-    """
-    Erlaubt es, Fehler direkt mit einem ErrorType-Objekt zu werfen.
-    Beispiel: raise AppException(ErrorTypes.INVALID_BATCH_VARIABLE, "Spalte fehlt", provided="X")
-    """
-    def __init__(self, error_type: ErrorType, detail: str, instance: Optional[str] = None, **extras):
+class AppException(Exception):
+    """Erlaubt es, Fehler direkt mit einem ErrorType-Objekt zu werfen."""
+    def __init__(self, error_type, detail: str, instance: Optional[str] = None, **extras):
+        self.status_code = error_type.status
         self.error_body = problem_detail(error_type, detail, instance, **extras)
-        super().__init__(status_code=error_type.status, detail=detail)
+        super().__init__(detail)
 
-# Alias für dein Batch-Modul, damit wir dort keine Namen anpassen müssen
 BatchException = AppException
 
-def app_exception_handler(request, exc: AppException):
+async def app_exception_handler(request: Request, exc: AppException):
     """Fängt die AppException ab und transformiert sie in gültiges RFC 9457 JSON"""
     return JSONResponse(
         status_code=exc.status_code,

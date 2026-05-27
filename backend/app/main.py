@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.error_types import AppException, app_exception_handler
 
 from app.api.routes import (
     upload,
@@ -17,6 +18,8 @@ app = FastAPI(
     title="Methylation Analysis API",
     version="1.0"
 )
+
+app.add_exception_handler(AppException, app_exception_handler)
 
 # CORS für lokale Entwicklung
 app.add_middleware(
