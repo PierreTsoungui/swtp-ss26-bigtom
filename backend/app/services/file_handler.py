@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Tuple, Dict
 from fastapi import UploadFile
 import os
+import json
 
 UPLOAD_BASE_DIR = Path(os.getenv("JOB_BASE_DIR", "./jobs"))
 
@@ -276,6 +277,20 @@ def save_sample_sheet(file: UploadFile, job_dir: Path) -> str:
     file_path = job_dir / file.filename
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+    return str(file_path)
+
+
+def save_filter_settings(filter_settings: Dict, job_dir: Path) -> str:
+    """
+    Speichert die filter_settings als JSON-Datei im Job-Ordner.
+    Erwartet ein bereits geparstes Dict (aus JSON).
+    Gibt den Pfad zur gespeicherten Datei als String zurück.
+    """
+    job_dir = Path(job_dir)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    file_path = job_dir / "filter_settings.json"
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(filter_settings, f)
     return str(file_path)
 
 
