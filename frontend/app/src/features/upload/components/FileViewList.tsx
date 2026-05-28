@@ -1,5 +1,6 @@
 import Chip from "@mui/material/Chip";
 import * as React from "react";
+import { getFileDisplayName, getFileIdentity } from "../utils/fileIdentity";
 
 /**
  * Typdefinition für die Props der FileViewList-Komponente
@@ -10,7 +11,7 @@ import * as React from "react";
 type FileViewListProps = {
     files: File[];
     errors: string[];
-    onRemove: (fileName: string) => void;
+    onRemove: (file: File) => void;
 }
 
 /**
@@ -25,11 +26,11 @@ const FileViewList: React.FC<FileViewListProps> = ({ files, errors, onRemove }) 
             IDAT-Dateien ({files.length})
         </h2>
         <div className="flex flex-wrap gap-2">
-            {files.map((file, index) => (
+            {files.map((file) => (
             <Chip
-                key={index}
-                label={file.name}
-                onDelete={() => onRemove(file.name)}
+                key={getFileIdentity(file)}
+                label={getFileDisplayName(file)}
+                onDelete={() => onRemove(file)}
                 color={errors.length > 0 ? "error" : "primary"}
                 variant="outlined"
                 size="small"

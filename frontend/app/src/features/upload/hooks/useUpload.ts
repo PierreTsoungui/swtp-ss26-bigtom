@@ -33,7 +33,7 @@ export function useUpload() : UploadState {
     // setData(null)
 
     const formData = new FormData()
-    idatFiles.forEach((file) => formData.append("idat_files", file))
+    idatFiles.forEach((file) => formData.append("idat_files", file, file.name))
     formData.append("sample_sheet", sampleSheet)
     formData.append("filter_settings", JSON.stringify(filterSettings))
 

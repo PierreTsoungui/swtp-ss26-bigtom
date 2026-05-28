@@ -6,6 +6,7 @@ import SampleSheetUpload from "./components/SampleSheetUpload";
 import IdatUpload from "./components/IdatUpload";
 import { useUpload } from "./hooks/useUpload";
 import { useNavigate } from "react-router";
+import { getFileIdentity } from "./utils/fileIdentity";
 import FilterPanel from "./components/FilterPanel.tsx";
 import {DEFAULT_FILTER_SETTINGS, type FilterSettings} from "./utils/types.ts";
 
@@ -45,33 +46,20 @@ function UploadView() : JSX.Element {
 
   // ## IDAT Upload 
   const handleIdatChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(event.target.files ?? []);
-    const errors: string[] = [];
-
-    const invalidFiles = selected.filter(
-      (f) => !f.name.toLowerCase().endsWith(".idat")
-    );
-    if (invalidFiles.length > 0) {
-      errors.push(
-        `Ungültige Dateien: ${invalidFiles.map((f) => f.name).join(", ")}`
-      );
-    }
-
-    const deduplicated = selected.filter(
-      (f) => !idatFiles.some((existing) => existing.name === f.name && existing.size === f.size)
-    );
-
-    const validFiles = deduplicated.filter((f) =>
+    const selectedIdatFiles = Array.from(event.target.files ?? []).filter((f) =>
       f.name.toLowerCase().endsWith(".idat")
     );
 
-    const allIdatFiles = [...idatFiles, ...validFiles];
+    const existingFileIds = new Set(idatFiles.map(getFileIdentity));
+    const deduplicated = selectedIdatFiles.filter(
+      (f) => !existingFileIds.has(getFileIdentity(f))
+    );
 
-    const pairErrors = validateIdatPairs(allIdatFiles);
-    setIdatErrors([...errors, ...pairErrors]);
+    const allIdatFiles = [...idatFiles, ...deduplicated];
+
+    setIdatErrors(validateIdatPairs(allIdatFiles));
     setIdatFiles(allIdatFiles);
 
-    // Input zurücksetzen damit dieselben Dateien nochmal gewählt werden können
     event.target.value = "";
   };
 
@@ -102,8 +90,9 @@ function UploadView() : JSX.Element {
   };
 
 
-  const onRemoveIdatFile = (fileName: string) => {
-      const updated = idatFiles.filter((f) => f.name !== fileName);
+  const onRemoveIdatFile = (fileToRemove: File) => {
+      const fileIdToRemove = getFileIdentity(fileToRemove);
+      const updated = idatFiles.filter((f) => getFileIdentity(f) !== fileIdToRemove);
       setIdatErrors(validateIdatPairs(updated));
       setIdatFiles(updated);
   };

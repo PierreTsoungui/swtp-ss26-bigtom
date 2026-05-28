@@ -264,7 +264,8 @@ def save_idat_files(files: List[UploadFile], job_dir: Path) -> List[str]:
     saved_paths = []
     for file in files:
         file.file.seek(0)
-        file_path = job_dir / file.filename
+        safe_name = Path(file.filename).name  # Nur Dateiname, keine Pfadangaben
+        file_path = job_dir / safe_name
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         saved_paths.append(str(file_path))
