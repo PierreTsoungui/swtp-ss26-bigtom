@@ -1,33 +1,45 @@
-  /**
-   * Validiert die IDAT-Dateien auf korrekte Paare (Grn/Red) basierend auf den Dateinamen.
-   * Es wird geprüft, ob für jede Grn-Datei eine entsprechende Red-Datei existiert und umgekehrt.
-   * Zusätzlich wird überprüft, ob die Anzahl der Dateien gerade ist (da sie in Paaren vorliegen sollten).
-   * @note Diese Validierung basiert ausschließlich auf den Dateinamen und berücksichtigt nicht den Inhalt der Dateien.
-   * @param files Array von IDAT-Dateien, die validiert werden sollen.
-   * @returns Array von Fehlern, falls Validierungsfehler vorliegen.
-   */
-  export const validateIdatPairs = (files: File[]): string[] => {
-    const errors: string[] = [];
-    const grn = files.filter((f) => f.name.includes("_Grn.idat"));
-    const red = files.filter((f) => f.name.includes("_Red.idat"));
+/**
+ * Validiert IDAT-Dateien auf korrekte Grn/Red-Paare anhand der Dateinamen.
+ * Die Prüfung ist case-insensitive für die Dateiendung und den Farbkanal.
+ */
+const grnPattern = /_Grn\.idat$/i;
+const redPattern = /_Red\.idat$/i;
 
-    grn.forEach((grnFile) => {
-      const prefix = grnFile.name.replace("_Grn.idat", "");
-      const hasPartner = red.some((r) => r.name === `${prefix}_Red.idat`);
-      if (!hasPartner)
-        errors.push(`Kein Red-Partner für: ${grnFile.name}`);
+export const validateIdatPairs = (files: File[]): string[] => {
+  const errors: string[] = [];
+  const grn = files.filter((f) => grnPattern.test(f.name));
+  const red = files.filter((f) => redPattern.test(f.name));
+  const validPairNames = new Set([...grn, ...red].map((f) => f.name));
+  const lowerCaseGrnNames = new Set(grn.map((f) => f.name.toLowerCase()));
+  const lowerCaseRedNames = new Set(red.map((f) => f.name.toLowerCase()));
+
+  files
+    .filter((f) => !validPairNames.has(f.name))
+    .forEach((file) => {
+      errors.push(`Ungültiges IDAT-Dateinamensmuster: ${file.name}`);
     });
 
-    red.forEach((redFile) => {
-      const prefix = redFile.name.replace("_Red.idat", "");
-      const hasPartner = grn.some((g) => g.name === `${prefix}_Grn.idat`);
-      if (!hasPartner)
-        errors.push(`Kein Grn-Partner für: ${redFile.name}`);
-    });
+  grn.forEach((grnFile) => {
+    const prefix = grnFile.name.replace(grnPattern, "");
+    const hasPartner = lowerCaseRedNames.has(`${prefix}_Red.idat`.toLowerCase());
 
-    if (files.length % 2 !== 0 && files.length > 0) {
-      errors.push("Ungerade Anzahl an IDAT-Dateien, es sollten Paare von Grn/Red vorliegen.");
+    if (!hasPartner) {
+      errors.push(`Kein Red-Partner für: ${grnFile.name}`);
     }
+  });
 
-    return errors;
-  };
+  red.forEach((redFile) => {
+    const prefix = redFile.name.replace(redPattern, "");
+    const hasPartner = lowerCaseGrnNames.has(`${prefix}_Grn.idat`.toLowerCase());
+
+    if (!hasPartner) {
+      errors.push(`Kein Grn-Partner für: ${redFile.name}`);
+    }
+  });
+
+  if (files.length % 2 !== 0 && files.length > 0) {
+    errors.push("Ungerade Anzahl an IDAT-Dateien, es sollten Paare von Grn/Red vorliegen.");
+  }
+
+  return errors;
+};
