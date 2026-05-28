@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { DatenschutzPage } from "./DatenschutzPage";
+import { DatenschutzPage } from "./DatenschutzPage.tsx";
 
 describe("DatenschutzPage", () => {
   it("enthält die wichtigen Datenschutzinformationen", () => {

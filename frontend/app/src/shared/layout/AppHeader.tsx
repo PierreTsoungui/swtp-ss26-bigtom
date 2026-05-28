@@ -1,4 +1,5 @@
 import { StepIndicator } from "./StepIndicator";
+import AnalyticsIcon from '@mui/icons-material/Analytics';
 
 interface AppHeaderProps {
   currentPhase: string;
@@ -19,7 +20,7 @@ export function AppHeader({
     <header className="border-b border-slate-200 bg-white px-6 py-4">
       <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[1fr_3fr_1fr] lg:items-center">
         <div>
-          <p className="text-2xl font-bold text-slate-900">BigTom</p>
+          <p className="text-2xl font-bold text-slate-900"><AnalyticsIcon fontSize="large" />  MethylAnalyzer</p>
         </div>
 
         <div className="space-y-2 text-center">

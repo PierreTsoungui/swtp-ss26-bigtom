@@ -21,7 +21,7 @@ describe("AppLayout", () => {
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
     expect(screen.getByText("Test child content")).toBeInTheDocument();
-    expect(screen.getByText("BigTom")).toBeInTheDocument();
+    expect(screen.getByText("© BigTom")).toBeInTheDocument();
   });
 
   it("zeigt die aktuelle Phase und die Schritte 1 bis 7", () => {
@@ -48,7 +48,7 @@ describe("AppLayout", () => {
 
     const header = screen.getByRole("banner");
     expect(within(header).queryByText("Datenschutz")).not.toBeInTheDocument();
-    expect(within(header).getAllByText("BigTom")).toHaveLength(2);
+    expect(within(header).getAllByText("MethylAnalyzer")).toHaveLength(1);
   });
 
   it("rendert die Footer-Links korrekt", () => {

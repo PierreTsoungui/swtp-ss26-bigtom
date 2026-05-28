@@ -3,7 +3,7 @@ import UploadView from './features/upload/UploadView';
 import { AnalysisPage } from './features/analysis/AnalysisPage';
 import {NormalizationPage} from "./features/normalisation/NormalizationPage.tsx";
 import { AppLayout } from './shared/layout/AppLayout';
-import { DatenschutzPage } from './pages/DatenschutzPage';
+import { DatenschutzPage } from './shared/pages/DatenschutzPage';
 import "./App.css";
 
 
