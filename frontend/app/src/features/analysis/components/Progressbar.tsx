@@ -111,7 +111,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
                     <button
                     onClick={onNext}
                     disabled={nextDisabled}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:bg-gray-300"
+                    className="w-36 bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 rounded-full transition-colors disabled:bg-gray-300"
                     >
                     Next
                     </button>

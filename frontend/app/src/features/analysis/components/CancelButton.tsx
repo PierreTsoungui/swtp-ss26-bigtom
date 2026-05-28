@@ -21,7 +21,7 @@ function CancelButton({ onCancel, disabled = false, }: CancelButtonProps) {
                 disabled={disabled}
                 className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-10 rounded-full transition-colors"
             >
-                Analyse abbrechen
+                Cancel
             </button>
         </div>
     );
