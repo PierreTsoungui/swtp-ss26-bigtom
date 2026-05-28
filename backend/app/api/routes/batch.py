@@ -29,7 +29,7 @@ def get_svd_plot(job_id: str, round_id: int):
         # HIER WAR DER FEHLER: Jetzt sauber nach RFC 9457
         raise BatchException(
             ErrorTypes.PLOT_NOT_FOUND,
-            detail=f"SVD-Plot für Runde {round_id} wurde nicht gefunden."
+            detail=f"SVD-Plot not found for Round {round_id}."
         )
     
     return FileResponse(plot_file, media_type="image/png")
@@ -45,7 +45,7 @@ def run_batch_correction(job_id: str, payload: BatchSettingsPayload, background_
     if settings.batch_variable not in available_cols:
         raise BatchException(
             ErrorTypes.INVALID_BATCH_VARIABLE,
-            detail=f"Spalte '{settings.batch_variable}' nicht im Samplesheet gefunden.",
+            detail=f"Column '{settings.batch_variable}' not found in SampleSheet.",
             provided=settings.batch_variable,
             available=available_cols
         )
@@ -54,7 +54,7 @@ def run_batch_correction(job_id: str, payload: BatchSettingsPayload, background_
     if settings.batch_variable in settings.covariates:
         raise BatchException(
             ErrorTypes.COVARIATE_EQUALS_BATCH,
-            detail="Die Batch-Variable darf nicht gleichzeitig als Kovariable deklariert werden.",
+            detail="The batch variable cannot be used as a covariate at the same time.",
             provided_batch_variable=settings.batch_variable,
             provided_covariates=settings.covariates
         )
