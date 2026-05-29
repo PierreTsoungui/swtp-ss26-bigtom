@@ -35,16 +35,29 @@ async def run_r_script(
     # ------------------------------------------------------------
 
     if mode == "normalization_preview":
-
         cmd = [
-            "docker", "exec",
-            R_WORKER_CONTAINER,
-
-            "Rscript",
-            script_path,
-
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
             f"{docker_job_dir}/filtered_data.rds",
             docker_job_dir
+        ]
+
+    elif mode == "batch_correction":
+        # Erwartet: [job_dir, batch_variable, covariates_comma_separated]
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            docker_job_dir,
+            *script_args
+        ]
+
+    elif mode == "svd_plot":
+        # Erwartet: [job_dir, input_rds_name, output_png_name, batch_variable]
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            docker_job_dir,
+            *script_args
         ]
 
     elif mode == "normalization":

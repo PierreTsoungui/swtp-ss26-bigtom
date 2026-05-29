@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.error_types import AppException, app_exception_handler
 
 from app.api.routes import (
     upload,
@@ -7,7 +8,8 @@ from app.api.routes import (
     stats,
     normalization_preview,
     normalize,
-    reset
+    reset,
+    batch
 )
 
 from app.api.routes.table import router as table_router
@@ -16,6 +18,8 @@ app = FastAPI(
     title="Methylation Analysis API",
     version="1.0"
 )
+
+app.add_exception_handler(AppException, app_exception_handler)
 
 # CORS für lokale Entwicklung
 app.add_middleware(
@@ -72,6 +76,12 @@ app.include_router(
 app.include_router(
     table_router,
     prefix="/api/v1"
+)
+
+app.include_router(
+    batch.router,
+    prefix="/api/v1/batch",
+    tags=["Batch Correction"]
 )
 
 @app.get("/")
