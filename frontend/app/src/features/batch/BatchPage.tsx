@@ -10,7 +10,7 @@ const BatchPage: React.FC = () => {
 
   const handleAnalysisSuccess = () => {};
 
-  const { history, globalStatus, jobStatus, loading, error, runBatch, skipBatch } = useBatchCorrection(
+  const { history, globalStatus, jobStatus, loading, error, runBatch, skipBatch, isSubmitting } = useBatchCorrection(
     jobId,
     handleAnalysisSuccess
   );
@@ -53,7 +53,7 @@ const BatchPage: React.FC = () => {
           <BatchForm
             onExecuteBatch={runBatch}
             onSkipToAnalysis={skipBatch}
-            disabled={globalStatus === 'running'}
+            disabled={globalStatus === 'running' || isSubmitting}
             backendError={error}
           />
         </div>

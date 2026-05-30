@@ -8,16 +8,18 @@
 #' Beispiel:
 #' Rscript run_dmr_analysis.R beta.rds sample_sheet.csv job_dir 10 0.15 0.01 1000
 
-
 # ── Verwendete Bibliotheken ───
 
 suppressPackageStartupMessages({
+  library(methods) 
+  library(DBI)
+  library(RSQLite) 
+  library(lumi)
   library(ChAMP)
   library(readr)
   library(minfi)
   library(jsonlite)
 })
-
 
 # ── Logging ───
 

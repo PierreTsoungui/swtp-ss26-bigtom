@@ -119,7 +119,7 @@ export const BatchForm: React.FC<BatchFormProps> = ({
           />
           {batchError && (
             <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '5px', fontWeight: '500' }}>
-              ⚠️ {batchError}
+              {batchError}
             </div>
           )}
         </div>
@@ -145,7 +145,7 @@ export const BatchForm: React.FC<BatchFormProps> = ({
           />
           {covariatesError && (
             <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '5px', fontWeight: '500' }}>
-              ⚠️ {covariatesError}
+              {covariatesError}
             </div>
           )}
         </div>
@@ -153,7 +153,7 @@ export const BatchForm: React.FC<BatchFormProps> = ({
         {/* Allgemeine Fehlermeldungen */}
         {generalFormError && (
           <div style={{ color: '#dc3545', marginBottom: '15px', fontSize: '14px', fontWeight: '500' }}>
-            ⚠️ {generalFormError}
+            {generalFormError}
           </div>
         )}
         

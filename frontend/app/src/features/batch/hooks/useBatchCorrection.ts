@@ -10,6 +10,7 @@ export const useBatchCorrection = (jobId: string | undefined, onSkipSuccess: () 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<BatchErrorDetail | null>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const API_BASE = 'http://localhost:8000/api/v1';
 
@@ -66,7 +67,8 @@ export const useBatchCorrection = (jobId: string | undefined, onSkipSuccess: () 
   }, [jobId, fetchHistory]);
 
   const runBatch = async (settings: any) => {
-    if (!jobId) return;
+    if (!jobId || isSubmitting) return;
+    setIsSubmitting(true);
     setGlobalStatus('running');
     setError(null);
 
@@ -86,6 +88,8 @@ export const useBatchCorrection = (jobId: string | undefined, onSkipSuccess: () 
     } catch (err) {
       setGlobalStatus('idle');
       setError({ error: 'NETWORK_ERROR', message: 'Connection to server failed.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -107,5 +111,5 @@ export const useBatchCorrection = (jobId: string | undefined, onSkipSuccess: () 
     }
   };
 
-  return { history, globalStatus, jobStatus, loading, error, runBatch, skipBatch, setError };
+  return { history, globalStatus, jobStatus, loading, error, runBatch, skipBatch, setError, isSubmitting };
 };

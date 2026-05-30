@@ -4,6 +4,8 @@ import type { FilterStats, JobPhase, JobStatus, JobStatusValue } from "../utils/
 
 const TERMINAL_STATES: JobStatusValue[] = [
   "normalization_done",
+  "ready_for_batch",
+  "batch_done",
   "completed",
   "failed",
   "canceled",
@@ -114,6 +116,8 @@ function isJobStatusValue(value: unknown): value is JobStatusValue {
     value === "filtering" ||
     value === "filtering_done" ||
     value === "normalization_done" ||
+    value === "ready_for_batch" ||
+    value === "batch_done" ||
     value === "completed" ||
     value === "failed" ||
     value === "canceled"

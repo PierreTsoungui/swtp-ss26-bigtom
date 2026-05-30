@@ -47,6 +47,11 @@ export type JobStatusValue =
   | "queued"
   | "running"
   | "waiting"
+  | "filtering"
+  | "filtering_done"
+  | "normalization_done"
+  | "ready_for_batch"
+  | "batch_done"
   | "completed"
   | "failed"
   | "canceled";

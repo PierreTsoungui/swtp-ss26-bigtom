@@ -28,7 +28,7 @@ if (!method %in% VALID_METHODS) {
 progress(0, "Starte Normalisierung")
 
 # ── filtered_data.rds laden ─────────────────────────────────────────────────
-rds_path <- file.path(job_dir, "filtered_data.rds")
+rds_path = file.path(job_dir, "filtered_data.rds")
 
 if (!file.exists(rds_path)) {
   stop(sprintf(
@@ -50,21 +50,22 @@ normalized <- switch(method,
   "funnorm"  = preprocessFunnorm(raw_data)
 )
 
-progress(70, "Extrahiere Beta-Werte")
-beta <- getBeta(normalized)
+# ── Validierung (Sanity Check) ──────────────────────────────────────────────
+progress(70, "Überprüfe Datenqualität")
+beta_check <- getBeta(normalized)
 
-# Sanity check
-if (any(beta < 0 | beta > 1, na.rm = TRUE)) {
+if (any(beta_check < 0 | beta_check > 1, na.rm = TRUE)) {
   stop('{"type":"error","message":"Beta-Werte ausserhalb des gueltigen Bereichs [0,1]"}')
 }
+rm(beta_check) # Speicher direkt wieder freigeben
 
 # ── Speichern ───────────────────────────────────────────────────────────────
-progress(85, "Speichere Ergebnisse")
+progress(85, "Speichere normalisiertes Objekt")
 
-saveRDS(beta, file.path(job_dir, "beta_matrix.rds"))
-
-output_path <- file.path(job_dir, "output.csv")
-write.csv(as.data.frame(beta), output_path, row.names = TRUE)
+# WICHTIG: Wir speichern das ganze minfi-Objekt, damit spätere Skripte 
+# alle Annotationen und Metadaten behalten!
+output_rds <- file.path(job_dir, "normalized_data.rds")
+saveRDS(normalized, output_rds)
 
 progress(100, "Normalisierung abgeschlossen")
-cat(sprintf('{"type":"done","method":"%s","output":"%s"}\n', method, output_path))
+cat(sprintf('{"type":"done","method":"%s","output":"%s"}\n', method, output_rds))

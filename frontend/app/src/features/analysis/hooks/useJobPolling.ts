@@ -3,6 +3,9 @@ import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTy
 import type {FilteringStatsType, JobPhase, JobStatus, JobStatusValue} from "../utils/types";
 
 const TERMINAL_STATES: JobStatusValue[] = [
+  "normalization_done",
+  "ready_for_batch",
+  "batch_done",
   "completed",
   "failed",
   "canceled",
@@ -133,7 +136,19 @@ function parseJobStatus(value: unknown): JobStatus {
 }
 
 function isJobStatusValue(value: unknown): value is JobStatusValue {
-  return typeof value === "string";
+  return (
+    value === "queued" ||
+    value === "running" ||
+    value === "waiting" ||
+    value === "filtering" ||
+    value === "filtering_done" ||
+    value === "normalization_done" ||
+    value === "ready_for_batch" ||
+    value === "batch_done" ||
+    value === "completed" ||
+    value === "failed" ||
+    value === "canceled"
+  );
 }
 
 function isJobPhase(value: unknown): value is JobPhase {

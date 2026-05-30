@@ -12,12 +12,15 @@
 # ── Verwendete Bibliotheken ───
 
 suppressPackageStartupMessages({
+  library(methods) 
+  library(DBI)
+  library(RSQLite)
+  library(lumi)  
   library(ChAMP)
   library(readr)
   library(minfi)
   library(jsonlite)
 })
-
 
 # ── Logging ───
 

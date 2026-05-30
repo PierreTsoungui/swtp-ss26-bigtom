@@ -65,7 +65,7 @@ export function NormalizationPage() {
 
       if (!res.ok) throw new Error(`Fehler: ${res.status}`);
 
-      navigate(`/analysis/${job_id}`);
+      navigate(`/batch/${job_id}`);
     } catch (e) {
       console.error(e);
     } finally {

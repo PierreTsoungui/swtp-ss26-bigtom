@@ -19,19 +19,15 @@ function App() {
   return (
     <AppLayout>
       <Routes>
-      {/* Hier können die Routen zu den verschiedenen Pages definiert werden */}
-      <Route path='/' element={<p>Home Page</p>} />
-      <Route path='/upload' element={<UploadView />} />
-      <Route path='/analysis/:job_id' element={<AnalysisPage />} />
+        <Route path='/' element={<p>Home Page</p>} />
+        <Route path='/upload' element={<UploadView />} />
+        <Route path='/analysis/:job_id' element={<AnalysisPage />} />
         <Route path='/normalization/:job_id' element={<NormalizationPage />} />
         <Route path='/datenschutz' element={<DatenschutzPage />} />
         <Route path="/batch/:jobId" element={<BatchPage />} />
       </Routes>
     </AppLayout>
-      
-    </Routes>
-    </>
-  )
+  );
 }
 
 export default App;

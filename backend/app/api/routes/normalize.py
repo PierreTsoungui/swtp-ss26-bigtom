@@ -109,20 +109,19 @@ async def start_normalization(
 
 
 async def run_normalization_background(job_id: str, job_dir: str, method: str):
-    """Führt Normalisierung im Hintergrund aus"""
+    """Führt Normalisierung im Hintergrund aus und berechnet danach den initialen SVD-Plot (Runde 0)"""
     
     async def on_progress(progress_data: dict):
         update_job(
             job_id,
             status="running",
             phase="normalizing",
-            progress_percent=progress_data.get("progress", 0),
+            progress_percent=int(progress_data.get("progress", 0) * 0.9), # Skalierung auf 90%, da SVD noch folgt
             current_step=progress_data.get("step", "Normalisierung läuft...")
         )
     
     try:
-       
-        
+        # 1. Schritt: Normalisierung ausführen
         result = await run_r_script(
             script="normalize.R",
             job_id=job_id,
@@ -142,13 +141,59 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             )
             return
         
-       
+        # 2. Schritt: Initialen SVD-Plot generieren (Runde 0 = Unkorrigiert)
+        round_zero_file = "svd_plot_0.png"
         update_job(
             job_id,
-            status="normalization_done",
+            status="running",
             phase="normalizing",
+            progress_percent=95,
+            current_step="Generiere initialen SVD-Plot (Runde 0)..."
+        )
+        
+        # Argumente für das R-Skript vorbereiten: job_dir, input_rds, output_png, batch_var
+        svd_args = [job_dir, "normalized_data.rds", round_zero_file, "none"]
+        
+        svd_result = await run_r_script(
+            script="generate_svd_plot.R",
+            job_id=job_id,
+            job_dir=job_dir,
+            sample_sheet="",
+            mode="batch_init",
+            script_args=svd_args,
+            on_progress=None
+        )
+        
+        if svd_result["returncode"] != 0:
+            update_job(
+                job_id,
+                status="failed",
+                phase="normalizing",
+                error_message=svd_result.get("stderr", "SVD-Plot-Generierung für Runde 0 fehlgeschlagen")
+            )
+            return
+
+        # 3. Schritt: Batch-Historie für Runde 0 (Baseline) aufbauen
+        initial_round = {
+            "round_number": 0,
+            "plot_file": round_zero_file,
+            "batch_variable": None,
+            "covariates": [],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        batch_history = {
+            "rounds": [initial_round]
+        }
+        
+        # Pipeline-Status auf die Batch-Phase umstellen
+        update_job(
+            job_id,
+            status="ready_for_batch",  # Signalisiert dem Frontend: Formular und Plot anzeigen!
+            phase="batch_correction",
             progress_percent=100,
-            current_step=f"Normalisierung mit {method} abgeschlossen"
+            current_step="Normalisierung abgeschlossen. Bereit für Batch-Effekt-Korrektur.",
+            batch_history=batch_history
         )
         
     except Exception as e:

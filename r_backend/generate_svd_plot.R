@@ -1,24 +1,102 @@
-# ACHTUNG: Dieses Skript ist eine Übergangslösung, um die SVD-Plot-Funktionalität im Backend zu gewährleisten, bis die eigentliche SVD-Plot-Generierung implementiert ist. Es kopiert einfach die bereits vorhandene norm_raw.png und benennt sie um, damit das Backend den erwarteten Plot findet. Sobald die echte SVD-Plot-Generierung implementiert ist, sollte dieses Skript entsprechend angepasst oder ersetzt werden.
-
 # generate_svd_plot.R
 args <- commandArgs(trailingOnly = TRUE)
-job_dir    <- args[1]
-input_rds  <- args[2]   # Wird ignoriert, bleibt wegen der Signatur drin
-output_png <- args[3]   # Der Name, den das Backend für den neuen Plot erwartet
-batch_var  <- args[4]   # Wird ignoriert, bleibt wegen der Signatur drin
+n_args <- length(args)
 
-# Pfade definieren
-source_file <- file.path(job_dir, "norm_raw.png")
-target_file <- file.path(job_dir, output_png)
-
-# Falls norm_raw.png existiert, kopieren und umbenennen
-if (file.exists(source_file)) {
-  file.copy(from = source_file, to = target_file, overwrite = TRUE)
+# ── FLEXIBLER ARGUMENTEN-PARSER FÜR ALLE ROUTEN ─────────────────────────────
+if (n_args >= 6) {
+  # Fall A: Python-Wrapper hat Pfade injiziert (z.B. in der Batch-Init Phase)
+  job_dir    <- args[1]   # /app/jobs/<job_id>/
+  input_rds  <- args[4]   # normalized_data.rds oder corrected_data.rds
+  output_png <- args[5]   # svd_plot_X.png
+  batch_var  <- args[6]   # Variable oder "none"
+} else if (n_args == 4) {
+  # Fall B: Sauberer Aufruf mit genau 4 Argumenten (z.B. in der Korrektur-Phase)
+  job_dir    <- args[1]   # /app/jobs/<job_id>
+  input_rds  <- args[2]   # corrected_data.rds
+  output_png <- args[3]   # svd_plot_2.png
+  batch_var  <- args[4]   # Slide
 } else {
-  # Sicherheits-Fallback: Falls norm_raw.png nicht da ist, erstelle eine leere Datei,
-  # damit das Backend beim Suchen des Plots keinen 404-Fehler wirft.
-  file.create(target_file)
+  stop(paste('{"type":"error","message":"Unerwartete Anzahl an Argumenten:', n_args, '"}'))
+}
+# ────────────────────────────────────────────────────────────────────────────
+
+suppressPackageStartupMessages({
+  library(minfi)
+  library(ggplot2)
+})
+
+# 1. Daten laden
+mat_path <- file.path(job_dir, input_rds)
+if (!file.exists(mat_path)) {
+  stop(paste("Input RDS-Datei nicht gefunden:", mat_path))
+}
+mat_data <- readRDS(mat_path)
+
+# 2. In Matrix (Beta-Werte) umwandeln
+if (is(mat_data, "RGChannelSet") || is(mat_data, "RGChannelSetExtended")) {
+  mat_data <- preprocessRaw(mat_data)
 }
 
-# WICHTIG: Das Backend parst diese Zeile, um zu wissen, ob das Skript erfolgreich war!
+if (is(mat_data, "MethylSet") || is(mat_data, "GenomicMethylSet") || 
+    is(mat_data, "RatioSet") || is(mat_data, "GenomicRatioSet")) {
+  mat <- getBeta(mat_data)
+} else {
+  mat <- as.matrix(mat_data)
+}
+
+mat <- na.omit(mat)
+
+# 3. SampleSheet einlesen und an Matrix-IDs anpassen
+targets <- read.metharray.sheet(job_dir, pattern = ".*SampleSheet.*\\.csv$")
+
+targets_ids <- paste0(targets$Slide, "_", targets$Array)
+clean_mat_ids <- gsub("_Grn.*|_Red.*|\\.idat.*", "", basename(colnames(mat)))
+clean_targets_ids <- gsub("_Grn.*|_Red.*|\\.idat.*", "", basename(targets_ids))
+matches <- match(clean_mat_ids, clean_targets_ids)
+
+if (any(is.na(matches)) || length(matches) != ncol(mat)) {
+  targets <- targets[1:ncol(mat), , drop=FALSE]
+} else {
+  targets <- targets[matches, , drop=FALSE]
+}
+
+# 4. PCA berechnen (Top 5000 variabelste Probes)
+row_vars <- apply(mat, 1, var)
+top_probes <- head(order(row_vars, decreasing = TRUE), 5000)
+
+if(nrow(mat) < 5000) top_probes <- 1:nrow(mat)
+
+pca <- prcomp(t(mat[top_probes, ]), scale. = TRUE)
+
+# Base-Dataframe für ggplot bauen
+pca_df <- data.frame(
+  PC1 = pca$x[, 1],
+  PC2 = pca$x[, 2]
+)
+
+# Abfangen von "none" oder ungültigen Spalten
+if (is.null(batch_var) || batch_var == "none" || !(batch_var %in% colnames(targets))) {
+  pca_df$Batch <- "All Samples"
+  subtitle_text <- "Baseline: Uncorrected (No variable selected)"
+} else {
+  pca_df$Batch <- as.factor(targets[[batch_var]])
+  subtitle_text <- paste("Colored by:", batch_var)
+}
+
+# 5. Plot generieren
+p <- ggplot(pca_df, aes(x = PC1, y = PC2, color = Batch)) +
+    geom_point(size = 3, alpha = 0.8) +
+    theme_minimal() +
+    labs(
+      title = "SVD / PCA Plot",
+      subtitle = subtitle_text,
+      x = "Principal Component 1",
+      y = "Principal Component 2"
+    ) +
+    theme(legend.position = "bottom")
+
+# 6. Speichern und Erfolg an das Backend melden
+ggsave(file.path(job_dir, output_png), plot = p, width = 7, height = 5, dpi = 150)
+
+# WICHTIG: Das Backend parst diese Zeile!
 cat(paste0('{"status": "plot_generated", "file": "', output_png, '"}\n'))
