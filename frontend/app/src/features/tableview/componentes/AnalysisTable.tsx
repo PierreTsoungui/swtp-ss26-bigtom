@@ -1,45 +1,59 @@
 type Props = {
   data: any;
+  onSort?: (column: string) => void;
+  sorting?: {
+    sort_by: string | null;
+    sort_order: "asc" | "desc" | null;
+  };
 };
 
 export function AnalysisTable({
   data,
+  onSort,
+  sorting,
 }: Props) {
-  if (!data) {
-    return <p>Keine Daten vorhanden.</p>;
-  }
+  if (!data) return <p>Keine Daten vorhanden.</p>;
 
   return (
-    <div className="overflow-auto">
-      <table className="w-full border">
-        <thead>
-          <tr>
-            {data.columns.map((column: any) => (
+    <table className="w-full border">
+      <thead>
+        <tr>
+          {data.columns.map((col: any) => {
+            const isActive = sorting?.sort_by === col.key;
+
+            return (
               <th
-                key={column.key}
-                className="border p-2 text-left"
+                key={col.key}
+                className="border p-2 cursor-pointer"
+                onClick={() => onSort?.(col.key)}
               >
-                {column.label}
+                {col.label}
+
+                {/* UI INDICATOR */}
+                {isActive &&
+                  sorting?.sort_order === "asc" &&
+                  " 🔼"}
+
+                {isActive &&
+                  sorting?.sort_order === "desc" &&
+                  " 🔽"}
               </th>
+            );
+          })}
+        </tr>
+      </thead>
+
+      <tbody>
+        {data.data.map((row: any, i: number) => (
+          <tr key={i}>
+            {data.columns.map((col: any) => (
+              <td key={col.key} className="border p-2">
+                {row[col.key]}
+              </td>
             ))}
           </tr>
-        </thead>
-
-        <tbody>
-          {data.data.map((row: any, index: number) => (
-            <tr key={index}>
-              {data.columns.map((column: any) => (
-                <td
-                  key={column.key}
-                  className="border p-2"
-                >
-                  {row[column.key]}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   );
 }

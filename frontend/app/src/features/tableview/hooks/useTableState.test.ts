@@ -27,4 +27,38 @@ describe("useTableState", () => {
       result.current.activeTab
     ).toBe("dmr");
   });
+
+
+
+it("cycles sorting: none → asc → desc → none", () => {
+  const { result } = renderHook(() =>
+    useTableState()
+  );
+
+  act(() => {
+    result.current.updateSorting("dmp", "gene");
+  });
+
+  expect(
+    result.current.sorting.dmp.sort_order
+  ).toBe("asc");
+
+  act(() => {
+    result.current.updateSorting("dmp", "gene");
+  });
+
+  expect(
+    result.current.sorting.dmp.sort_order
+  ).toBe("desc");
+
+  act(() => {
+    result.current.updateSorting("dmp", "gene");
+  });
+
+  expect(
+    result.current.sorting.dmp.sort_order
+  ).toBe(null);
+});
+
+
 });

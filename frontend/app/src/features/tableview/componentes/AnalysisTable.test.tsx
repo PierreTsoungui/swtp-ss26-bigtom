@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect } from "vitest";
 
 import { AnalysisTable } from "./AnalysisTable";
@@ -102,4 +102,28 @@ describe("AnalysisTable", () => {
       screen.getByText("Keine Daten vorhanden.")
     ).toBeInTheDocument();
   });
+
+
+
+it("calls onSort when clicking column header", () => {
+  const onSort = vi.fn();
+
+  render(
+    <AnalysisTable
+      data={mockData}
+      onSort={onSort}
+      sorting={{
+        sort_by: null,
+        sort_order: null,
+      }}
+    />
+  );
+
+  fireEvent.click(screen.getByText("CpG"));
+
+  expect(onSort).toHaveBeenCalledWith("CpG");
+});
+
+
+
 });
