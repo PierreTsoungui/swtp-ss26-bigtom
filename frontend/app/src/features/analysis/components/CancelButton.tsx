@@ -15,7 +15,7 @@ type CancelButtonProps = {
  */
 function CancelButton({ onCancel, disabled = false, }: CancelButtonProps) {
     return (
-        <div className="flex justify-center m-10">
+        <div className="flex justify-center">
             <button
                 onClick={onCancel}
                 disabled={disabled}
