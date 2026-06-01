@@ -2,40 +2,39 @@ type Props = {
   activeTab: "dmp" | "dmr";
   onChange: (tab: "dmp" | "dmr") => void;
 };
-export function TableTabs({
-  activeTab,
-  onChange,
-}: Props) {
+export function TableTabs({ activeTab, onChange }: Props) {
   return (
-    <div
-      role="tablist"
-      className="flex border-b mb-4"
-    >
-      <button
-        role="tab"
-        aria-selected={activeTab === "dmp"}
-        className={`px-4 py-2 ${
-          activeTab === "dmp"
-            ? "border-b-2 border-blue-500 font-semibold"
-            : ""
-        }`}
-        onClick={() => onChange("dmp")}
-      >
-        DMP Analysis
-      </button>
-
-      <button
-        role="tab"
-        aria-selected={activeTab === "dmr"}
-        className={`px-4 py-2 ${
-          activeTab === "dmr"
-            ? "border-b-2 border-blue-500 font-semibold"
-            : ""
-        }`}
-        onClick={() => onChange("dmr")}
-      >
-        DMR Analysis
-      </button>
+    <div className="border-b border-gray-200">
+      <div className="flex gap-6" role="tablist">  
+        <button
+          role="tab"  
+          aria-selected={activeTab === "dmp"}  
+          onClick={() => onChange("dmp")}
+          className={`
+            px-1 py-3 text-sm font-medium transition-colors
+            ${activeTab === "dmp" 
+              ? "text-blue-600 border-b-2 border-blue-600" 
+              : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+            }
+          `}
+        >
+          DMP Analysis
+        </button>
+        <button
+          role="tab"  
+          aria-selected={activeTab === "dmr"}  
+          onClick={() => onChange("dmr")}
+          className={`
+            px-1 py-3 text-sm font-medium transition-colors
+            ${activeTab === "dmr" 
+              ? "text-blue-600 border-b-2 border-blue-600" 
+              : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+            }
+          `}
+        >
+          DMR Analysis
+        </button>
+      </div>
     </div>
   );
 }

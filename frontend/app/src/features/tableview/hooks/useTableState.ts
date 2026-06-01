@@ -8,8 +8,7 @@ export type TableSortState = {
 };
 
 export function useTableState() {
-  const [activeTab, setActiveTab] =
-    useState<"dmp" | "dmr">("dmp");
+  const [activeTab, setActiveTab] = useState<"dmp" | "dmr">("dmp");
 
   const [sorting, setSorting] = useState<Record<
     "dmp" | "dmr",
@@ -19,36 +18,43 @@ export function useTableState() {
     dmr: { sort_by: null, sort_order: null },
   });
 
-  const updateSorting = (
-    table: "dmp" | "dmr",
-    column: string
-  ) => {
+  const updateSorting = (table: "dmp" | "dmr", column: string) => {
     setSorting((prev) => {
       const current = prev[table];
-
-      // 🔁 Cycle Logic
-      let newOrder: SortOrder = "asc";
-
+      
+      let newSortBy: string | null;
+      let newSortOrder: SortOrder;
+      
       if (current.sort_by !== column) {
-        newOrder = "asc"; // neue Spalte
-      } else if (current.sort_order === "asc") {
-        newOrder = "desc";
-      } else if (current.sort_order === "desc") {
-        newOrder = null;
+  
+        newSortBy = column;
+        newSortOrder = "asc";
       } else {
-        newOrder = "asc";
+       
+        if (current.sort_order === "asc") {
+          newSortBy = column;
+          newSortOrder = "desc";
+        } else if (current.sort_order === "desc") {
+          newSortBy = null;
+          newSortOrder = null;
+        } else {
+          // none -> asc
+          newSortBy = column;
+          newSortOrder = "asc";
+        }
       }
-
+      
       return {
-        ...prev,
-        [table]: {
-          sort_by: newOrder ? column : null,
-          sort_order: newOrder,
+        ...prev,          
+        [table]: {         
+          sort_by: newSortBy,
+          sort_order: newSortOrder,
         },
       };
     });
   };
 
+  
   return {
     activeTab,
     setActiveTab,

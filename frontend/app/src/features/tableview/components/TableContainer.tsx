@@ -1,4 +1,4 @@
-{ useParams } from "react-router";
+ import { useParams } from "react-router-dom";
 
 import { TableTabs } from "./TableTabs";
 import { AnalysisTable } from "./AnalysisTable";
@@ -6,19 +6,10 @@ import { AnalysisTable } from "./AnalysisTable";
 import { useTableState } from "../hooks/useTableState";
 import { useTableData } from "../hooks/useTableData";
 
-
 export function TableContainer() {
   const { job_id } = useParams();
-
-  const {
-    activeTab,
-    setActiveTab,
-    sorting,
-    updateSorting,
-  } = useTableState();
-
+  const { activeTab, setActiveTab, sorting, updateSorting } = useTableState();
   const currentSort = sorting[activeTab];
-
   const { data } = useTableData(
     job_id ?? null,
     activeTab,
@@ -28,17 +19,11 @@ export function TableContainer() {
 
   return (
     <div className="w-full max-w-5xl mx-auto">
-      <TableTabs
-        activeTab={activeTab}
-        onChange={setActiveTab}
-      />
-
+      <TableTabs activeTab={activeTab} onChange={setActiveTab} />
       <AnalysisTable
         data={data}
         sorting={currentSort}
-        onSort={(column) =>
-          updateSorting(activeTab, column)
-        }
+        onSort={(column) => updateSorting(activeTab, column)}
       />
     </div>
   );
