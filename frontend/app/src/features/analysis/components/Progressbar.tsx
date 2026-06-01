@@ -35,7 +35,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
     const { cancelJob, isLoading: isLoadingJobAbort, error: cancelError } = useJobCancel(jobStatus.job_id, handleCancelSuccess);
 
     return (
-        <div className="w-9/12 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             {/* Error PopUp Snackbar */}
             {cancelError && (
                 <ErrorMessage
@@ -101,7 +101,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
 
             {/* Footer */}
 
-            <div className="mt-6 flex justify-center gap-3">
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <CancelButton
                     onCancel={cancelJob}
                     disabled={isLoadingJobAbort}
@@ -111,7 +111,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
                     <button
                     onClick={onNext}
                     disabled={nextDisabled}
-                    className="w-36 bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 rounded-full transition-colors disabled:bg-gray-300"
+                    className="inline-flex min-w-24 items-center justify-center rounded-full bg-blue-500 px-6 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:bg-gray-300"
                     >
                     Next
                     </button>

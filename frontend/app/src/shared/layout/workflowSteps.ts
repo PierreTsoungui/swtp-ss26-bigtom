@@ -6,13 +6,10 @@ export interface WorkflowStep {
 
 export const workflowSteps: WorkflowStep[] = [
   { id: 1, label: "Upload", pathPrefixes: ["/", "/upload"] },
-  // Validation is currently handled inside the upload flow; this prefix is ready for a future route.
-  { id: 2, label: "Validation", pathPrefixes: ["/validation"] },
-  { id: 3, label: "Analysis", pathPrefixes: ["/analysis"] },
-  { id: 4, label: "Normalization", pathPrefixes: ["/normalization"] },
-  { id: 5, label: "Quality Control", pathPrefixes: ["/quality-control", "/qc"] },
-  { id: 6, label: "Results", pathPrefixes: ["/results"] },
-  { id: 7, label: "Export", pathPrefixes: ["/export"] },
+  { id: 2, label: "Filter", pathPrefixes: ["/analysis"] },
+  { id: 3, label: "Normalization", pathPrefixes: ["/normalization"] },
+  { id: 4, label: "Batch", pathPrefixes: ["/batch"] },
+  { id: 5, label: "Results", pathPrefixes: ["/results"] },
 ];
 
 export function getWorkflowStepForPath(pathname: string): WorkflowStep | undefined {
