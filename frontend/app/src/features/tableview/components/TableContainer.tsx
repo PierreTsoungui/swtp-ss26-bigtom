@@ -1,4 +1,4 @@
- { useParams } from "react-router";
+ import { useParams } from "react-router-dom";
 
 import { TableTabs } from "./TableTabs";
 import { AnalysisTable } from "./AnalysisTable";
