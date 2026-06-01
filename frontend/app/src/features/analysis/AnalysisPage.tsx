@@ -2,10 +2,11 @@ import { type NavigateFunction, useNavigate, useParams } from "react-router";
 // import { ResultsTable } from "./components/ResultsTable";
 import { useJobPolling } from "./hooks/useJobPolling";
 // import { useResultsTable } from "./hooks/useResultsTable";
-import type { FilteringStatsType, JobStatus } from "./utils/types";
+import type { JobStatus } from "./utils/types";
 import Progressbar from "./components/Progressbar.tsx";
 import { useEffect, useRef } from "react";
 import { FilteringStats } from "./components/FilteringStats";
+import {useFilterStats} from "./hooks/useFilterStats.ts";
 
 /**
  * Hauptseite für die Analyse eines Jobs.
@@ -19,19 +20,20 @@ export function AnalysisPage() {
     const { job_id } = useParams<{ job_id: string }>();
     const jobStatus: JobStatus | null = useJobPolling(job_id ?? null);
     const navigate: NavigateFunction = useNavigate();
+    const hasTriggeredFetch = useRef(false);
+    const { filterStats, isLoading: filterStatsLoading } = useFilterStats(
+        job_id && jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current
+            ? job_id
+            : null
+    );
 
-    // ── Filter Stats cachen ───────────────────────────────────────
-    // Stats bleiben sichtbar, auch wenn spätere Phasen keine
-    // filter_stats mehr mitsenden.
-    const cachedFilterStats = useRef<FilteringStatsType | null>(null);
-
+    // -- Trigger nur einmal setzen --
     useEffect(() => {
-        console.log("Filter Stats Cache Update:", jobStatus?.filter_stats);
-
-        if (jobStatus?.filter_stats) {
-            cachedFilterStats.current = jobStatus.filter_stats;
+        if (jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current) {
+            hasTriggeredFetch.current = true;
         }
-    }, [jobStatus]);
+    }, [jobStatus?.phase]);
+
 
     const isPreviewReady =
         jobStatus?.status === "waiting" &&
@@ -70,6 +72,18 @@ export function AnalysisPage() {
         );
     }
 
+    if (filterStatsLoading) {
+        return (
+            <>
+                <InfoPanel
+                    title="Filterstatistik vorbereiten"
+                    message="Die Filterung ist noch in Bearbeitung. Bitte warten...">
+
+                </InfoPanel>
+            </>
+        );
+    }
+
     // ── Progressbar anzeigen ──────────────────────────────────────
     const shouldShowProgress =
         jobStatus.status === "queued" ||
@@ -78,7 +92,7 @@ export function AnalysisPage() {
             jobStatus.phase === "waiting_selection");
 
     // ── Fehlerfall OHNE Filterstatistiken ─────────────────────────
-    if (jobStatus.status === "failed" && !cachedFilterStats.current) {
+    if (jobStatus.status === "failed" && !filterStats) {
         return (
             <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
                 <section
@@ -117,7 +131,7 @@ export function AnalysisPage() {
                 )}
 
                 {/* Fehlerbanner */}
-                {jobStatus.status === "failed" && cachedFilterStats.current && (
+                {jobStatus.status === "failed" && filterStats && (
                     <section
                         className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-900"
                         role="alert"
@@ -152,9 +166,15 @@ export function AnalysisPage() {
                 )}
 
                 {/* Filterstatistiken */}
-                {cachedFilterStats.current ? (
+                {filterStatsLoading ? (
+                    <InfoPanel
+                        title="Filterstatistiken werden geladen"
+                        message="Die Filterstatistiken werden gerade abgerufen. Bitte warten..."
+                    />
+                ) :
+                filterStats ? (
                     <div data-testid="filtering-stats">
-                        <FilteringStats stats={cachedFilterStats.current} />
+                        <FilteringStats stats={filterStats} />
                     </div>
                 ) : (
                     <InfoPanel

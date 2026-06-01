@@ -36,8 +36,9 @@ async def get_filter_stats(request: Request, job_id: str):
             )
         )
 
+    PHASES_BEFORE_STATS = {"filtering"}
    
-    if job.phase != "filtering_done":
+    if job.phase in PHASES_BEFORE_STATS :
         raise HTTPException(
             status_code=409,
             detail=problem_detail(
@@ -54,12 +55,15 @@ async def get_filter_stats(request: Request, job_id: str):
    
     if not job.filter_stats:
         raise HTTPException(
-            status_code=404,
+            status_code=409,
             detail=problem_detail(
-                error_type=ErrorTypes.NO_STATS_AVAILABLE, 
-                detail="Keine Filterstatistik für diesen Job verfügbar",
+                error_type=ErrorTypes.FILTERING_NOT_FINISHED,
+                detail=f"Filterstatistiken noch nicht verfügbar (Phase: {job.phase})",
                 instance=request.url.path,
-                job_id=job_id
+                job_id=job_id,
+                current_phase=job.phase,
+                current_status=job.status,
+                progress_percent=job.progress_percent
             )
         )
 
