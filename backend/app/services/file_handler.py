@@ -2,6 +2,7 @@ from email import header
 import shutil
 from pathlib import Path
 from typing import List, Tuple, Dict
+
 from fastapi import UploadFile
 import os
 import json
@@ -262,23 +263,40 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
 
 def save_idat_files(files: List[UploadFile], job_dir: Path) -> List[str]:
     saved_paths = []
+
     for file in files:
         file.file.seek(0)
-        safe_name = Path(file.filename).name  # Nur Dateiname, keine Pfadangaben
+
+        safe_name = Path(file.filename).name
         file_path = job_dir / safe_name
+
+        if file_path.exists():
+            raise ValueError(
+                f"Doppelter Dateiname erkannt: {safe_name}"
+            )
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+
         saved_paths.append(str(file_path))
+
     return saved_paths
 
 
 def save_sample_sheet(file: UploadFile, job_dir: Path) -> str:
     file.file.seek(0)
-    file_path = job_dir / file.filename
+
+    safe_name = Path(file.filename).name
+    file_path = job_dir / safe_name
+    try:
+        file_path.resolve().relative_to(job_dir.resolve())
+    except ValueError:
+        raise ValueError("Ungültiger Dateiname")
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    return str(file_path)
 
+    return str(file_path)
 
 def save_filter_settings(filter_settings: Dict, job_dir: Path) -> str:
     """

@@ -127,19 +127,17 @@ async def upload_files(
     try:
         save_idat_files(idat_files, job_dir)
         save_sample_sheet(sample_sheet, job_dir)
+        save_filter_settings(filter_settings_model.model_dump(), job_dir)
 
-        try:
-            save_filter_settings(filter_settings_model.model_dump(), job_dir)
-
-        except Exception as e:
+    except ValueError as e:
             clean_job_files(job_id)
             raise HTTPException(
-                status_code=500,
+                status_code=400,
                 detail={
-                    "type": "/errors/save-failed",
-                    "title": "Save failed",
-                    "status": 500,
-                    "detail": f"Fehler beim Speichern von filter_settings.json: {str(e)}",
+                    "type": "/errors/invalid-upload",
+                    "title": "Invalid upload",
+                    "status": 400,
+                    "detail": str(e),
                     "instance": request.url.path,
                     "job_id": job_id
                 }
@@ -148,7 +146,7 @@ async def upload_files(
     except HTTPException:
         # Bereits formatierte HTTPException nicht nochmal wrappen
         raise
-
+   
     except Exception as e:
         clean_job_files(job_id)
         raise HTTPException(
