@@ -1,8 +1,8 @@
 import LinearProgress from '@mui/material/LinearProgress';
-import type { JobStatus } from '../utils/types';
-import CancelButton from './CancelButton';
-import {useJobCancel} from "../hooks/useJobCancel.ts";
-import ErrorMessage from "../../../shared/error-handling/components/ErrorMessage.tsx";
+import type { JobStatus } from '../../features/analysis/utils/types.ts';
+import CancelButton from './CancelButton.tsx';
+import {useJobCancel} from "../../features/analysis/hooks/useJobCancel.ts";
+import ErrorMessage from "../error-handling/components/ErrorMessage.tsx";
 import {useNavigate} from "react-router";
 
 /**

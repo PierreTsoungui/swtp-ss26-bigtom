@@ -3,7 +3,7 @@ import { type NavigateFunction, useNavigate, useParams } from "react-router";
 import { useJobPolling } from "./hooks/useJobPolling";
 // import { useResultsTable } from "./hooks/useResultsTable";
 import type { JobStatus } from "./utils/types";
-import Progressbar from "./components/Progressbar.tsx";
+import Progressbar from "../../shared/components/Progressbar.tsx";
 import { useEffect, useRef } from "react";
 import { FilteringStats } from "./components/FilteringStats";
 import {useFilterStats} from "./hooks/useFilterStats.ts";

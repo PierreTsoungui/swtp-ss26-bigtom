@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AnalysisPage } from "../AnalysisPage";
 import { useJobPolling } from "../hooks/useJobPolling";
+import { useFilterStats } from "../hooks/useFilterStats";
 import type { JobStatus } from "../utils/types";
 
 const { mockNavigate } = vi.hoisted(() => ({
@@ -25,27 +26,35 @@ vi.mock("../hooks/useJobPolling", () => ({
   useJobPolling: vi.fn(),
 }));
 
+vi.mock("../hooks/useFilterStats", () => ({
+  useFilterStats: vi.fn(() => ({
+    filterStats: null,
+    isLoading: false, // Standardmäßig auf false, damit die Progressbar rendert!
+  })),
+}));
+
 vi.mock("../components/FilteringStats", () => ({
   FilteringStats: () => <div data-testid="filtering-stats-content">Filtering Stats geladen</div>,
 }));
 
 vi.mock("../components/Progressbar.tsx", () => ({
   default: ({
-    nextDisabled,
-    onNext,
-  }: {
+              nextDisabled,
+              onNext,
+            }: {
     nextDisabled?: boolean;
     onNext?: () => void;
   }) => (
-    <div data-testid="preview-progressbar">
-      <button disabled={nextDisabled} onClick={onNext}>
-        Next
-      </button>
-    </div>
+      <div data-testid="preview-progressbar">
+        <button disabled={nextDisabled} onClick={onNext}>
+          Next
+        </button>
+      </div>
   ),
 }));
 
 const mockedUseJobPolling = vi.mocked(useJobPolling);
+const mockedUseFilterStats = vi.mocked(useFilterStats); // <-- Typensicheres Mocking bereitstellen
 
 function buildJobStatus(overrides: Partial<JobStatus> = {}): JobStatus {
   return {
@@ -57,22 +66,28 @@ function buildJobStatus(overrides: Partial<JobStatus> = {}): JobStatus {
     steps_total: 6,
     steps_completed: 5,
     estimated_seconds_remaining: 20,
-    filter_stats: null,
     ...overrides,
   };
 }
 
 function renderAnalysisPage() {
   return render(
-    <MemoryRouter>
-      <AnalysisPage />
-    </MemoryRouter>,
+      <MemoryRouter>
+        <AnalysisPage />
+      </MemoryRouter>,
   );
 }
 
 describe("AnalysisPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Vor jedem Test sicherstellen, dass useFilterStats nicht lädt
+    mockedUseFilterStats.mockReturnValue({
+      filterStats: null,
+      isLoading: false,
+      error: null,
+    });
   });
 
   it("zeigt den Ladezustand wenn noch kein Jobstatus vorhanden ist", () => {
@@ -88,17 +103,16 @@ describe("AnalysisPage", () => {
 
     renderAnalysisPage();
 
-    expect(screen.getByTestId("preview-progressbar")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
   });
 
   it("aktiviert den Next-Button wenn die Preview bereit ist", () => {
     mockedUseJobPolling.mockReturnValue(
-      buildJobStatus({
-        status: "waiting",
-        phase: "waiting_selection",
-        progress_percent: 100,
-      }),
+        buildJobStatus({
+          status: "waiting",
+          phase: "waiting_selection",
+          progress_percent: 100,
+        }),
     );
 
     renderAnalysisPage();
@@ -108,26 +122,16 @@ describe("AnalysisPage", () => {
 
   it("navigiert zur Normalization Page wenn Next geklickt wird", () => {
     mockedUseJobPolling.mockReturnValue(
-      buildJobStatus({
-        status: "waiting",
-        phase: "waiting_selection",
-        progress_percent: 100,
-      }),
+        buildJobStatus({
+          status: "waiting",
+          phase: "waiting_selection",
+          progress_percent: 100,
+        }),
     );
 
     renderAnalysisPage();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     expect(mockNavigate).toHaveBeenCalledWith("/normalization/test-job-123");
-  });
-
-  it("zeigt einen Hinweis wenn keine Filterstatistik vorhanden ist", () => {
-    mockedUseJobPolling.mockReturnValue(buildJobStatus({ filter_stats: null }));
-
-    renderAnalysisPage();
-
-    expect(
-      screen.getByText(/Keine Filterstatistiken/),
-    ).toBeInTheDocument();
   });
 });

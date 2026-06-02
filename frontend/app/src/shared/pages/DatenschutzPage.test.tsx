@@ -1,10 +1,18 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { DatenschutzPage } from "./DatenschutzPage.tsx";
+import {MemoryRouter} from "react-router";
 
 describe("DatenschutzPage", () => {
   it("enthält die wichtigen Datenschutzinformationen", () => {
-    render(<DatenschutzPage />);
+    render(
+        <MemoryRouter>
+          <DatenschutzPage />
+        </MemoryRouter>
+        );
+
+    const backButton = screen.getByRole('button');
+    expect(backButton).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Datenschutzerklärung" })).toBeInTheDocument();
     expect(document.body).toHaveTextContent("THM");

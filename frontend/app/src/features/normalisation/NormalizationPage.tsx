@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router";
 import type { MethodPlotGroup, NormalizationMethod } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
-import Progressbar from "../analysis/components/Progressbar.tsx";
+import Progressbar from "../../shared/components/Progressbar.tsx";
 import type {JobStatus} from "../analysis/utils/types.ts";
 
 // Modal Component für Plot-Vorschau
@@ -112,6 +112,9 @@ export function NormalizationPage() {
   const handleImageClick = (url: string, title: string) => {
     setPreviewImage({ url, title });
   };
+
+  const isDisabled : boolean = !selected || isSubmitting || isNormalising;
+
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10">
@@ -228,11 +231,11 @@ export function NormalizationPage() {
       <div className="flex justify-center">
         <button
           onClick={handleConfirm}
-          disabled={!selected || isSubmitting || isNormalising}
+          disabled={isDisabled}
           className={`
             rounded-full px-10 py-3 font-bold text-white
             transition-colors
-            ${!selected || isSubmitting
+            ${isDisabled
               ? "cursor-not-allowed bg-slate-300"
               : "bg-blue-600 hover:bg-blue-700"
             }
