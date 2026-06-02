@@ -228,7 +228,7 @@ export function NormalizationPage() {
       <div className="flex justify-center">
         <button
           onClick={handleConfirm}
-          disabled={!selected || isSubmitting || !isNormalising}
+          disabled={!selected || isSubmitting || isNormalising}
           className={`
             rounded-full px-10 py-3 font-bold text-white
             transition-colors
