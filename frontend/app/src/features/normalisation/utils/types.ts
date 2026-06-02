@@ -27,5 +27,4 @@ export interface PlotItem {
 export interface MethodPlotGroup {
   method: NormalizationMethod;
   plots: PlotItem[];
-
 }

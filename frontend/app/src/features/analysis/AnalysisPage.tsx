@@ -7,6 +7,7 @@ import Progressbar from "../../shared/components/Progressbar.tsx";
 import { useEffect, useRef } from "react";
 import { FilteringStats } from "./components/FilteringStats";
 import {useFilterStats} from "./hooks/useFilterStats.ts";
+import InfoPanel from "./components/InfoPanel.tsx";
 
 /**
  * Hauptseite für die Analyse eines Jobs.
@@ -21,13 +22,13 @@ export function AnalysisPage() {
     const jobStatus: JobStatus | null = useJobPolling(job_id ?? null);
     const navigate: NavigateFunction = useNavigate();
     const hasTriggeredFetch = useRef(false);
+
     const { filterStats, isLoading: filterStatsLoading } = useFilterStats(
         job_id && jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current
             ? job_id
             : null
     );
 
-    // -- Trigger nur einmal setzen --
     useEffect(() => {
         if (jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current) {
             hasTriggeredFetch.current = true;
@@ -41,11 +42,6 @@ export function AnalysisPage() {
 
     useEffect(() => {
         if (!jobStatus || !job_id) return;
-
-        // KEIN automatisches navigate mehr.
-        // Navigation erfolgt manuell über den Weiter-Button.
-
-        // Pipeline komplett abgeschlossen
         /*
         if (jobStatus.status === "completed") {
           navigate(`/results/${job_id}`);
@@ -67,7 +63,10 @@ export function AnalysisPage() {
     if (!jobStatus) {
         return (
             <main className="flex min-h-screen items-center justify-center">
-                <p className="text-slate-500">Verbindung wird aufgebaut...</p>
+                <InfoPanel
+                    title="Analyse wird vorbereitet"
+                    message="Die Analyse wird gerade vorbereitet. Bitte warten..."
+                />
             </main>
         );
     }
@@ -75,11 +74,12 @@ export function AnalysisPage() {
     if (filterStatsLoading) {
         return (
             <>
-                <InfoPanel
-                    title="Filterstatistik vorbereiten"
-                    message="Die Filterung ist noch in Bearbeitung. Bitte warten...">
-
-                </InfoPanel>
+                <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+                    <InfoPanel
+                        title="Filterstatistik vorbereiten"
+                        message="Die Filterung ist noch in Bearbeitung. Bitte warten...">
+                    </InfoPanel>
+                </main>
             </>
         );
     }
@@ -165,49 +165,20 @@ export function AnalysisPage() {
                     </section>
                 )}
 
-                {/* Filterstatistiken */}
-                {filterStatsLoading ? (
-                    <InfoPanel
-                        title="Filterstatistiken werden geladen"
-                        message="Die Filterstatistiken werden gerade abgerufen. Bitte warten..."
-                    />
-                ) :
-                filterStats ? (
+                {filterStats ? (
                     <div data-testid="filtering-stats">
                         <FilteringStats stats={filterStats} />
                     </div>
                 ) : (
-                    <InfoPanel
-                        title="Analyse"
-                        message="Keine Filterstatistiken für diesen Job verfügbar."
-                    />
+                    <div className="flex justify-center pt-10">
+                        <InfoPanel
+                            title="Analyse"
+                            message="Keine Filterstatistiken für diesen Job verfügbar."
+                        />
+                    </div>
                 )}
             </div>
         </main>
     );
 }
 
-interface InfoPanelProps {
-    title: string;
-    message: string;
-}
-
-function InfoPanel({ title, message }: InfoPanelProps) {
-    return (
-        <section
-            className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
-            aria-labelledby="analysis-title"
-        >
-            <h1
-                id="analysis-title"
-                className="text-2xl font-semibold text-slate-900"
-            >
-                {title}
-            </h1>
-
-            <p className="mt-3 text-slate-600">
-                {message}
-            </p>
-        </section>
-    );
-}
