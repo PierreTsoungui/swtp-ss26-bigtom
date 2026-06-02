@@ -1,20 +1,8 @@
 #!/usr/bin/env Rscript
 options(digits = 4)
 
-# ── Progress Logger ──────────────────────────────────────────────────────────
-
-#' Emits progress updates in JSON format for backend tracking.
-#'
-#' @param percent An integer representing the percentage of completion.
-#' @param step A character string describing the current step.
-#'
-#' @return Invisible NULL.
-#' @export
-emit_progress <- function(percent, step) {
-  cat(paste0('{"progress": ', percent, ', "step": "', step, '"}\n'))
-  flush.console()
-  invisible(NULL)
-}
+# ── Progress Vertrag einbinden ───────────────────────────────────────────────
+source("/app/r_backend/utils/progress.R")
 
 # ── Data Synchronization ─────────────────────────────────────────────────────
 
@@ -89,6 +77,9 @@ validate_covariates <- function(targets, covariates_str) {
 #' @return None (Saves corrected data as RDS).
 #' @export
 run_batch_correction <- function(job_dir, batch_var, covariates_str = "") {
+
+  emit_progress(0, "Script initialized - Start Batch-Correction")
+
   emit_progress(10, "Loading Bioconductor packages (sva & minfi)...")
   suppressPackageStartupMessages({
     library(sva)
@@ -98,15 +89,13 @@ run_batch_correction <- function(job_dir, batch_var, covariates_str = "") {
   emit_progress(20, "Locating sample sheet and importing files...")
   csv_files <- list.files(job_dir, pattern = ".*SampleSheet.*\\.csv$", full.names = TRUE)
   if (length(csv_files) == 0) {
-    cat('{"error": "Samplesheet not found"}\n')
-    quit(status = 1)
+    emit_error("Samplesheet not found")
   }
   targets <- minfi::read.metharray.sheet(job_dir, pattern = ".*SampleSheet.*\\.csv$")
 
   data_path <- file.path(job_dir, "normalized_data.rds")
   if (!file.exists(data_path)) {
-    cat('{"error": "normalized_data.rds is missing"}\n')
-    quit(status = 1)
+    emit_error("normalized_data.rds is missing")
   }
   data_obj <- readRDS(data_path)
 
@@ -155,7 +144,9 @@ run_batch_correction <- function(job_dir, batch_var, covariates_str = "") {
   emit_progress(90, "Saving corrected dataset...")
   saveRDS(corrected_mat, file = file.path(job_dir, "corrected_data.rds"))
 
+  # Finale Erfolgsmeldung und anschließendes Done-Signal an das Backend senden
   emit_progress(100, "Batch correction pipeline finished successfully!")
+  emit_done()
 }
 
 # ── CLI Execution Block ──────────────────────────────────────────────────────
@@ -164,8 +155,7 @@ is_main_script <- any(grepl("--file=.*batch_correct\\.R", commandArgs(trailingOn
 if (is_main_script) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 2) {
-    cat('{"error": "Missing required CLI arguments: job_dir and batch_var"}\n')
-    quit(status = 1)
+    emit_error("Missing required CLI arguments: job_dir and batch_var")
   }
 
   job_dir <- args[1]
