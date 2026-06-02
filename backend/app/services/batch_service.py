@@ -90,7 +90,7 @@ async def run_batch_pipeline_task(job_id: str, settings_dict: dict, next_round: 
         # 2. Schritt: SVD-Plot generieren
         print(f"[PIPELINE] Generiere SVD-Plot für Runde {next_round}...", flush=True)
         plot_result = await run_r_script(
-            script="generate_svd_plot.R",
+            script="batch_svd.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet="",

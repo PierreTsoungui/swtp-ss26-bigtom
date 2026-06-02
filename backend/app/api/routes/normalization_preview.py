@@ -14,49 +14,44 @@ from app.services.normalization_preview_service import (
 router = APIRouter()
 
 
-@router.post("/preview/normalization/{job_id}", status_code=202)
-async def start_preview(
-    job_id: str,
-    background_tasks: BackgroundTasks
-):
-
+@router.get("/preview/normalization/{job_id}")
+async def get_preview(job_id: str):
     job = get_job(job_id)
-
     if not job:
         raise HTTPException(
             status_code=404,
-            detail={
-                "error": "JOB_NOT_FOUND",
-                "message": "No job found"
-            }
+            detail={"error": "JOB_NOT_FOUND", "message": "No job found"}
         )
-
     if job.expires_at < datetime.now():
         raise HTTPException(
             status_code=410,
-            detail={
-                "error": "SESSION_EXPIRED",
-                "message": "Session expired"
-            }
+            detail={"error": "SESSION_EXPIRED", "message": "Session expired"}
         )
 
-    update_job(
-        job_id,
-        status="running",
-        phase="normalization_preview",
-        progress_percent=0,
-        current_step="Starting normalization preview..."
-    )
+    preview_plots = getattr(job, "preview_plots", None)
 
-    background_tasks.add_task(
-        run_normalization_preview,
-        job_id,
-        job.temp_dir
-    )
+    # Sicherheitscheck: preview_plots muss ein dict sein
+    if not isinstance(preview_plots, dict):
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "PREVIEW_NOT_READY", "message": "Preview plots not yet available"}
+        )
 
     return {
         "job_id": job_id,
-        "status": "accepted"
+        "plots": [
+            {
+                "method": method,
+                "plots": [
+                    {
+                        "plot_kind": p["plot_kind"].lower(),
+                        "url": f"/api/v1/preview/normalization/{job_id}/{p['file']}"
+                    }
+                    for p in items
+                ]
+            }
+            for method, items in preview_plots.items()
+        ]
     }
 
 

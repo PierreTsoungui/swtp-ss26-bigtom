@@ -188,11 +188,7 @@ async def process_upload_background(
     sample_sheet_filename: str,
     filter_settings_model: FilterSettings
 ):
-    """
-    Hintergrundverarbeitung für die Filterung.
-    """
     try:
-
         update_job(
             job_id,
             status="running",
@@ -201,17 +197,23 @@ async def process_upload_background(
             current_step="Starte Filterung der Rohdaten..."
         )
 
-
-        async def on_progress(progress_data: dict):
-            update_job(
-                job_id,
-                status="running",
-                phase="filtering",
-                progress_percent=progress_data["progress"],
-                current_step=progress_data["step"]
-            )
-            print(f"[FILTERING] Job {job_id}: {progress_data['progress']}% - {progress_data['step']}")
-
+        async def on_progress(data: dict):
+            if data.get("type") == "progress":
+                update_job(
+                    job_id,
+                    status="running",
+                    phase="filtering",
+                    progress_percent=data["percent"],
+                    current_step=data["message"]
+                )
+            elif data.get("status") == "failed":
+                update_job(
+                    job_id,
+                    status="failed",
+                    phase="filtering",
+                    current_step=data.get("current_step"),
+                    error=data.get("error")
+                )
 
         filter_json = json.dumps(filter_settings_model.model_dump())
 
@@ -223,7 +225,6 @@ async def process_upload_background(
             script_args=[filter_json],
             on_progress=on_progress
         )
-
 
         if result["returncode"] != 0:
             job = get_job(job_id)
@@ -237,7 +238,6 @@ async def process_upload_background(
                 error_message=result["stderr"]
             )
             return
-
 
         stats_path = Path(job_dir) / "filter_stats.json"
         if not stats_path.exists():
@@ -253,9 +253,7 @@ async def process_upload_background(
         with open(stats_path, "r") as f:
             filter_stats = json.load(f)
 
-        # Im Job-Manager speichern
         save_filter_stats(job_id, filter_stats)
-
 
         update_job(
             job_id,
@@ -267,12 +265,11 @@ async def process_upload_background(
         )
 
         print(f"[FILTERING] Job {job_id}: Filterung erfolgreich abgeschlossen")
-          # NEU: Normalization Preview automatisch starten
         print(f"[PREVIEW] Job {job_id}: Starte Normalization Preview...")
         await run_normalization_preview(job_id, str(job_dir))
         print(f"[PREVIEW] Job {job_id}: Normalization Preview abgeschlossen")
+
     except Exception as e:
-       
         update_job(
             job_id,
             status="failed",

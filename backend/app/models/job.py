@@ -1,23 +1,27 @@
+# app/models/job.py
+
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, Field, field_validator
 
 class JobStatus(BaseModel):
     job_id: str
-    status: str  # queued, running, waiting, completed, failed, canceled
-    phase: str   # uploaded, validating, filtering, waiting_selection, etc.
+    status: str
+    phase: str
     progress_percent: int
     current_step: str
     steps_total: int = 6
     steps_completed: int = 0
     filter_stats: Optional[Dict] = None
     estimated_seconds_remaining: Optional[int] = None
-    normalization_method: str= None
+    normalization_method: Optional[str] = None
     temp_dir: Optional[str] = None
     error_message: Optional[str] = None
+    error: Optional[Dict[str, Any]] = None
+    preview_plots: Optional[Any] = None      # dict von R: {"noob": [...], ...}
+    batch_history: Optional[Dict[str, Any]] = None
     created_at: datetime
     expires_at: datetime
-    preview_plots: List[str] = []
 
 class UploadResponse(BaseModel):
     job_id: str
@@ -28,9 +32,12 @@ class NormalizeResponse(BaseModel):
     job_id: str
     status: str
     method: str
+
 class NormalizeRequest(BaseModel):
     method: str
+
 class StatusResponse(BaseModel):
+    """UPPC-konforme API-Response: Exakt das, was das Frontend bekommt."""
     job_id: str
     status: str
     phase: str
@@ -38,8 +45,10 @@ class StatusResponse(BaseModel):
     current_step: str
     steps_total: int
     steps_completed: int
-    filter_stats: Optional[Dict] = None
+    # filter_stats wurde hier ENTFARNT!
     estimated_seconds_remaining: Optional[int] = None
+    error: Optional[Dict[str, Any]] = None  
+
 
 # -------------------------
 # DET P FILTER
@@ -53,7 +62,7 @@ class FilterDetP(BaseModel):
     def validate_cutoff(cls, v):
         try:
             v = float(v)
-            if 0.01 <= v <= 0.05:   # min: 0.01 | max: 0.05
+            if 0.01 <= v <= 0.05:
                 return v
         except:
             pass
@@ -72,7 +81,7 @@ class FilterBeadCount(BaseModel):
     def validate_bead_cutoff(cls, v):
         try:
             v = float(v)
-            if 0.01 <= v <= 0.1:    # sehr streng: 0.01 | sehr locker: 0.1
+            if 0.01 <= v <= 0.1:
                 return v
         except:
             pass
@@ -98,7 +107,7 @@ class FilterSnp(BaseModel):
     def validate_maf_cutoff(cls, v):
         try:
             v = float(v)
-            if 0.01 <= v <= 0.1:    # sehr streng: 0.01 | sehr locker: 0.1
+            if 0.01 <= v <= 0.1:
                 return v
         except:
             pass
@@ -143,7 +152,7 @@ class FilterSampleQuality(BaseModel):
     def validate_sample_failure_rate(cls, v):
         try:
             v = float(v)
-            if 0.05 <= v <= 0.2:    # min: 0.05 | max: 0.2
+            if 0.05 <= v <= 0.2:
                 return v
         except:
             pass

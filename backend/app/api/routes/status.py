@@ -1,4 +1,5 @@
 # app/api/routes/status.py
+
 from fastapi import APIRouter, HTTPException, Request
 from datetime import datetime
 from app.services.job_manager import get_job
@@ -36,6 +37,7 @@ async def get_status(request: Request, job_id: str):
             )
         )
     
+    # Rückgabe ohne filter_stats -> Entkopplung erfolgreich
     return StatusResponse(
         job_id=job.job_id,
         status=job.status,
@@ -44,6 +46,6 @@ async def get_status(request: Request, job_id: str):
         current_step=job.current_step,
         steps_total=job.steps_total,
         steps_completed=job.steps_completed,
-        filter_stats=job.filter_stats,
-        estimated_seconds_remaining=job.estimated_seconds_remaining
+        estimated_seconds_remaining=job.estimated_seconds_remaining,
+        error=job.error  
     )
