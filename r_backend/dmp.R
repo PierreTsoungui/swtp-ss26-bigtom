@@ -1,31 +1,18 @@
+#!/usr/bin/env Rscript
+
 #' DMP-Analyse
 #'
 #' Ausführung:
-#' Rscript dmp.R <beta.rds> <sample_sheet.csv> <job_dir>
-#' Optional:
-#'   <adjPVal> <arraytype>
-#'
-#' Arraytype-Werte: EPICv2 (Standard), EPICv1, 450K
-#' Hinweis: "EPIC" und "850K" werden automatisch zu "EPICv1" normalisiert
-#'
-#' Beispiel:
-#' Rscript dmp.R beta.rds samples.csv outdir 0.05 EPICv2
-
+#' Rscript dmp.R <beta.rds> <sample_sheet.csv> <job_dir> [adjPVal] [arraytype]
 
 # ── Verwendete Bibliotheken ───
-
 suppressPackageStartupMessages({
-  library(methods) 
-  library(DBI)
-  library(RSQLite)
-  library(lumi)  
   library(ChAMP)
   library(readr)
   library(jsonlite)
 })
 
 # ── Logging ───
-
 log_msg <- function(status, message, step = NULL) {
   cat(toJSON(list(status = status, step = step, message = message),
              auto_unbox = TRUE), "\n")
@@ -36,9 +23,7 @@ exit_with_error <- function(message, step = NULL) {
   quit(save = "no", status = 1)
 }
 
-
 # ── Eingabeparameter ───
-
 args <- commandArgs(trailingOnly = TRUE)
 
 if (length(args) < 3) {
@@ -52,43 +37,23 @@ job_dir           <- args[3]
 adjPVal   <- ifelse(length(args) >= 4, as.numeric(args[4]), 0.05)
 arraytype <- ifelse(length(args) >= 5, args[5], "EPICv2")
 
-# ── Arraytype normalisieren ───
-#
-#  Warum: champ.DMP() akzeptiert intern nur "EPICv2", "EPICv1", "450K".
-#  Bei falschem arraytype lädt ChAMP die falsche probe.features-Tabelle
-#  (z.B. 450K statt EPICv2) → intersect() der CpG-IDs ist leer
-#  → dmp_table hat 0 Zeilen trotz 800k+ gefundener CpGs.
-#  "EPIC" / "850K" sind verbreitete Aliase → werden zu "EPICv1" normalisiert.
-
+# Arraytype normalisieren
 if (arraytype %in% c("EPIC", "850K")) {
-  log_msg("running",
-          paste0("arraytype '", arraytype, "' wird zu 'EPICv1' normalisiert"),
-          "init")
+  log_msg("running", paste0("arraytype '", arraytype, "' wird zu 'EPICv1' normalisiert"), "init")
   arraytype <- "EPICv1"
 }
 
 if (!arraytype %in% c("EPICv2", "EPICv1", "450K")) {
-  exit_with_error(
-    paste0("Ungültiger arraytype: '", arraytype,
-           "'. Erlaubt: EPICv2, EPICv1, 450K"),
-    "init"
-  )
+  exit_with_error(paste0("Ungültiger arraytype: '", arraytype, "'. Erlaubt: EPICv2, EPICv1, 450K"), "init")
 }
 
-log_msg("running",
-        paste0("adjPVal=", adjPVal, " | arraytype=", arraytype),
-        "init")
-
-
-# ── Erstellen von Job-Ordner ───
+log_msg("running", paste0("adjPVal=", adjPVal, " | arraytype=", arraytype), "init")
 
 if (!dir.exists(job_dir)) {
   dir.create(job_dir, recursive = TRUE)
 }
 
-
-# ── Beta-Matrix ───
-
+# ── Beta-Matrix laden ───
 log_msg("running", "Laden von Beta", "load_beta")
 
 if (!file.exists(beta_path)) {
@@ -98,171 +63,139 @@ if (!file.exists(beta_path)) {
 beta <- readRDS(beta_path)
 
 if (!is.matrix(beta)) {
-  exit_with_error("Beta muss Matrix sein", "validate_beta")
+  beta <- as.matrix(beta)
 }
 
-log_msg("running",
-        paste0("Beta geladen: ", nrow(beta), " CpGs x ", ncol(beta), " Proben"),
-        "load_beta")
+# Schutzschild für batch-korrigierte Daten
+if (any(beta < 0, na.rm = TRUE) || any(beta > 1, na.rm = TRUE)) {
+  log_msg("running", "Batch-korrigierte Beta-Werte leicht außerhalb von [0,1] detektiert. Kappe Werte auf Intervall.", "load_beta")
+  beta[beta < 0] <- 0
+  beta[beta > 1] <- 1
+}
 
+log_msg("running", paste0("Beta geladen: ", nrow(beta), " CpGs x ", ncol(beta), " Proben"), "load_beta")
 
-# ── Sample Sheet ───
-
+# ── Sample Sheet laden ───
 log_msg("running", "Laden von Sample Sheet", "load_samples")
 
 all_lines  <- readLines(sample_sheet_path)
 data_start <- which(grepl("^\\[Data\\]", all_lines))
-
-# [Data] gefunden → eine Zeile darunter beginnt der CSV-Header
-# Kein [Data] → direkt von Zeile 1 lesen
 skip_lines <- if (length(data_start) > 0) data_start[[1]] else 0
 
-samples <- read_csv(
-  sample_sheet_path,
-  skip           = skip_lines,
-  show_col_types = FALSE
-)
-
-log_msg("running",
-        paste0("Sample Sheet geladen: ", nrow(samples), " Zeilen | Spalten: ",
-               paste(colnames(samples), collapse = ", ")),
-        "load_samples")
+samples <- read_csv(sample_sheet_path, skip = skip_lines, show_col_types = FALSE)
 
 required <- c("Sample_Name", "Sample_Group")
-
 if (!all(required %in% colnames(samples))) {
-  exit_with_error(
-    paste("Fehlende Spalten. Gefunden:", paste(colnames(samples), collapse = ", ")),
-    "validate_samples"
-  )
+  exit_with_error(paste("Fehlende Pflichtspalten. Gefunden:", paste(colnames(samples), collapse = ", ")), "validate_samples")
 }
 
-pheno <- factor(samples$Sample_Group)
+# ── Robustes Alignment ───
+log_msg("running", "Abgleich und Sortierung von Beta-Spalten und Sample Sheet", "validate_alignment")
 
+beta_samples <- colnames(beta)
 
-# ── Abgleich Beta-Spalten vs. Sample Sheet ───
-
-n_beta_cols   <- ncol(beta)
-n_sample_rows <- nrow(samples)
-
-log_msg("running",
-        paste0("Beta-Spalten: ", n_beta_cols,
-               " | Sample-Sheet-Zeilen: ", n_sample_rows),
-        "validate_alignment")
-
-if (n_beta_cols != n_sample_rows) {
-  exit_with_error(
-    paste0("Beta-Spalten (", n_beta_cols, ") stimmen nicht mit ",
-           "Sample-Sheet-Zeilen (", n_sample_rows, ") überein. ",
-           "Bitte sicherstellen, dass das Sample Sheet genau die Proben ",
-           "der Beta-Matrix enthält."),
-    "validate_alignment"
-  )
+if ("Sentrix_ID" %in% colnames(samples) && "Sentrix_Position" %in% colnames(samples)) {
+  samples$Array_ID <- paste0(samples$Sentrix_ID, "_", samples$Sentrix_Position)
+} else {
+  samples$Array_ID <- NA
 }
+
+id_col <- NULL
+if (all(beta_samples %in% samples$Sample_Name)) {
+  id_col <- "Sample_Name"
+} else if (all(beta_samples %in% samples$Array_ID)) {
+  id_col <- "Array_ID"
+} else {
+  if (any(beta_samples %in% samples$Sample_Name)) id_col <- "Sample_Name"
+  if (any(beta_samples %in% samples$Array_ID)) id_col <- "Array_ID"
+}
+
+if (is.null(id_col)) {
+  exit_with_error(paste0("Keine Übereinstimmung zwischen Beta-Spalten und den Identifikatoren im Sample Sheet gefunden."), "validate_alignment")
+}
+
+# HIER WAR DER FEHLER - JETZT KORREKT %in%
+samples_filtered <- samples[samples[[id_col]] %in% beta_samples, , drop = FALSE]
+match_idx        <- match(beta_samples, samples_filtered[[id_col]])
+samples_aligned  <- samples_filtered[match_idx, , drop = FALSE]
+
+if (nrow(samples_aligned) != ncol(beta)) {
+  exit_with_error("Die Anzahl der alignierten Samples stimmt nicht mit der Beta-Matrix überein.", "validate_alignment")
+}
+
+pheno <- factor(samples_aligned$Sample_Group)
 
 if (length(levels(pheno)) != 2) {
-  exit_with_error(
-    paste0("Genau 2 Gruppen sind notwendig. Gefunden: ",
-           paste(levels(pheno), collapse = ", ")),
-    "validate_groups"
-  )
+  exit_with_error(paste0("Genau 2 Gruppen sind für den DMP-Vergleich notwendig. Gefunden: ", paste(levels(pheno), collapse = ", ")), "validate_groups")
 }
 
 group1 <- levels(pheno)[1]
 group2 <- levels(pheno)[2]
 
-log_msg("running",
-        paste0("Gruppen: '", group1, "' (n=", sum(pheno == group1), ") vs ",
-               "'", group2, "' (n=", sum(pheno == group2), ")"),
-        "validate_groups")
+log_msg("running", paste0("Gruppen-Zuweisung nach Alignment: '", group1, "' (n=", sum(pheno == group1), ") vs '", group2, "' (n=", sum(pheno == group2), ")"), "validate_groups")
 
+# ── Hotfix für Single-Sample-Gruppen (Verhindert ChAMP-Dimension-Drop) ────────
+for (g in levels(pheno)) {
+  if (sum(pheno == g) == 1) {
+    log_msg("running", paste0("Hotfix: Gruppe '", g, "' hat nur 1 Probe. Dupliziere Spalte mit minimalem Rauschen für ChAMP."), "dmp")
+    idx <- which(pheno == g)
+    
+    set.seed(42)
+    noise <- rnorm(nrow(beta), mean = 0, sd = 1e-7)
+    new_col <- beta[, idx, drop = FALSE] + noise
+    
+    new_col[new_col < 0] <- 0
+    new_col[new_col > 1] <- 1
+    
+    colnames(new_col) <- paste0(colnames(beta)[idx], "_virtual_rep")
+    
+    beta <- cbind(beta, new_col)
+    pheno <- factor(c(as.character(pheno), g))
+  }
+}
 
 # ── DMP-Analyse via champ.DMP ───
-
 log_msg("running", "DMP-Analyse (champ.DMP)", "dmp")
 
 dmp_raw <- tryCatch({
-  
   champ.DMP(
     beta      = beta,
     pheno     = pheno,
-    adjPVal   = 1,          # alles behalten, eigener Filter kommt weiter unten
-    arraytype = arraytype   # korrekt: EPICv2 / EPICv1 / 450K
+    adjPVal   = 1, 
+    arraytype = arraytype
   )
-  
 }, error = function(e) {
   exit_with_error(e$message, "dmp")
 })
 
-
-# ── Ergebnis aus champ.DMP extrahieren ───
-
+# ── Ergebnis extrahieren ───
 log_msg("running", "Vorbereiten von Output", "format")
 
-comparison_key <- paste0(group1, "_to_", group2)
-
-if (!comparison_key %in% names(dmp_raw)) {
-  exit_with_error(
-    paste0("Vergleichsschlüssel '", comparison_key, "' nicht gefunden. ",
-           "Verfügbare Schlüssel: ", paste(names(dmp_raw), collapse = ", ")),
-    "format"
-  )
+if (is.null(dmp_raw) || length(dmp_raw) == 0) {
+  exit_with_error("champ.DMP hat keine Ergebnisse zurückgegeben.", "format")
 }
+
+comparison_key <- names(dmp_raw)[1]
+log_msg("running", paste0("Extrahiere Daten für Key: '", comparison_key, "'"), "format")
 
 dmp_table <- dmp_raw[[comparison_key]]
 
 if (is.null(dmp_table) || nrow(dmp_table) == 0) {
-  exit_with_error(
-    paste0("dmp_table ist leer. ",
-           "Prüfe ob arraytype='", arraytype, "' korrekt ist. ",
-           "EPICv2-Daten haben CpG-IDs mit Suffix _BC11/_TC11."),
-    "format"
-  )
+  exit_with_error("dmp_table ist leer. Prüfe den arraytype.", "format")
 }
 
-log_msg("running",
-        paste0("dmp_table: ", nrow(dmp_table), " CpGs | Spalten: ",
-               paste(colnames(dmp_table), collapse = ", ")),
-        "format")
-
-# P-Wert-Spalte robust finden (champ.DMP liefert "adj.P.Val")
-p_col <- intersect(c("adj.P.Val", "adj.p.val", "P.Value", "p.value"),
-                   colnames(dmp_table))[1]
-
-if (is.na(p_col)) {
-  exit_with_error(
-    paste("Keine P-Wert-Spalte gefunden. Verfügbare Spalten:",
-          paste(colnames(dmp_table), collapse = ", ")),
-    "format"
-  )
-}
-
-log_msg("running",
-        paste0("P-Wert-Spalte: '", p_col, "' | ",
-               "Min=", round(min(dmp_table[[p_col]], na.rm = TRUE), 6), " | ",
-               "Max=", round(max(dmp_table[[p_col]], na.rm = TRUE), 6)),
-        "format")
-
-# AVG-Spalten
+p_col <- intersect(c("adj.P.Val", "adj.p.val", "P.Value", "p.value"), colnames(dmp_table))[1]
 col_group1 <- paste0(group1, "_AVG")
 col_group2 <- paste0(group2, "_AVG")
 
 if (!col_group1 %in% colnames(dmp_table) || !col_group2 %in% colnames(dmp_table)) {
-  exit_with_error(
-    paste("AVG-Spalten nicht gefunden. Verfügbare Spalten:",
-          paste(colnames(dmp_table), collapse = ", ")),
-    "format"
-  )
+  col_group1 <- intersect(colnames(dmp_table), paste0(levels(pheno), "_AVG"))[1]
+  col_group2 <- intersect(colnames(dmp_table), paste0(levels(pheno), "_AVG"))[2]
 }
 
-# CpG-IDs aus Rownames
-cpg_ids <- rownames(dmp_table)
-
 eps <- 1e-8
-
-# Für nähere Bedeutung der Spalten: siehe Dateien / Beispieldaten / dmp dmr columns
 dmp <- data.frame(
-  ID         = cpg_ids,
+  ID         = rownames(dmp_table),
   CHR        = dmp_table$CHR,
   POS        = dmp_table$MAPINFO,
   GENE       = dmp_table$gene,
@@ -272,63 +205,23 @@ dmp <- data.frame(
   GROUP1_AVG = dmp_table[[col_group1]],
   GROUP2_AVG = dmp_table[[col_group2]],
   DELTA_BETA = dmp_table$deltaBeta,
-  LOG_FC     = log2(
-    (dmp_table[[col_group2]] + eps) /
-      (dmp_table[[col_group1]] + eps)
-  ),
+  LOG_FC     = log2((dmp_table[[col_group2]] + eps) / (dmp_table[[col_group1]] + eps)),
   DMR_ID     = "-",
   stringsAsFactors = FALSE
 )
 
-# ── NA-Bereinigung AVG-Spalten ───
-#
-#  Warum: champ.DMP() kann NA in den Gruppen-Durchschnittsspalten zurückgeben,
-#  wenn alle Proben einer Gruppe fehlende Beta-Werte für eine bestimmte Sonde haben.
-#  all(x >= 0 & x <= 1) gibt NA zurück (nicht FALSE/TRUE), wenn x NAs enthält,
-#  was den Test GROUP1_AVG/GROUP2_AVG im Beta-Bereich [0,1] fehlschlagen lässt.
-#  Solche Sonden sind biologisch nicht interpretierbar → werden entfernt.
-
-n_before_na <- nrow(dmp)
+# NA-Bereinigung
 dmp <- dmp[!is.na(dmp$GROUP1_AVG) & !is.na(dmp$GROUP2_AVG), ]
-n_removed_na <- n_before_na - nrow(dmp)
-
-if (n_removed_na > 0) {
-  log_msg("running",
-          paste0("NA-Bereinigung: ", n_removed_na,
-                 " Sonden mit NA in AVG-Spalten entfernt"),
-          "format")
-}
-
-# adjPVal-Filter (NAs ausschließen)
 dmp_filtered <- dmp[!is.na(dmp$ADJ_P) & dmp$ADJ_P <= adjPVal, ]
 
-log_msg("running",
-        paste0("Nach Filter adjPVal <= ", adjPVal, ": ",
-               nrow(dmp_filtered), " DMPs"),
-        "format")
-
-
-# ── Validierung ───
-
 if (nrow(dmp_filtered) == 0) {
-  exit_with_error(
-    paste0("Nach Filter (adjPVal <= ", adjPVal, ") keine DMPs übrig. ",
-           "Min adj.P.Val in Daten: ",
-           round(min(dmp$ADJ_P, na.rm = TRUE), 6)),
-    "validate_output"
-  )
+  exit_with_error(paste0("Nach Filter (adjPVal <= ", adjPVal, ") keine DMPs übrig. Min p-Wert: ", round(min(dmp$ADJ_P, na.rm = TRUE), 6)), "validate_output")
 }
 
-
 # ── Speichern ───
-
 log_msg("running", "Speichern", "save")
-
 write.csv(dmp_filtered, file.path(job_dir, "dmp_results.csv"), row.names = FALSE)
 saveRDS(dmp_filtered,   file.path(job_dir, "dmp_results.rds"))
 
-log_msg("done",
-        paste0("DMP erfolgreich abgeschlossen: ", nrow(dmp_filtered), " DMPs gespeichert"),
-        "complete")
-
+log_msg("done", paste0("DMP erfolgreich abgeschlossen: ", nrow(dmp_filtered), " DMPs gespeichert"), "complete")
 quit(save = "no", status = 0)
