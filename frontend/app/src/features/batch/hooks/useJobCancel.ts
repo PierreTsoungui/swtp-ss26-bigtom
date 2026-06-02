@@ -1,13 +1,12 @@
-import type {ApiProblemDetail, ProblemDetail} from "../../../shared/error-handling/types/ErrorTypes.ts";
-import {useState} from "react";
-
 /**
  * Custom Hook, der die Funktionalität zum Abbrechen eines Jobs bereitstellt.
  * @param jobId Die ID des Jobs, der abgebrochen werden soll.
  * @param onCancelSuccess Callback-Funktion, die nach erfolgreichem Abbrechen des Jobs aufgerufen wird.
  * @returns Ein Objekt mit der Funktion `cancelJob`, einem Ladezustand `isLoading` und einem Fehlerobjekt `error`.
- */
-export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
+ **/
+
+/*
+function useJobCancel(jobId: string, onCancelSuccess: () => void) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<ProblemDetail | null>(null);
 
@@ -40,3 +39,6 @@ export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
     }
     return { cancelJob, isLoading, error };
 }
+
+
+*/

@@ -1,7 +1,10 @@
-import { useState } from "react";
+import {useEffect, useState} from "react";
 import { useParams, useNavigate } from "react-router";
 import type { MethodPlotGroup, NormalizationMethod } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
+import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
+import Progressbar from "../analysis/components/Progressbar.tsx";
+import type {JobStatus} from "../analysis/utils/types.ts";
 
 // Modal Component für Plot-Vorschau
 function PlotModal({ 
@@ -44,16 +47,24 @@ export function NormalizationPage() {
   const navigate = useNavigate();
 
   const { data, isLoading, error } = useNormalizationPreview(job_id ?? null);
-
   const [selected, setSelected] = useState<NormalizationMethod | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
   // State für Modal-Vorschau
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
 
+  const [isNormalising, setIsNormalising] = useState(false);
+
+  const jobStatus : JobStatus | null  = useJobPolling(isNormalising ? (job_id ?? null) : null);
+
+  useEffect(() => {
+      if (!jobStatus) return;
+      if (jobStatus.status === "ready_for_batch") {
+        navigate(`/batch/${job_id}`);
+      }
+  }, [jobStatus?.status])
+
   const handleConfirm = async () => {
     if (!selected || !job_id) return;
-
     setIsSubmitting(true);
 
     try {
@@ -65,7 +76,8 @@ export function NormalizationPage() {
 
       if (!res.ok) throw new Error(`Fehler: ${res.status}`);
 
-      navigate(`/batch/${job_id}`);
+      setIsNormalising(true);
+
     } catch (e) {
       console.error(e);
     } finally {
@@ -204,11 +216,19 @@ export function NormalizationPage() {
         })}
       </div>
 
+      {/* Ladebalken */}
+      {isNormalising && jobStatus && (
+          <div className="mb-5">
+            <Progressbar jobStatus={jobStatus} showNextButton={false} onNext={() => {}} />
+          </div>
+
+      )}
+
       {/* CONFIRM BUTTON */}
       <div className="flex justify-center">
         <button
           onClick={handleConfirm}
-          disabled={!selected || isSubmitting}
+          disabled={!selected || isSubmitting || !isNormalising}
           className={`
             rounded-full px-10 py-3 font-bold text-white
             transition-colors

@@ -54,9 +54,9 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
                             ? "Normalisierungsvorschau wird erstellt"
                             : "Analyse läuft"}
                     </h2>
-                    <p className="text-sm text-gray-500">
-                        Schritte {jobStatus.steps_completed} von {jobStatus.steps_total}
-                    </p>
+                    {/*<p className="text-sm text-gray-500">
+                        `Schritte ${jobStatus.steps_completed} von ${jobStatus.steps_total}`
+                    </p>*/}
                 </div>
 
                 <div className="min-w-17.5 text-right text-sm font-medium text-gray-700">
@@ -87,7 +87,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
                     <span>{jobStatus.current_step}</span>
                 </div>
 
-                {jobStatus.estimated_seconds_remaining !== null && (
+                {/*jobStatus.estimated_seconds_remaining !== null && (
                     <div className="flex flex-col gap-1">
                         <span className="font-medium text-gray-500">
                             Verbleibende Zeit
@@ -96,7 +96,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
                             {jobStatus.estimated_seconds_remaining} Sekunden
                         </span>
                     </div>
-                )}
+                )*/}
             </div>
 
             {/* Footer */}

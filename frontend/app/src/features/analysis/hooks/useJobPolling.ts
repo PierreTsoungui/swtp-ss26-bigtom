@@ -9,6 +9,7 @@ const TERMINAL_STATES: JobStatusValue[] = [
   "completed",
   "failed",
   "canceled",
+  "ready_for_batch"
 ];
 
 /**
@@ -143,7 +144,6 @@ function parseJobStatus(value: unknown): JobStatus {
     current_step,
     steps_total,
     steps_completed,
-    filter_stats: null,
     estimated_seconds_remaining: parsedEstimated,
     ...(isProblemDetail(error) ? { error } : {}),
   };

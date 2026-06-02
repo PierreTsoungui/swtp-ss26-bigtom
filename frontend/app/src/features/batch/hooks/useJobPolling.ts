@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+/*import { useState, useEffect, useRef } from "react";
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
 import type { JobPhase, JobStatus, JobStatusValue } from "../utils/types";
 
@@ -11,12 +11,12 @@ const TERMINAL_STATES: JobStatusValue[] = [
   "canceled",
   "filtering_done",
 ];
-
+*/
 /**
  * Custom Hook, der den Status eines Jobs überwacht, indem er regelmäßig die API abfragt.
  * @param jobId Die ID des Jobs, dessen Status überwacht werden soll. Wenn `null`, wird kein Polling durchgeführt.
  */
-export function useJobPolling(jobId: string | null): JobStatus | null {
+/*export function useJobPolling(jobId: string | null): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -192,3 +192,4 @@ function isFiniteNumber(value: unknown): value is number {
 function isNonNegativeInteger(value: unknown): value is number {
   return Number.isInteger(value) && typeof value === "number" && value >= 0;
 }
+*/

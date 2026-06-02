@@ -39,7 +39,6 @@ function buildJobStatus(overrides: Partial<JobStatus> = {}): JobStatus {
         current_step: "SNP-Filter wird angewendet...",
         steps_total: 6,
         steps_completed: 3,
-        filter_stats: null,
         estimated_seconds_remaining: 30,
         ...overrides,
     };

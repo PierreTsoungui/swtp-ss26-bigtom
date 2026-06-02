@@ -76,7 +76,6 @@ export interface JobStatus {
   current_step: string;
   steps_total: number;
   steps_completed: number;
-  filter_stats: FilteringStatsType | null;
   estimated_seconds_remaining: number | null;
   error?: ProblemDetail;
 }

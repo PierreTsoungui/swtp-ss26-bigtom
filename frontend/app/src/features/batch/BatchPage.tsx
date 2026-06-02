@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useBatchCorrection } from './hooks/useBatchCorrection';
 import { BatchForm } from './components/BatchForm';
 import { SvdPlot } from './components/SvdPlot';
-import Progressbar from './components/Progressbar';
+import Progressbar from "../analysis/components/Progressbar.tsx";
 
 const BatchPage: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
