@@ -24,17 +24,26 @@ describe("AppLayout", () => {
     expect(screen.getByText("© BigTom")).toBeInTheDocument();
   });
 
-  it("zeigt die aktuelle Phase und die Schritte 1 bis 7", () => {
+  it("zeigt die aktuelle Phase und die Schritte 1 bis 5", () => {
     renderLayout("/analysis/job-123");
 
-    expect(screen.getAllByText("Analysis").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Filter").length).toBeGreaterThan(0);
 
     const stepIndicator = screen.getByRole("navigation", { name: /schrittanzeige/i });
-    for (let step = 1; step <= 7; step += 1) {
+    for (let step = 1; step <= 5; step += 1) {
       expect(within(stepIndicator).getByText(String(step))).toBeInTheDocument();
     }
 
-    expect(within(stepIndicator).getByText("3")).toHaveAttribute("aria-current", "step");
+    expect(within(stepIndicator).getByText("2")).toHaveAttribute("aria-current", "step");
+    expect(within(stepIndicator).getByText("Upload")).toBeInTheDocument();
+    expect(within(stepIndicator).getByText("Filter")).toBeInTheDocument();
+    expect(within(stepIndicator).getByText("Normalization")).toBeInTheDocument();
+    expect(within(stepIndicator).getByText("Batch")).toBeInTheDocument();
+    expect(within(stepIndicator).getByText("Results")).toBeInTheDocument();
+    expect(within(stepIndicator).queryByText("Validation")).not.toBeInTheDocument();
+    expect(within(stepIndicator).queryByText("Analysis")).not.toBeInTheDocument();
+    expect(within(stepIndicator).queryByText("Quality Control")).not.toBeInTheDocument();
+    expect(within(stepIndicator).queryByText("Export")).not.toBeInTheDocument();
   });
 
   it("zeigt Datenschutz nur auf der Datenschutz-Seite als aktuelle Phase", () => {
@@ -43,7 +52,7 @@ describe("AppLayout", () => {
     expect(within(screen.getByRole("banner")).getByText("Datenschutz")).toBeInTheDocument();
   });
 
-  it("verwendet BigTom als Phase fuer unbekannte Routen", () => {
+  it("verwendet BigTom als Phase für unbekannte Routen", () => {
     renderLayout("/unbekannt");
 
     const header = screen.getByRole("banner");
