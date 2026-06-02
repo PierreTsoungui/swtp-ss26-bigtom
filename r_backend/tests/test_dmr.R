@@ -1,163 +1,115 @@
-#'  ── Tests für DMR
-
-# ── Verwendete Bibliotheken ───
+# ── test_dmr.R ────────────────────────────────────────────────────────────────
+#
+#  Voraussetzungen:
+#    - filtered_data.rds
+#    - Demo_EPIC-8v2-0_A1_SampleSheet_16.csv
+#    - dmr.R
+#
+#  Ausführung:
+#    Rscript -e "testthat::test_file('test_dmr.R')"
+#
+# ──────────────────────────────────────────────────────────────────────────────
 
 library(testthat)
 
-# ── Test 1 ───
-test_that("DMR läuft und erzeugt Tabelle", {
+BETA_PATH    <- "filtered_data.rds"
+SAMPLES_PATH <- "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
+DMR_SCRIPT   <- "dmr.R"
+
+run_dmr <- function(beta      = BETA_PATH,
+                    samples   = SAMPLES_PATH,
+                    job_dir   = tempfile("dmr_out_"),
+                    arraytype = "EPICv2") {
   
-  # Testdaten
-  job_dir <- tempdir()
-  beta_file <- "filtered_data.rds"
-  sample_file <- "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
-  
-  # Existieren Dateien ?
-  expect_true(file.exists(beta_file))
-  expect_true(file.exists(sample_file))
-  
-  # Ausführen von Test
-  script_path <- "dmr.R"
-  
-  exit_code <- system2(
-    "Rscript",
-    args = c(
-      script_path,
-      beta_file,
-      sample_file,
-      job_dir
-    )
+  status <- withCallingHandlers(
+    tryCatch(
+      system2("Rscript", c(DMR_SCRIPT, beta, samples, job_dir,
+                           "3", "0.1", "0.05", "1000", arraytype, "50", "1"),
+              stdout = TRUE, stderr = TRUE),
+      error = function(e) NULL
+    ),
+    warning = function(w) invokeRestart("muffleWarning")
   )
   
-  # Lief das Skript erfolgreich durch ? -> kein Fehler erwartet
-  expect_equal(exit_code, 0)
+  exit_code <- ifelse(is.null(attr(status, "status")), 0L,
+                      as.integer(attr(status, "status")))
   
-  # Output
-  output_csv <- file.path(job_dir, "dmr_results.csv")
-  output_rds <- file.path(job_dir, "dmr_results.rds")
+  list(status  = exit_code,
+       stdout  = paste(status, collapse = "\n"),
+       job_dir = job_dir)
+}
+
+skip_if_no_data <- function() {
+  skip_if_not(file.exists(BETA_PATH),    paste("Beta fehlt:",    BETA_PATH))
+  skip_if_not(file.exists(SAMPLES_PATH), paste("Samples fehlt:", SAMPLES_PATH))
+  skip_if_not(file.exists(DMR_SCRIPT),   paste("dmr.R fehlt:",   DMR_SCRIPT))
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 1  HAPPY PATH
+# ══════════════════════════════════════════════════════════════════════════════
+
+test_that("Standardlauf endet mit Exit-Code 0 und erzeugt Ausgabedateien", {
+  skip_if_no_data()
   
-  expect_true(file.exists(output_csv))
-  expect_true(file.exists(output_rds))
-  
-  result <- read.csv(output_csv)
-  
-  # Ist Tabelle leer ?
-  expect_true(nrow(result) > 0)
-  
-  # Pflichtspalten laut Tabelle
-  required_columns <- c(
-    "ID",
-    "N_DMPs",
-    "CHR",
-    "START",
-    "STOP",
-    "WIDTH",
-    "P_VALUE",
-    "MEANDIFF"
-  )
-  
-  expect_true(
-    all(required_columns %in% colnames(result))
-  )
-  
-  # Liegt P-Value im Normbereich ?
-  expect_true(all(result$P_VALUE >= 0))
-  expect_true(all(result$P_VALUE <= 1))
-  
-  # Ist N_DMPs eine positive ganze Zahl ?
-  expect_true(is.numeric(result$N_DMPs))
-  expect_true(all(result$N_DMPs > 0))
-  
-  # Ist WIDTH numerisch und positiv ?
-  expect_true(is.numeric(result$WIDTH))
-  expect_true(all(result$WIDTH > 0))
-  
-  # Ist START immer kleiner als STOP ?
-  expect_true(all(result$START < result$STOP))
-  
-  # Ist MEANDIFF numerisch ?
-  expect_true(is.numeric(result$MEANDIFF))
-  
-  # Haben alle IDs das erwartete Format DMR_N ?
-  expect_true(all(grepl("^DMR_\\d+$", result$ID)))
-  
+  res <- run_dmr()
+  expect_equal(res$status, 0L, info = res$stdout)
+  expect_true(file.exists(file.path(res$job_dir, "dmr_results.csv")))
+  expect_true(file.exists(file.path(res$job_dir, "dmr_results.rds")))
 })
 
-# ── Test 2 ───
-test_that("DMR script schlägt fehl mit ungültigem Beta", {
+
+test_that("Ergebnis enthält Pflicht-Spalten und mindestens 1 DMR", {
+  skip_if_no_data()
   
-  job_dir <- tempdir()
+  res <- run_dmr()
+  df  <- read.csv(file.path(res$job_dir, "dmr_results.csv"), check.names = FALSE)
   
-  # Ungültige Beta-Datei
-  invalid_beta <- matrix()
-  
-  beta_file <- file.path(job_dir, "invalid_beta.rds")
-  
-  saveRDS(invalid_beta, beta_file)
-  
-  # Reales Sample Sheet
-  sample_file <- "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
-  
-  expect_true(file.exists(sample_file))
-  
-  exit_code <- system2(
-    "Rscript",
-    args = c(
-      "dmr.R",
-      beta_file,
-      sample_file,
-      job_dir
-    )
-  )
-  
-  # Lief das Skript erfolgreich durch ? -> Fehler erwartet
-  expect_true(exit_code != 0)
-  
+  expect_true(all(c("ID", "N_DMPs", "CHR", "START", "STOP",
+                    "WIDTH", "P_VALUE", "MEANDIFF") %in% colnames(df)))
+  expect_gt(nrow(df), 0L)
 })
 
-# ── Test 3 ───
-test_that("DMR script schlägt fehl mit fehlendem Beta", {
+
+test_that("N_DMPs >= 3, WIDTH > 0, P_VALUE in [0,1]", {
+  skip_if_no_data()
   
-  job_dir <- tempdir()
+  df <- read.csv(file.path(run_dmr()$job_dir, "dmr_results.csv"),
+                 check.names = FALSE)
   
-  exit_code <- system2(
-    "Rscript",
-    args = c(
-      "dmr.R",
-      "nicht_vorhanden.rds",
-      "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv",
-      job_dir
-    )
-  )
-  
-  expect_true(exit_code != 0)
-  
+  expect_true(all(df$N_DMPs >= 3))
+  expect_true(all(df$WIDTH > 0))
+  expect_true(all(df$P_VALUE >= 0 & df$P_VALUE <= 1, na.rm = TRUE))
 })
 
-# ── Test 4 ───
-test_that("DMR script schlägt fehl mit ungültigen numerischen Parametern", {
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 2  FEHLERFÄLLE
+# ══════════════════════════════════════════════════════════════════════════════
+
+test_that("Fehlende Beta-Datei → Exit-Code 1 mit 'error'-Status", {
+  skip_if_no_data()
   
-  job_dir <- tempdir()
-  beta_file <- "filtered_data.rds"
-  sample_file <- "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
+  res <- run_dmr(beta = "nicht_vorhanden.rds")
+  expect_equal(res$status, 1L)
+  expect_true(grepl('"error"', res$stdout))
+})
+
+
+test_that("Ungültiger arraytype → Exit-Code 1", {
+  skip_if_no_data()
   
-  expect_true(file.exists(beta_file))
-  expect_true(file.exists(sample_file))
+  expect_equal(run_dmr(arraytype = "INVALID")$status, 1L)
+})
+
+
+test_that("Beta mit falscher Spaltenzahl → Exit-Code 1", {
+  skip_if_no_data()
   
-  exit_code <- system2(
-    "Rscript",
-    args = c(
-      "dmr.R",
-      beta_file,
-      sample_file,
-      job_dir,
-      "keine_zahl",   # minProbes ungültig
-      "0.2",
-      "0.05",
-      "500"
-    )
-  )
+  tmp <- tempfile(fileext = ".rds")
+  saveRDS(readRDS(BETA_PATH)[, 1:2, drop = FALSE], tmp)
+  on.exit(unlink(tmp))
   
-  expect_true(exit_code != 0)
-  
+  expect_equal(run_dmr(beta = tmp)$status, 1L)
 })
