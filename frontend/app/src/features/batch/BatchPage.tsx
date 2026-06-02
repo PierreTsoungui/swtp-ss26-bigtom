@@ -41,8 +41,8 @@ const BatchPage: React.FC = () => {
           {history && <SvdPlot rounds={history.rounds} />}
         </div>
 
-        {/* 2. Progressbar */}
-        {globalStatus === 'running' && jobStatus && (
+        {/* 2. Progressbar: show during backend-run or while normalization is running */}
+        {jobStatus && (globalStatus === 'running' || jobStatus.phase === 'normalizing') && (
           <div style={{ width: '100%', display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
             <Progressbar jobStatus={jobStatus} />
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
-import type {FilteringStatsType, JobPhase, JobStatus, JobStatusValue} from "../utils/types";
+import type { JobPhase, JobStatus, JobStatusValue} from "../utils/types";
 
 const TERMINAL_STATES: JobStatusValue[] = [
   "normalization_done",
@@ -89,37 +89,51 @@ export function useJobPolling(jobId: string | null): JobStatus | null {
 
 function parseJobStatus(value: unknown): JobStatus {
   if (!isRecord(value)) {
-    console.error("[PARSING ERROR] (parseJobStatus) Expected an object but got:", value);
+    console.error("[PARSING ERROR] Expected an object but got:", value);
     throw new Error("Invalid job status response");
   }
 
-  const {
-    job_id,
-    status,
-    phase,
-    progress_percent,
-    current_step,
-    steps_total,
-    steps_completed,
-    filter_stats,
-    estimated_seconds_remaining,
-    error,
-  } = value;
+  const job_id = value.job_id;
+  const status = value.status;
+  const phase = value.phase;
+  const progress_percent = value.progress_percent;
+  const current_step = value.current_step;
+  const steps_total = value.steps_total;
+  const steps_completed = value.steps_completed;
+  const estimated_seconds_remaining = value.estimated_seconds_remaining;
+  const error = value.error;
 
-  if (
-    typeof job_id !== "string" ||
-    !isJobStatusValue(status) ||
-    !isJobPhase(phase) ||
-    !isFiniteNumber(progress_percent) ||
-    typeof current_step !== "string" ||
-    !isNonNegativeInteger(steps_total) ||
-    !isNonNegativeInteger(steps_completed) ||
-    !isFilterStatsOrNull(filter_stats) ||
-    !isNullableNonNegativeNumber(estimated_seconds_remaining)
-  ) {
-    console.error("[PARSING ERROR] (parseJobStatus) Invalid field types in response:", value);
-    throw new Error("Invalid job status response");
+  if (typeof job_id !== "string") {
+    throw new Error("Invalid job status response: job_id");
   }
+  if (!isJobStatusValue(status)) {
+    console.error("[PARSING ERROR] Unknown status value:", status);
+    throw new Error("Invalid job status response: status");
+  }
+  if (!isJobPhase(phase)) {
+    console.error("[PARSING ERROR] Unknown phase value:", phase);
+    throw new Error("Invalid job status response: phase");
+  }
+  if (!isFiniteNumber(progress_percent)) {
+    throw new Error("Invalid job status response: progress_percent");
+  }
+  if (typeof current_step !== "string") {
+    throw new Error("Invalid job status response: current_step");
+  }
+  if (!isNonNegativeInteger(steps_total)) {
+    throw new Error("Invalid job status response: steps_total");
+  }
+  if (!isNonNegativeInteger(steps_completed)) {
+    throw new Error("Invalid job status response: steps_completed");
+  }
+
+  // estimated_seconds_remaining: null oder number, undefined auch erlaubt
+  const parsedEstimated: number | null =
+    estimated_seconds_remaining === undefined || estimated_seconds_remaining === null
+      ? null
+      : isFiniteNumber(estimated_seconds_remaining)
+      ? estimated_seconds_remaining
+      : null;
 
   return {
     job_id,
@@ -129,8 +143,8 @@ function parseJobStatus(value: unknown): JobStatus {
     current_step,
     steps_total,
     steps_completed,
-    filter_stats,
-    estimated_seconds_remaining,
+    filter_stats: null,
+    estimated_seconds_remaining: parsedEstimated,
     ...(isProblemDetail(error) ? { error } : {}),
   };
 }
@@ -167,29 +181,6 @@ function isJobPhase(value: unknown): value is JobPhase {
   );
 }
 
-function isFilterStatsOrNull(value: unknown): value is FilteringStatsType | null {
-  if (value === null) return true;
-  if (!isRecord(value)) return false;
-  console.log("[FILTER_STATS]", value);
-  console.log("[FILTER_STEPS]", value.steps);
-  // Prüfe die Hauptfelder, die immer vorhanden sein müssen
-  const hasTotalStart = isNonNegativeNumber(value.total_start);
-  const hasTotalEnd = isNonNegativeNumber(value.total_end);
-  const hasTotalRemoved = isNonNegativeNumber(value.total_removed);
-
-  // Optional: Prüfe, dass die Unterobjekte existieren (aber nicht zwingend ihre Werte)
-  const hasBeadCount = isRecord(value.bead_count);
-  const hasDetP = isRecord(value.det_p);
-  const hasMultiHit = isRecord(value.multi_hit);
-  const hasNonCpg = isRecord(value.non_cpg);
-  const hasSnp = isRecord(value.snp);
-  const hasXy = isRecord(value.xy_chromosomes);
-  const hasSampleQuality = isRecord(value.sample_quality);
-
-  return hasTotalStart && hasTotalEnd && hasTotalRemoved &&
-      hasBeadCount && hasDetP && hasMultiHit &&
-      hasNonCpg && hasSnp && hasXy && hasSampleQuality;
-}
 
 function isProblemDetail(value: unknown): value is ProblemDetail {
   if (!isRecord(value)) return false;
@@ -221,14 +212,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
-}
-
-function isNonNegativeNumber(value: unknown): value is number {
-  return isFiniteNumber(value) && value >= 0;
-}
-
-function isNullableNonNegativeNumber(value: unknown): value is number | null {
-  return value === null || isNonNegativeNumber(value);
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
