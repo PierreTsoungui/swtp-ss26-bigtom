@@ -7,8 +7,10 @@ router = APIRouter()
 @router.get("/table/{job_id}")
 def get_table(
     job_id: str,
+    table: str,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=100, ge=1),
 ):
     """
     Liefert paginierte Tabellendaten eines Analysejobs.
@@ -46,5 +48,7 @@ def get_table(
     return get_table_data(
         job_id=job_id,
         page=page,
-        page_size=page_size,
+        table=table,
+        sort_by=sort_by,
+        sort_order=sort_order
     )
