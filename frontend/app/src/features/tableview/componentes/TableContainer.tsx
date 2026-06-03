@@ -1,11 +1,13 @@
-{ useParams } from "react-router";
+import { useParams } from "react-router";
 
 import { TableTabs } from "./TableTabs";
 import { AnalysisTable } from "./AnalysisTable";
 
 import { useTableState } from "../hooks/useTableState";
 import { useTableData } from "../hooks/useTableData";
+import { TableFilters } from "./TableFilters";
 
+import { useTableFilters } from "../hooks/useTableFilters";
 
 export function TableContainer() {
   const { job_id } = useParams();
@@ -17,13 +19,26 @@ export function TableContainer() {
     updateSorting,
   } = useTableState();
 
+  const {
+    draftFilters,
+    appliedFilters,
+    setDraftFilters,
+    applyFilters,
+    resetFilters,
+  } = useTableFilters();
+
   const currentSort = sorting[activeTab];
 
-  const { data } = useTableData(
+  const {
+    data,
+    loading,
+    error,
+  } = useTableData(
     job_id ?? null,
     activeTab,
     currentSort.sort_by,
-    currentSort.sort_order
+    currentSort.sort_order,
+    appliedFilters[activeTab]
   );
 
   return (
@@ -33,6 +48,30 @@ export function TableContainer() {
         onChange={setActiveTab}
       />
 
+      <TableFilters
+        filters={draftFilters[activeTab]}
+        onChange={(filters) =>
+          setDraftFilters((prev) => ({
+            ...prev,
+            [activeTab]: filters,
+          }))
+        }
+        onApply={() =>
+          applyFilters(activeTab)
+        }
+        onReset={() =>
+          resetFilters(activeTab)
+        }
+      />
+      {loading && (
+        <p>Loading table...</p>
+      )}
+
+      {error && (
+        <p className="text-red-500">
+          {error}
+        </p>
+      )}
       <AnalysisTable
         data={data}
         sorting={currentSort}
