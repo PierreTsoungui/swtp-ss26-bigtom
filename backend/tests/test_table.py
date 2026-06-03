@@ -8,65 +8,63 @@ client = TestClient(app)
 
 @pytest.fixture
 def mock_job(tmp_path):
-    """
-    Erstellt eine minimale Mock-Jobstruktur mit realistischer output.csv.
-    """
 
     job_id = "test-job-123"
     job_dir = tmp_path / job_id
     job_dir.mkdir()
 
-    # CSV-Struktur entspricht dem produktiven Exportformat.
-    # Erste Header-Spalte bleibt absichtlich leer.
-    csv_path = job_dir / "output.csv"
+    def create_csv(path):
+        with open(path, "w") as f:
+            f.write(",206891110001_R01C01,206891110001_R03C01,206891110001_R07C01,206891110001_R08C01\n")
 
-    with open(csv_path, "w") as f:
-        f.write(',206891110001_R01C01,206891110001_R03C01,206891110001_R07C01,206891110001_R08C01\n')
+            for i in range(200):
+                v1 = round((i * 0.1) % 1, 6)
+                v2 = round((i * 0.2) % 1, 6)
+                v3 = round((i * 0.3) % 1, 6)
+                v4 = round((i * 0.4) % 1, 6)
 
-        # Erzeugt deterministische Testdaten für Pagination-Tests.
-        for i in range(200):
-            v1 = round((i * 0.1) % 1, 6)
-            v2 = round((i * 0.2) % 1, 6)
-            v3 = round((i * 0.3) % 1, 6)
-            v4 = round((i * 0.4) % 1, 6)
+                f.write(f"cg{i:08d}_BC11,{v1},{v2},{v3},{v4}\n")
 
-            f.write(f'"cg{i:08d}_BC11",{v1},{v2},{v3},{v4}\n')
+    create_csv(job_dir / "dmp_results.csv")
+    create_csv(job_dir / "dmr_results.csv")
 
-    # Lenkt den Service temporär auf das pytest-Dateisystem um.
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
         yield job_id, job_dir
 
 
-def test_pagination_returns_correct_rows(mock_job):
-    """Prüft, ob page_size korrekt angewendet wird."""
+# HELPER
 
+def call(job_id, table, page=1):
+    return client.get(
+        f"/api/v1/table/{job_id}",
+        params={
+            "table": table,
+            "page": page
+        }
+    )
+
+
+def test_pagination_returns_correct_rows(mock_job):
     job_id, _ = mock_job
 
-    res = client.get(f"/api/v1/table/{job_id}?page=1&page_size=10")
+    res = call(job_id, "dmp")
 
     assert res.status_code == 200
-    assert len(res.json()["data"]) == 10
+    assert len(res.json()["data"]) == 75
 
 
 def test_total_rows_correct(mock_job):
-    """Validiert die Gesamtanzahl der CSV-Zeilen."""
-
     job_id, _ = mock_job
 
-    res = client.get(f"/api/v1/table/{job_id}?page=1&page_size=100")
+    res = call(job_id, "dmp")
 
     assert res.json()["pagination"]["total_rows"] == 200
 
 
 def test_cpg_id_in_response(mock_job):
-    """
-    Stellt sicher, dass die CpG-ID korrekt aus der ersten CSV-Spalte
-    übernommen wird.
-    """
-
     job_id, _ = mock_job
 
-    res = client.get(f"/api/v1/table/{job_id}?page=1&page_size=10")
+    res = call(job_id, "dmp")
 
     first_row = res.json()["data"][0]
 
@@ -75,62 +73,46 @@ def test_cpg_id_in_response(mock_job):
 
 
 def test_columns_returned(mock_job):
-    """Prüft, ob Spaltenmetadaten vollständig zurückgegeben werden."""
-
     job_id, _ = mock_job
 
-    res = client.get(f"/api/v1/table/{job_id}?page=1&page_size=10")
+    res = call(job_id, "dmp")
 
-    col_names = [c["name"] for c in res.json()["columns"]]
+    col_names = [c["key"] for c in res.json()["columns"]]
 
     assert "cpg_id" in col_names
     assert "206891110001_R01C01" in col_names
 
 
 def test_page_2_different_from_page_1(mock_job):
-    """Validiert die tatsächliche Pagination über mehrere Seiten."""
-
     job_id, _ = mock_job
 
-    res1 = client.get(f"/api/v1/table/{job_id}?page=1&page_size=10")
-    res2 = client.get(f"/api/v1/table/{job_id}?page=2&page_size=10")
+    res1 = call(job_id, "dmp", page=1)
+    res2 = call(job_id, "dmp", page=2)
 
-    assert res1.json()["data"][0]["cpg_id"] != res2.json()["data"][0]["cpg_id"]
-
-
-def test_page_size_too_large(mock_job):
-    """
-    Große page_size-Werte sollen serverseitig begrenzt werden,
-    um Speicher- und Transferkosten kontrollierbar zu halten.
-    """
-
-    job_id, _ = mock_job
-
-    res = client.get(f"/api/v1/table/{job_id}?page_size=501")
-
-    assert res.status_code == 400
+    assert res1.json()["data"] != res2.json()["data"]
 
 
-def test_job_not_found(mock_job, tmp_path):
-    """Nicht existierende Jobs müssen konsistent 404 liefern."""
-
+def test_job_not_found(tmp_path):
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        res = client.get("/api/v1/table/nicht-vorhanden-xyz")
+
+        res = client.get(
+            "/api/v1/table/nicht-vorhanden-xyz",
+            params={"table": "dmp"}
+        )
 
         assert res.status_code == 404
 
 
-def test_data_not_ready(mock_job, tmp_path):
-    """
-    Falls der Job existiert, aber noch keine output.csv erzeugt wurde,
-    wird ein 'data not ready'-Zustand erwartet.
-    """
+def test_data_not_ready(tmp_path):
 
     job_id = "job-ohne-csv"
-
     (tmp_path / job_id).mkdir()
 
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        res = client.get(f"/api/v1/table/{job_id}")
+
+        res = client.get(
+            f"/api/v1/table/{job_id}",
+            params={"table": "dmp"}
+        )
 
         assert res.status_code == 409
