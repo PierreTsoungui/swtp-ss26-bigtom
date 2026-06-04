@@ -4,8 +4,8 @@ import { AnalysisPage } from './features/analysis/AnalysisPage';
 import {NormalizationPage} from "./features/normalisation/NormalizationPage.tsx";
 import { AppLayout } from './shared/layout/AppLayout';
 import { DatenschutzPage } from './shared/pages/DatenschutzPage';
-import BatchPage from './features/batch/BatchPage';
 import "./App.css";
+import {BatchPage} from "./features/batch/BatchPage.tsx";
 
 
 /**

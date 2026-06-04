@@ -3,6 +3,16 @@ export interface BatchSettings {
   covariates: string[];
 }
 
+export interface BatchParametersResponse {
+  job_id: string;
+  eligible_columns: string[];
+}
+
+export interface BatchFormData {
+  batch_variable: string;
+  covariates: string[];
+}
+
 export interface BatchRound {
   round: number;
   timestamp: string;

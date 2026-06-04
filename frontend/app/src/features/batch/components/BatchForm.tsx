@@ -1,193 +1,158 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from "react";
+import type { BatchFormData, BatchParametersResponse } from "../utils/types";
+import {
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    TextField,
+    Autocomplete,
+    Chip,
+    Box,
+} from "@mui/material";
 
 interface BatchFormProps {
-  onExecuteBatch: (settings: any) => void;
-  onSkipToAnalysis: () => void;
-  disabled: boolean;
-  backendError: any; // Der Fehler vom Server
+    parameters: BatchParametersResponse;
+    onSubmit: (data: BatchFormData) => void;
+    isLoading?: boolean;
+    onSkip?: () => void;
 }
 
-export const BatchForm: React.FC<BatchFormProps> = ({ 
-  onExecuteBatch, 
-  onSkipToAnalysis, 
-  disabled, 
-  backendError 
-}) => {
-  const [batchVariable, setBatchVariable] = useState('');
-  const [covariatesInput, setCovariatesInput] = useState('');
-  
-  // Getrennte lokale Fehlerzustände für die Felder
-  const [batchError, setBatchError] = useState<string | null>(null);
-  const [covariatesError, setCovariatesError] = useState<string | null>(null);
-  const [generalFormError, setGeneralFormError] = useState<string | null>(null);
+export function BatchForm({
+                              parameters,
+                              onSubmit,
+                              isLoading = false,
+                              onSkip,
+                          }: BatchFormProps) {
+    const [batchVariable, setBatchVariable] = useState<string>("");
+    const [covariates, setCovariates] = useState<string[]>([]);
 
-  // ── BACKEND-FEHLER PARSEN UND ZUORDNEN ─────────────────────────────────────
-  useEffect(() => {
-      setBatchError(null);
-      setCovariatesError(null);
-      setGeneralFormError(null);
+    const handleBatchVariableChange = (value: string) => {
+        setBatchVariable(value);
+        // Entferne batch_variable aus covariates wenn sie ausgewählt ist
+        setCovariates(covariates.filter((c) => c !== value));
+    };
 
-      if (!backendError) return;
+    const handleCovariatesChange = (_event: any, newValue: string[]) => {
+        // Verhindere, dass die Batch Variable in Covariates aufgenommen wird
+        const filtered = newValue.filter((c) => c !== batchVariable);
+        setCovariates(filtered);
+    };
 
-      if (Array.isArray(backendError.detail)) {
-        backendError.detail.forEach((err: any) => {
-          const path = err.loc?.join('.') || '';
-          if (path.includes('batch_variable')) {
-            setBatchError(`Invalid input: ${err.msg}`);
-          } else if (path.includes('covariates')) {
-            setCovariatesError(`Invalid input: ${err.msg}`);
-          } else {
-            setGeneralFormError(err.msg);
-          }
-        });
-        return;
-      }
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!batchVariable) {
+            alert("Bitte wählen Sie eine Batch Variable aus");
+            return;
+        }
+        onSubmit({ batch_variable: batchVariable, covariates });
+    };
 
-      let errorMsg = 'An error occurred';
-      if (typeof backendError.detail === 'string') {
-        errorMsg = backendError.detail;
-      } else if (backendError.message) {
-        errorMsg = backendError.message;
-      } else if (typeof backendError.error === 'string') {
-        errorMsg = backendError.error;
-      }
+    return (
+        <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Batch Variable (Required) */}
+            <div className="space-y-3">
+                <label className="block text-sm font-semibold text-slate-900">
+                    Batch Variable <span className="text-red-500">*</span>
+                </label>
+                <p className="text-xs text-slate-500">
+                    Technischer Faktor der korrigiert werden soll
+                </p>
 
-      const errorType = backendError.error || '';
-      const lowerMsg = errorMsg.toLowerCase();
-
-      if (errorType.includes('BATCH') || lowerMsg.includes('batch') || lowerMsg.includes('variable')) {
-        setBatchError(errorMsg);
-      } else if (lowerMsg.includes('covariable') || lowerMsg.includes('covariate')) {
-        setCovariatesError(errorMsg);
-      } else {
-        setGeneralFormError(errorMsg);
-      }
-    }, [backendError]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setBatchError(null);
-    setCovariatesError(null);
-    setGeneralFormError(null);
-
-    if (!batchVariable.trim()) {
-      setBatchError('Please provide a batch variable.');
-      return;
-    }
-
-    const covariates = covariatesInput
-      .split(',')
-      .map((c) => c.trim())
-      .filter((c) => c.length > 0);
-
-    if (covariates.includes(batchVariable.trim())) {
-      setCovariatesError('The batch variable cannot be used as a covariate at the same time.');
-      return;
-    }
-
-    onExecuteBatch({
-      batch_correction: {
-        batch_variable: batchVariable.trim(),
-        covariates,
-      }
-    });
-  };
-
-  return (
-    <div style={{ padding: '20px', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#f9f9f9' }}>
-      <h3>Batch Parameters</h3>
-      <form onSubmit={handleSubmit}>
-        
-        {/* Feld 1: Batch-Variable */}
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="batch-variable" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-            Batch Variable (Required):
-          </label>
-          <input
-            id="batch-variable" // ◄── HIER FEHLTE DIE ID
-            type="text"
-            placeholder="e.g., Slide"
-            value={batchVariable}
-            onChange={(e) => setBatchVariable(e.target.value)}
-            disabled={disabled}
-            style={{ 
-              width: '100%', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              border: batchError ? '1px solid #dc3545' : '1px solid #ccc' 
-            }}
-          />
-          {batchError && (
-            <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '5px', fontWeight: '500' }}>
-              {batchError}
+                <FormControl fullWidth disabled={isLoading}>
+                    <InputLabel id="batch-variable-label">
+                        Bitte auswählen...
+                    </InputLabel>
+                    <Select
+                        labelId="batch-variable-label"
+                        id="batch-variable-select"
+                        value={batchVariable}
+                        label="Bitte auswählen..."
+                        onChange={(e) => handleBatchVariableChange(e.target.value)}
+                    >
+                        {parameters.eligible_columns.map((col) => (
+                            <MenuItem key={col} value={col}>
+                                {col}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
             </div>
-          )}
-        </div>
 
-        {/* Feld 2: Kovariablen */}
-        <div style={{ marginBottom: '15px' }}>
-          <label htmlFor="covariates" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
-            Covariates (Optional, comma-separated):
-          </label>
-          <input
-            id="covariates" // ◄── HIER FEHLTE DIE ID
-            type="text"
-            placeholder="e.g., Sample_Group, Age"
-            value={covariatesInput}
-            onChange={(e) => setCovariatesInput(e.target.value)}
-            disabled={disabled}
-            style={{ 
-              width: '100%', 
-              padding: '8px', 
-              borderRadius: '4px', 
-              border: covariatesError ? '1px solid #dc3545' : '1px solid #ccc' 
-            }}
-          />
-          {covariatesError && (
-            <div style={{ color: '#dc3545', fontSize: '14px', marginTop: '5px', fontWeight: '500' }}>
-              {covariatesError}
+            {/* Covariates (Optional Multi-Select) */}
+            <div className="space-y-3">
+                <label className="block text-sm font-semibold text-slate-900">
+                    Covariates (Optional)
+                </label>
+                <p className="text-xs text-slate-500">
+                    Biologische Gruppen die NICHT verändert werden dürfen. Mehrfachauswahl
+                    möglich.
+                </p>
+
+                <Autocomplete
+                    multiple
+                    id="covariates-autocomplete"
+                    options={parameters.eligible_columns.filter(
+                        (col) => col !== batchVariable
+                    )}
+                    value={covariates}
+                    onChange={handleCovariatesChange}
+                    disabled={isLoading}
+                    renderValue={(value, getTagProps) =>
+                        value.map((option, index) => (
+                            <Chip
+                                label={option}
+                                {...getTagProps({ index })}
+                            />
+                        ))
+                    }
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            placeholder={
+                                covariates.length === 0 ? "Covariates auswählen..." : ""
+                            }
+                        />
+                    )}
+                />
             </div>
-          )}
-        </div>
 
-        {/* Allgemeine Fehlermeldungen */}
-        {generalFormError && (
-          <div style={{ color: '#dc3545', marginBottom: '15px', fontSize: '14px', fontWeight: '500' }}>
-            {generalFormError}
-          </div>
-        )}
-        
-        {backendError?.detail?.available && (
-          <div style={{ padding: '10px', backgroundColor: '#fff3cd', color: '#856404', borderRadius: '4px', marginBottom: '15px', fontSize: '13px' }}>
-            <strong>Available columns in SampleSheet:</strong> {backendError.detail.available.join(', ')}
-          </div>
-        )}
+            {/* Info Box */}
+            <Box
+                className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4"
+            >
+                <p className="text-sm text-amber-900">
+                    <span className="font-semibold">ℹ️ Hinweis:</span> Die Covariates
+                    dürfen nicht identisch mit der Batch Variable sein, um biologische
+                    Signale zu erhalten.
+                </p>
+            </Box>
 
-        {/* Buttons */}
-        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-          <button
-            type="submit"
-            disabled={disabled}
-            style={{ 
-              flex: 1, padding: '10px', backgroundColor: '#28a745', color: 'white', 
-              border: 'none', borderRadius: '4px', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 'bold' 
-            }}
-          >
-            Batch
-          </button>
-          <button
-            type="button"
-            onClick={onSkipToAnalysis}
-            disabled={disabled}
-            style={{ 
-              flex: 1, padding: '10px', backgroundColor: '#1e7e34', color: 'white', 
-              border: 'none', borderRadius: '4px', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 'bold' 
-            }}
-          >
-            Skip
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-};
+            {/* Buttons */}
+            <div className="flex gap-4">
+                <button
+                    type="submit"
+                    disabled={!batchVariable || isLoading}
+                    className={`flex-1 px-6 py-3 rounded-lg font-semibold transition ${
+                        batchVariable && !isLoading
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                    }`}
+                >
+                    {isLoading ? "Korrektur läuft..." : "Korrektur starten"}
+                </button>
+
+                {onSkip && (
+                    <button
+                        type="button"
+                        onClick={onSkip}
+                        disabled={isLoading}
+                        className="flex-1 px-6 py-3 rounded-lg font-semibold border-2 border-slate-300 text-slate-700 hover:bg-slate-50 transition"
+                    >
+                        Überspringen
+                    </button>
+                )}
+            </div>
+        </form>
+    );
+}
