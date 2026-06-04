@@ -271,7 +271,8 @@ async def process_upload_background(
         print(f"[FILTERING] Job {job_id}: Filterung erfolgreich abgeschlossen")
           # NEU: Normalization Preview automatisch starten
         print(f"[PREVIEW] Job {job_id}: Starte Normalization Preview...")
-        await run_normalization_preview(job_id, str(job_dir))
+        sample_sheet_path = str(Path(job_dir) / sample_sheet_filename)
+        await run_normalization_preview(job_id, str(job_dir), sample_sheet_path)
         print(f"[PREVIEW] Job {job_id}: Normalization Preview abgeschlossen")
     except Exception as e:
        
