@@ -83,16 +83,31 @@ if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
 
 args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 2) {
-  emit_error("Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir>")
+if (length(args) < 3) {
+  emit_error("Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir> <sample_sheet.csv>")
 }
 
-rds_path <- args[1]
-job_dir  <- args[2]
+rds_path          <- args[1]
+job_dir           <- args[2]
+sample_sheet_path <- args[3]
 
 if (!file.exists(rds_path)) {
   emit_error("filtered_data.rds nicht gefunden")
 }
+
+# Sample Sheet einlesen - skippt [Header]-Block automatisch
+read_sample_sheet <- function(path) {
+  lines     <- readLines(path, warn = FALSE)
+  data_start <- grep("^\\[Data\\]", lines)
+  skip_n    <- if (length(data_start) > 0) data_start[1] else 0
+  read.csv(path, skip = skip_n, stringsAsFactors = FALSE, check.names = FALSE)
+}
+
+sample_sheet <- read_sample_sheet(sample_sheet_path)
+
+# Lookup-Tabelle: Array_ID -> Sample_Name
+sample_sheet$Array_ID <- paste0(sample_sheet$Sentrix_ID, "_", sample_sheet$Sentrix_Position)
+id_to_name <- setNames(sample_sheet$Sample_Name, sample_sheet$Array_ID)
 
 # ------------------------------------------------------------
 # LOAD FILTERED RGChannelSet
@@ -185,148 +200,70 @@ make_density_plot <- function(
 # PCA PLOT
 # ------------------------------------------------------------
 
-make_pca_plot <- function(
-  beta_values,
-  filename,
-  title
-) {
+make_pca_plot <- function(beta_values, filename, title, sample_labels = NULL) {
   if (is.null(beta_values) || ncol(beta_values) < 3) {
-    stop(
-      paste(
-        "PCA plot requires at least 3 samples"
-      )
-    )
+    stop("PCA plot requires at least 3 samples")
   }
-
-  # ----------------------------------------------------------
-  # CLEAN INVALID VALUES
-  # ----------------------------------------------------------
 
   beta_values[!is.finite(beta_values)] <- NA
+  beta_values <- beta_values[complete.cases(beta_values), ]
 
-  beta_values <- beta_values[
-    complete.cases(beta_values),
-  ]
+  var_filter <- apply(beta_values, 1, var, na.rm = TRUE)
+  beta_values <- beta_values[var_filter > 1e-6, ]
 
-  var_filter <- apply(
-    beta_values,
-    1,
-    var,
-    na.rm = TRUE
-  )
+  if (nrow(beta_values) < 10) stop("Not enough valid CpGs remaining for PCA")
+  if (ncol(beta_values) < 2)  stop("Not enough samples for PCA")
 
-  beta_values <- beta_values[
-    var_filter > 1e-6,
-  ]
-
-  if (nrow(beta_values) < 10) {
-    stop(
-      "Not enough valid CpGs remaining for PCA"
-    )
-  }
-  if (ncol(beta_values) < 2) {
-    stop(
-      "Not enough samples for PCA"
-    )
-  }
   if (nrow(beta_values) > MAX_PROBES_FOR_PCA) {
     set.seed(123)
-
-    idx <- sample(
-      1:nrow(beta_values),
-      MAX_PROBES_FOR_PCA
-    )
-
+    idx <- sample(1:nrow(beta_values), MAX_PROBES_FOR_PCA)
     beta_values <- beta_values[idx, ]
   }
 
-  pca <- prcomp(
-    t(beta_values),
-    center = TRUE,
-    scale. = FALSE
-  )
+  pca <- prcomp(t(beta_values), center = TRUE, scale. = FALSE)
 
-  var_exp <- round(
-    (pca$sdev^2 / sum(pca$sdev^2)) * 100,
-    1
-  )
+  var_exp <- round((pca$sdev^2 / sum(pca$sdev^2)) * 100, 1)
 
-  sample_names <- colnames(beta_values)
-
-  if (is.null(sample_names)) {
-    sample_names <- paste0(
-      "Sample_",
-      1:ncol(beta_values)
-    )
+  # Sample-Labels: Parameter nutzen, sonst Spaltennamen, sonst generisch
+  labels_to_use <- if (!is.null(sample_labels) && length(sample_labels) == ncol(beta_values)) {
+    sample_labels
+  } else {
+    colnames(beta_values)
   }
 
-  # ----------------------------------------------------------
-  # DATAFRAME
-  # ----------------------------------------------------------
+  if (is.null(labels_to_use)) {
+    labels_to_use <- paste0("Sample_", seq_len(ncol(beta_values)))
+  }
 
   plot_data <- data.frame(
-    PC1 = pca$x[, 1],
-    PC2 = pca$x[, 2],
-    Sample = sample_names
+    PC1    = pca$x[, 1],
+    PC2    = pca$x[, 2],
+    Sample = labels_to_use
   )
 
-  # ----------------------------------------------------------
-  # PCA PLOT
-  # ----------------------------------------------------------
-
-  p <- ggplot(
-    plot_data,
-    aes(
-      x = PC1,
-      y = PC2,
-      color = Sample
-    )
-  ) +
-    geom_point(
-      size = 3,
-      alpha = 0.85
-    ) +
+  p <- ggplot(plot_data, aes(x = PC1, y = PC2, color = Sample)) +
+    geom_point(size = 3, alpha = 0.85) +
     geom_text(
       aes(label = Sample),
-      vjust = -0.8,
-      size = 3,
+      vjust    = -0.8,
+      size     = 3,
+      check_overlap = TRUE,
       show.legend = FALSE
     ) +
     labs(
       title = paste(title, "- PCA Plot"),
-      x = paste0(
-        "PC1 (",
-        var_exp[1],
-        "%)"
-      ),
-      y = paste0(
-        "PC2 (",
-        var_exp[2],
-        "%)"
-      )
+      x = paste0("PC1 (", var_exp[1], "%)"),
+      y = paste0("PC2 (", var_exp[2], "%)")
     ) +
     theme_minimal() +
     theme(
-      plot.title = element_text(
-        size = 14,
-        face = "bold"
-      ),
-      axis.title = element_text(
-        size = 12
-      ),
+      plot.title = element_text(size = 14, face = "bold"),
+      axis.title = element_text(size = 12),
       legend.position = "none"
     ) +
-    scale_color_brewer(
-      palette = "Set2"
-    )
+    scale_color_brewer(palette = "Set2")
 
-  ggsave(
-    filename,
-    plot = p,
-    width = 8,
-    height = 6,
-    dpi = 150
-  )
+  ggsave(filename, plot = p, width = 8, height = 6, dpi = 150)
 }
 
 # ------------------------------------------------------------
@@ -368,7 +305,17 @@ run_method <- function(
     # BETA EXTRACTION
     # ------------------------------------------------------
 
-    beta <- getBeta(normalized)
+    beta <- as.matrix(getBeta(normalized))   # <-- as.matrix() hier!
+
+    # Sample-Namen über Array_ID aus dem Sample Sheet nachschlagen
+    array_ids <- colnames(beta)
+    emit_progress(base_pct + 1, paste0("Array IDs: ", paste(array_ids, collapse=", ")))
+    emit_progress(base_pct + 1, paste0("Lookup Namen: ", paste(id_to_name[array_ids], collapse=", ")))
+    sample_labels <- ifelse(
+      array_ids %in% names(id_to_name),
+      id_to_name[array_ids],
+      array_ids                              # Fallback: Array-ID wenn nicht gefunden
+    )
 
     tryCatch({
       emit_progress(base_pct + 3, paste0(method_name, ": Generiere Density-Plot..."))
@@ -389,11 +336,7 @@ run_method <- function(
 
     tryCatch({
       emit_progress(base_pct + 6, paste0(method_name, ": Generiere PCA-Plot..."))
-      make_pca_plot(
-        beta,
-        pca_filename,
-        method_name
-      )
+      make_pca_plot(beta, pca_filename, method_name, sample_labels = sample_labels)
     }, error = function(e) {
       emit_progress(base_pct + 6, paste0("Hinweis: PCA-Plot fehlgeschlagen für ", method_name))
       create_error_png(
