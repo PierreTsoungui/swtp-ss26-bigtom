@@ -36,9 +36,8 @@ def mock_job(tmp_path):
 
 def call(job_id, table, page=1):
     return client.get(
-        f"/api/v1/table/{job_id}",
+        f"/api/v1/table/{job_id}/{table}",
         params={
-            "table": table,
             "page": page
         }
     )
@@ -96,8 +95,8 @@ def test_job_not_found(tmp_path):
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
 
         res = client.get(
-            "/api/v1/table/nicht-vorhanden-xyz",
-            params={"table": "dmp"}
+            "/api/v1/table/nicht-vorhanden-xyz/dmp",
+          
         )
 
         assert res.status_code == 404
@@ -111,8 +110,8 @@ def test_data_not_ready(tmp_path):
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
 
         res = client.get(
-            f"/api/v1/table/{job_id}",
-            params={"table": "dmp"}
+            f"/api/v1/table/{job_id}/dmp",
+           
         )
 
         assert res.status_code == 409

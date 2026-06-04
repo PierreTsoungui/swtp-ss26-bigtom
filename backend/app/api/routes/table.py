@@ -4,7 +4,7 @@ from app.services.table_handler import get_table_data
 router = APIRouter()
 
 
-@router.get("/table/{job_id}")
+@router.get("/table/{job_id}/{table}")
 def get_table(
     job_id: str,
     table: str,
