@@ -6,7 +6,8 @@ from fastapi.responses import FileResponse
 from app.core.error_types import BatchException, ErrorTypes
 from app.models.batch import (
     BatchHistoryResponse, BatchRunResponse, 
-    BatchSkipResponse, BatchSettingsPayload
+    BatchSkipResponse, BatchSettingsPayload,
+    BatchOptionsResponse
 )
 from app.services import batch_service, job_manager
 
@@ -103,4 +104,23 @@ def skip_batch_correction(job_id: str, background_tasks: BackgroundTasks):
     return {
         "job_id": job_id,
         "status": "running"
+    }
+
+
+@router.get("/{job_id}/batch-options", response_model=BatchOptionsResponse)
+def get_batch_options(job_id: str):
+    """
+    Gibt alle verfügbaren Spalten des Samplesheets für die Dropdowns im Frontend zurück.
+    """
+    # 1. Job-Verzeichnis holen (wirft automatisch 404 bei JOB_NOT_FOUND)
+    job_dir = batch_service.get_job_dir_or_404(job_id)
+    
+    # 2. Spalten über den aktualisierten Service auslesen
+    # (wirft automatisch SAMPLE_SHEET_NOT_FOUND falls Datei fehlt)
+    available_cols = batch_service.get_available_columns_from_samplesheet(job_dir)
+    
+    # 3. Antwort an Maxim (Frontend) schicken
+    return {
+        "job_id": job_id,
+        "available_columns": available_cols
     }

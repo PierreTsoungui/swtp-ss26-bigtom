@@ -7,6 +7,7 @@ import glob
 import os
 from typing import Optional
 import glob
+import csv
 
 from app.core.error_types import BatchException, ErrorTypes
 from app.services.r_executor import run_r_script
@@ -52,10 +53,6 @@ def save_history(job_dir: Path, data: dict):
     history_file = job_dir / "batch_history.json"
     with open(history_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
-
-def get_available_columns_from_samplesheet(job_dir: Path) -> list:
-    """Mock-Logik: Spalten, die real in deinem Samplesheet stehen."""
-    return ["Sample_Group", "Sentrix_ID", "Sentrix_Position", "Slide"]
 
 def set_job_status(job_id: str, status_str: str, phase_str: Optional[str] = None):
     """Aktualisiert Job-Status im Memory und printi zu Logging."""
@@ -201,3 +198,81 @@ def find_sample_sheet_name(job_dir: str) -> str:
     if not matches:
         raise FileNotFoundError(f"Kein SampleSheet in {job_dir} gefunden")
     return Path(matches[0]).name 
+
+def get_available_columns_from_samplesheet(job_dir: Path) -> list:
+    """
+    Sucht das Samplesheet, parst die Datenzeilen und gibt NUR Spalten zurück,
+    die statistisch für ComBat geeignet sind (>= 2 Levels und < Anzahl Proben).
+    """
+    try:
+        sample_sheet_name = find_sample_sheet_name(str(job_dir))
+        sheet_path = job_dir / sample_sheet_name
+    except FileNotFoundError:
+        raise BatchException(
+            ErrorTypes.SAMPLE_SHEET_NOT_FOUND,
+            detail=f"Es wurde kein Samplesheet im Verzeichnis für Job '{job_dir.name}' gefunden."
+        )
+
+    try:
+        with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        # 1. [Data] Sektion finden
+        data_index = -1
+        for i, line in enumerate(lines):
+            if "[Data]" in line:
+                data_index = i
+                break
+
+        # Slicing ab [Data]+1, falls nicht gefunden nehmen wir die ganze Datei
+        data_lines = lines[data_index + 1:] if data_index != -1 else lines
+        # Bereinigen von reinen Leerzeilen am Ende der Datei
+        data_lines = [line.strip() for line in data_lines if line.strip()]
+
+        if not data_lines:
+            return []
+
+        # 2. Trennzeichen ermitteln & CSV-Reader aufsetzen
+        header_line = data_lines[0]
+        delimiter = ";" if ";" in header_line else ","
+        
+        reader = csv.reader(data_lines, delimiter=delimiter)
+        rows = list(reader)
+        
+        headers = [h.strip() for h in rows[0] if h.strip()]
+        data_rows = rows[1:]
+        total_samples = len(data_rows)
+
+        if total_samples == 0:
+            return []
+
+        # 3. Werte pro Spalte sammeln (nur befüllte Werte zählen)
+        num_cols = len(headers)
+        col_values = {i: set() for i in range(num_cols)}
+
+        for row in data_rows:
+            # Falls Zeilen unvollständig sind, mit Leerstrings auffüllen
+            while len(row) < num_cols:
+                row.append("")
+            for i in range(num_cols):
+                val = row[i].strip()
+                if val:  # Ignoriere leere Zellen
+                    col_values[i].add(val)
+
+        # 4. Filter-Logik nach ComBat-Kriterien anwenden
+        eligible_columns = []
+        for i, header in enumerate(headers):
+            unique_count = len(col_values[i])
+            
+            # REGEL 1: Mindestens 2 verschiedene Werte nötig (verhindert leere/konstante Spalten)
+            # REGEL 2: Weniger eindeutige Werte als Gesamtproben (verhindert eindeutige IDs wie Sample_Name)
+            if 2 <= unique_count < total_samples:
+                eligible_columns.append(header)
+
+        return eligible_columns
+
+    except Exception as e:
+        raise BatchException(
+            ErrorTypes.INVALID_CSV_CONTENT,
+            detail=f"Das Samplesheet konnte nicht statistisch validiert werden: {str(e)}"
+        )
