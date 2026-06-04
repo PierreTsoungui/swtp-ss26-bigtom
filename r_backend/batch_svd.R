@@ -80,6 +80,7 @@ if (length(args) < 3) {
 beta_path         <- normalizePath(args[1], mustWork = FALSE)
 sample_sheet_path <- normalizePath(args[2], mustWork = FALSE)
 job_dir           <- normalizePath(args[3], mustWork = FALSE)
+plot_name         <- if (length(args) >= 4) args[4] else "svd_plot.png"
 
 dir.create(job_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -93,6 +94,13 @@ if (!file.exists(beta_path)) {
 }
 
 beta <- readRDS(beta_path)
+
+# Falls es ein Bioconductor/minfi S4-Objekt ist, die Beta-Matrix korrekt extrahieren
+if (isS4(beta)) {
+  log_msg("debug", "S4 object detected, extracting beta values using minfi", "load_beta")
+  beta <- minfi::getBeta(beta)
+}
+
 beta <- as.matrix(beta)
 
 if (nrow(beta) == 0 || ncol(beta) == 0) {
@@ -166,10 +174,26 @@ if (nlevels(samples$Sample_Group) < 2) {
   exit_with_error("Need >= 2 groups in Sample_Group", "validate_groups")
 }
 
-#' ── PCA (SVD-ähnliche Zerlegung der Methylationsmatrix) ───────────────────────
-log_msg("running", "computing PCA", "svd")
+#' ── PCA (SVD-Zerlegung mit ChAMP & EPICv2 Optimierung) ────────────────────────
+log_msg("running", "computing PCA with feature selection", "svd")
 
-pca    <- prcomp(t(beta), center = TRUE, scale. = FALSE)
+# FIX (Issue 4): EPICv2 Skalierbarkeit & Memory-Overflow Schutz
+# Zur Vermeidung von Out-of-Memory (OOM) Fehlern bei großen Matrizen nutzen wir 
+# die 50.000 variabelsten Sonden (Standard-Bioinformatik-Methodik analog zu ChAMP).
+max_probes <- 50000
+if (nrow(beta) > max_probes) {
+  log_msg("debug", paste("Subsampling matrix from", nrow(beta), "to top", max_probes, "highly variable probes."), "svd")
+  # Superschnelle, vektorisierte Varianzberechnung ohne externe Abhängigkeiten: Var = E[X^2] - E[X]^2
+  row_vars <- rowMeans(beta^2) - rowMeans(beta)^2
+  top_probes <- order(row_vars, decreasing = TRUE)[1:max_probes]
+  beta_for_pca <- beta[top_probes, , drop = FALSE]
+} else {
+  beta_for_pca <- beta
+}
+
+# FIX (Issue 3): Ausrichtung an ChAMP-Referenz-SVD. 
+# Prcomp auf zentrierten, aber unskalierten Beta-Werten entspricht exakt der mathematischen Basis von champ.SVD().
+pca    <- prcomp(t(beta_for_pca), center = TRUE, scale. = FALSE)
 n_pcs  <- min(10, ncol(pca$x))
 pcs    <- pca$x[, seq_len(n_pcs), drop = FALSE]
 
@@ -177,23 +201,31 @@ var_explained <- round(100 * pca$sdev[seq_len(n_pcs)]^2 / sum(pca$sdev^2), 1)
 
 #' ── Technische Variablen bestimmen ────────────────────────────────────────────
 #'
-#' Extraktion potenzieller Batch-Effekte aus Sample Sheet.
+#' Extraktion potenzieller Batch-Effekte aus dem Sample Sheet unter strenger Whitelist-Kontrolle.
 tech_vars <- list()
 
-tech_vars[["Slide"]] <- as.integer(factor(samples$Sentrix_ID))
-tech_vars[["Array"]] <- as.integer(factor(samples$Sentrix_Position))
+# FIX (Issue 2): Einführung einer strikten Whitelist für technische Variablen
+tech_whitelist <- c("Sentrix_ID", "Sentrix_Position", "Sample_Well", "Sample_Plate", 
+                    "Pool_ID", "Batch", "Run", "Box", "Plate", "Processing_Date")
 
-if ("Sample_Well" %in% colnames(samples) &&
-    length(unique(samples$Sample_Well)) > 1) {
+# Standard-Illumina Batch-Faktoren zuweisen
+tech_vars[["Slide (Sentrix_ID)"]] <- as.integer(factor(samples$Sentrix_ID))
+tech_vars[["Array (Sentrix_Position)"]] <- as.integer(factor(samples$Sentrix_Position))
+
+if ("Sample_Well" %in% colnames(samples) && length(unique(samples$Sample_Well)) > 1) {
   tech_vars[["Sample_Well"]] <- as.integer(factor(samples$Sample_Well))
 }
+if ("Sample_Plate" %in% colnames(samples) && length(unique(samples$Sample_Plate)) > 1) {
+  tech_vars[["Sample_Plate"]] <- as.integer(factor(samples$Sample_Plate))
+}
 
-tech_vars[["Sample_Group"]] <- as.integer(samples$Sample_Group)
-
+# FIX (Issue 1 & 2): Nur Variablen auf der Whitelist zulassen. 
+# Sample_Group wird hier konsequent ausgeschlossen und als "biologisch geschützt" markiert.
+extra_candidates <- intersect(colnames(samples), tech_whitelist)
 extra_candidates <- setdiff(
-  colnames(samples),
+  extra_candidates,
   c("Sentrix_ID", "Sentrix_Position", "Array_ID", "Sample_Group",
-    "Sample_Well", "Sample_Name", "Sample_ID")
+    "Sample_Well", "Sample_Plate", "Sample_Name", "Sample_ID")
 )
 
 for (col in extra_candidates) {
@@ -201,6 +233,12 @@ for (col in extra_candidates) {
   if (length(unique(v[!is.na(v)])) >= 2) {
     tech_vars[[col]] <- as.integer(factor(v))
   }
+}
+
+# FIX (Issue 5): Fachliche Testvalidierung direkt im Code verankert.
+# Falls Sample_Group durch Fehlkonfigurationen hier landet, bricht das Skript kontrolliert ab.
+if ("Sample_Group" %in% names(tech_vars)) {
+  exit_with_error("Fachlicher Validierungsfehler: Biologische 'Sample_Group' darf nicht in die SVD-Batchanalyse einfließen!", "validate_tech_vars")
 }
 
 #' ── Kruskal-Wallis p-Werte berechnen ─────────────────────────────────────────
@@ -263,19 +301,22 @@ color_mat <- matrix(
 )
 
 #' ── SVD-Assoziationsplot erzeugen ─────────────────────────────────────────────
-plot_path <- file.path(job_dir, "svd_plot.png")
+plot_path <- file.path(job_dir, plot_name)
 
 n_vars <- nrow(pval_mat)
 n_pcs_plot <- n_pcs
 
-img_w <- max(900,  120 * n_pcs_plot + 300)
-img_h <- max(600,  120 * n_vars + 300)
+# Puffer erhöht: Grundbreite von 900 auf 1100 und extra Abstand für die Ränder
+img_w <- max(1100, 120 * n_pcs_plot + 450)
+img_h <- max(650,  120 * n_vars + 350)
 
 png(plot_path, width = img_w, height = img_h, res = 150)
 on.exit(dev.off(), add = TRUE)
 
 par(
-  mar = c(6, 9, 5, 12),
+  # mar = c(Unten, Links, Oben, Rechts)
+  # Links von 9 auf 16 erhöht, damit "Array (Sentrix_Position)" perfekt hinpasst!
+  mar = c(6, 16, 5, 13),
   xpd = TRUE
 )
 
@@ -301,6 +342,21 @@ for (r in seq_len(n_vars)) {
       border = "white",
       lwd = 1.5
     )
+    
+    # P-Wert als Text in die Kachel schreiben
+    p_val <- pval_mat[r, c]
+    if (!is.na(p_val)) {
+      p_text <- if (p_val < 0.001) formatC(p_val, format = "e", digits = 1) else sprintf("%.3f", p_val)
+      text_col <- if (p_val < 1e-5) "white" else "black"
+      
+      text(
+        x = c, 
+        y = r, 
+        labels = p_text, 
+        col = text_col, 
+        cex = 0.7
+      )
+    }
   }
 }
 

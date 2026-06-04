@@ -13,7 +13,7 @@ ALLOWED_IDAT_EXTENSIONS = {".idat"}
 ALLOWED_SHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
 
-MAX_TOTAL_SIZE = 200 * 1024 * 1024  # 200 MB (mehr als genug für 30 MB + Puffer)
+MAX_TOTAL_SIZE = 600 * 1024 * 1024  # 200 MB (mehr als genug für 30 MB + Puffer)
 MAX_SAMPLE_SHEET_SIZE = 10 * 1024 * 1024
 
 # ==================== HILFSFUNKTIONEN ====================

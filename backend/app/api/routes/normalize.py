@@ -5,6 +5,8 @@ from app.services.r_executor import run_r_script
 from app.core.error_types import ErrorTypes, problem_detail
 from app.models.job import NormalizeRequest, NormalizeResponse
 from datetime import datetime
+import glob
+from pathlib import Path
 router = APIRouter()
 
 
@@ -109,19 +111,26 @@ async def start_normalization(
 
 
 async def run_normalization_background(job_id: str, job_dir: str, method: str):
-    """Führt Normalisierung im Hintergrund aus und berechnet danach den initialen SVD-Plot (Runde 0)"""
-    
-    async def on_progress(progress_data: dict):
-        update_job(
-            job_id,
-            status="running",
-            phase="normalizing",
-            progress_percent=int(progress_data.get("progress", 0) * 0.9), # Skalierung auf 90%, da SVD noch folgt
-            current_step=progress_data.get("step", "Normalisierung läuft...")
-        )
-    
+
+    async def on_progress(data: dict):
+        if data.get("type") == "progress":
+            update_job(
+                job_id,
+                status="running",
+                phase="normalizing",
+                progress_percent=int(data["percent"] * 0.9),
+                current_step=data["message"]
+            )
+        elif data.get("status") == "failed":
+            update_job(
+                job_id,
+                status="failed",
+                phase="normalizing",
+                current_step=data.get("current_step"),
+                error=data.get("error")
+            )
+
     try:
-        # 1. Schritt: Normalisierung ausführen
         result = await run_r_script(
             script="normalize.R",
             job_id=job_id,
@@ -131,7 +140,7 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             script_args=[method],
             on_progress=on_progress
         )
-        
+
         if result["returncode"] != 0:
             update_job(
                 job_id,
@@ -140,8 +149,7 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
                 error_message=result.get("stderr", "Normalisierung fehlgeschlagen")
             )
             return
-        
-        # 2. Schritt: Initialen SVD-Plot generieren (Runde 0 = Unkorrigiert)
+
         round_zero_file = "svd_plot_0.png"
         update_job(
             job_id,
@@ -150,12 +158,12 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             progress_percent=95,
             current_step="Generiere initialen SVD-Plot (Runde 0)..."
         )
-        
-        # Argumente für das R-Skript vorbereiten: job_dir, input_rds, output_png, batch_var
-        svd_args = [job_dir, "normalized_data.rds", round_zero_file, "none"]
-        
+
+        sample_sheet_name = find_sample_sheet_name(job_dir)
+        svd_args = ["normalized_data.rds", sample_sheet_name, round_zero_file]
+
         svd_result = await run_r_script(
-            script="generate_svd_plot.R",
+            script="batch_svd.R",
             job_id=job_id,
             job_dir=job_dir,
             sample_sheet="",
@@ -163,17 +171,16 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             script_args=svd_args,
             on_progress=None
         )
-        
+
         if svd_result["returncode"] != 0:
             update_job(
                 job_id,
                 status="failed",
                 phase="normalizing",
-                error_message=svd_result.get("stderr", "SVD-Plot-Generierung für Runde 0 fehlgeschlagen")
+                error_message=svd_result.get("stderr", "SVD-Plot-Generierung fehlgeschlagen")
             )
             return
 
-        # 3. Schritt: Batch-Historie für Runde 0 (Baseline) aufbauen
         initial_round = {
             "round_number": 0,
             "plot_file": round_zero_file,
@@ -181,21 +188,16 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             "covariates": [],
             "timestamp": datetime.now().isoformat()
         }
-        
-        batch_history = {
-            "rounds": [initial_round]
-        }
-        
-        # Pipeline-Status auf die Batch-Phase umstellen
+
         update_job(
             job_id,
-            status="ready_for_batch",  # Signalisiert dem Frontend: Formular und Plot anzeigen!
+            status="ready_for_batch",
             phase="batch_correction",
             progress_percent=100,
             current_step="Normalisierung abgeschlossen. Bereit für Batch-Effekt-Korrektur.",
-            batch_history=batch_history
+            batch_history={"rounds": [initial_round]}
         )
-        
+
     except Exception as e:
         update_job(
             job_id,
@@ -203,3 +205,9 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             phase="normalizing",
             error_message=str(e)
         )
+
+def find_sample_sheet_name(job_dir: str) -> str:
+    matches = glob.glob(str(Path(job_dir) / "*SampleSheet*.csv"))
+    if not matches:
+        raise FileNotFoundError(f"Kein SampleSheet in {job_dir} gefunden")
+    return Path(matches[0]).name
