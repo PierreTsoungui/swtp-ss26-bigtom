@@ -5,6 +5,8 @@ from app.services.r_executor import run_r_script
 from app.core.error_types import ErrorTypes, problem_detail
 from app.models.job import NormalizeRequest, NormalizeResponse
 from datetime import datetime
+import glob
+from pathlib import Path
 router = APIRouter()
 
 
@@ -157,7 +159,8 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             current_step="Generiere initialen SVD-Plot (Runde 0)..."
         )
 
-        svd_args = [job_dir, "normalized_data.rds", round_zero_file, "none"]
+        sample_sheet_name = find_sample_sheet_name(job_dir)
+        svd_args = ["normalized_data.rds", sample_sheet_name, round_zero_file]
 
         svd_result = await run_r_script(
             script="batch_svd.R",
@@ -202,3 +205,9 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
             phase="normalizing",
             error_message=str(e)
         )
+
+def find_sample_sheet_name(job_dir: str) -> str:
+    matches = glob.glob(str(Path(job_dir) / "*SampleSheet*.csv"))
+    if not matches:
+        raise FileNotFoundError(f"Kein SampleSheet in {job_dir} gefunden")
+    return Path(matches[0]).name

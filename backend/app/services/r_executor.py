@@ -30,11 +30,13 @@ async def run_r_script(
     # COMMANDS
     # ------------------------------------------------------------
     if mode == "normalization_preview":
+        docker_sample_sheet = f"{docker_job_dir}/{Path(sample_sheet).name}"
         cmd = [
             "docker", "exec", R_WORKER_CONTAINER,
             "Rscript", script_path,
             f"{docker_job_dir}/filtered_data.rds",
-            docker_job_dir
+            docker_job_dir,
+            docker_sample_sheet
         ]
     elif mode == "batch_correction":
         cmd = [
@@ -43,12 +45,30 @@ async def run_r_script(
             docker_job_dir,
             *script_args
         ]
-    elif mode == "svd_plot":
+    elif mode == "batch_init":
+        beta_file         = script_args[0]  # "normalized_data.rds"
+        sample_sheet_file = script_args[1]  # "Demo_...SampleSheet.csv"
+        plot_name         = script_args[2]  # "svd_plot_0.png"
         cmd = [
             "docker", "exec", R_WORKER_CONTAINER,
             "Rscript", script_path,
+            f"{docker_job_dir}/{beta_file}",
+            f"{docker_job_dir}/{sample_sheet_file}",
             docker_job_dir,
-            *script_args
+            plot_name
+        ]
+
+    elif mode == "svd_plot":
+        beta_file         = script_args[0]  # "corrected_data.rds"
+        sample_sheet_file = script_args[1]  # "Demo_...SampleSheet.csv"
+        plot_name         = script_args[2]  # "svd_plot_1.png"
+        cmd = [
+            "docker", "exec", R_WORKER_CONTAINER,
+            "Rscript", script_path,
+            f"{docker_job_dir}/{beta_file}",
+            f"{docker_job_dir}/{sample_sheet_file}",
+            docker_job_dir,
+            plot_name
         ]
     elif mode == "normalization":
         cmd = [
