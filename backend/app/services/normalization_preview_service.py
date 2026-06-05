@@ -3,7 +3,7 @@ from app.services.job_manager import get_job, update_job
 from app.services.r_executor import run_r_script
 from pathlib import Path
 
-async def run_normalization_preview(job_id: str, job_dir: str):
+async def run_normalization_preview(job_id: str, job_dir: str, sample_sheet_path: str):
     print(f"[PREVIEW] ====== START run_normalization_preview für {job_id} ======")
 
     job = get_job(job_id)
@@ -41,7 +41,7 @@ async def run_normalization_preview(job_id: str, job_dir: str):
             script="normalization_preview.R",
             job_id=job_id,
             job_dir=job_dir,
-            sample_sheet="",
+            sample_sheet=sample_sheet_path,
             mode="normalization_preview",
             on_progress=on_progress
         )
@@ -56,22 +56,18 @@ async def run_normalization_preview(job_id: str, job_dir: str):
             )
             return
 
-        # Plots direkt vom Disk lesen statt auf R-Events warten
         job_path = Path(job_dir)
         preview_plots = {}
 
         for png_file in sorted(job_path.glob("*.png")):
-            filename = png_file.name  # z.B. "density_noob.png"
+            filename = png_file.name
             parts = filename.replace(".png", "").split("_", 1)
             if len(parts) != 2:
                 continue
-
-            plot_kind = parts[0]   # "density" oder "pca"
-            method = parts[1]      # "noob", "quantile", etc.
-
+            plot_kind = parts[0]
+            method    = parts[1]
             if method not in preview_plots:
                 preview_plots[method] = []
-
             preview_plots[method].append({
                 "plot_kind": plot_kind,
                 "file": filename

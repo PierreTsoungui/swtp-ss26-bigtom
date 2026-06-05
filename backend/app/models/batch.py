@@ -30,3 +30,7 @@ class BatchRunResponse(BaseModel):
 class BatchSkipResponse(BaseModel):
     job_id: str
     status: str
+
+class BatchOptionsResponse(BaseModel):
+    job_id: str
+    available_columns: list[str]

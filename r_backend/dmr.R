@@ -109,8 +109,14 @@ if (!file.exists(beta_path)) {
 
 beta <- readRDS(beta_path)
 
+if (isS4(beta)) {
+  log_msg("running", "S4-Objekt erkannt, extrahiere Beta-Matrix via minfi", "load_beta")
+  suppressPackageStartupMessages(library(minfi))
+  beta <- minfi::getBeta(beta)
+}
+
 if (!is.matrix(beta)) {
-  exit_with_error("Beta must be a matrix", "validate_beta")
+  beta <- as.matrix(beta)
 }
 
 if (nrow(beta) == 0 || ncol(beta) == 0) {

@@ -6,6 +6,8 @@ import subprocess
 import glob
 import os
 from typing import Optional
+import glob
+import csv
 
 from app.core.error_types import BatchException, ErrorTypes
 from app.services.r_executor import run_r_script
@@ -52,10 +54,6 @@ def save_history(job_dir: Path, data: dict):
     with open(history_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-def get_available_columns_from_samplesheet(job_dir: Path) -> list:
-    """Mock-Logik: Spalten, die real in deinem Samplesheet stehen."""
-    return ["Sample_Group", "Sentrix_ID", "Sentrix_Position", "Slide"]
-
 def set_job_status(job_id: str, status_str: str, phase_str: Optional[str] = None):
     """Aktualisiert Job-Status im Memory und printi zu Logging."""
     print(f"[STATUS-UPDATE] Job {job_id} -> status: {status_str}, phase: {phase_str}", flush=True)
@@ -89,13 +87,16 @@ async def run_batch_pipeline_task(job_id: str, settings_dict: dict, next_round: 
 
         # 2. Schritt: SVD-Plot generieren
         print(f"[PIPELINE] Generiere SVD-Plot für Runde {next_round}...", flush=True)
+
+        sample_sheet_name = find_sample_sheet_name(str(job_dir))
+
         plot_result = await run_r_script(
             script="batch_svd.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet="",
             mode="svd_plot",
-            script_args=["corrected_data.rds", f"svd_plot_{next_round}.png", settings_dict["batch_variable"]]
+            script_args=["corrected_data.rds", sample_sheet_name, f"svd_plot_{next_round}.png"]
         )
         
         if plot_result.get("returncode") != 0:
@@ -127,14 +128,15 @@ async def run_batch_pipeline_task(job_id: str, settings_dict: dict, next_round: 
         print(f"[PIPELINE CRITICAL] Unerwarteter Fehler im Ablauf: {str(e)}", flush=True)
         set_job_status(job_id, status_str="failed")
 
-def run_downstream_analysis_workflow(job_id: str, job_dir: str):
+def run_downstream_analysis_workflow(job_id: str, job_dir_raw: str):
     """
     Extrahiert die Beta-Matrix (da Batch-Korrektur geskippt wurde)
-    und führt nacheinander die DMP- und DMR-Skripte aus.
+    und führt nacheinander die DMR- und danach die DMP-Skripte aus.
     """
     try:
-        # 1. Status auf "running" für die Downstream-Phase setzen
-        # batch_service.set_job_status(job_id, status_str="running", phase="downstream_analysis")
+        # FIX: Sicherstellen, dass job_dir ein Path-Objekt ist, sonst crashst du bei .glob()
+        job_dir = Path(job_dir_raw).resolve()
+        
         print(f"[PIPELINE] Starte Downstream-Analyse für Job {job_id}...")
 
         # 2. Dynamisch das SampleSheet im Job-Verzeichnis finden
@@ -144,11 +146,10 @@ def run_downstream_analysis_workflow(job_id: str, job_dir: str):
         sample_sheet_path = csv_files[0]
 
         # Pfade definieren
-        normalized_rds = os.path.join(job_dir, "normalized_data.rds")
-        beta_rds = os.path.join(job_dir, "beta.rds") # Das Erwartungsobjekt für DMP/DMR
+        normalized_rds = job_dir / "normalized_data.rds"
+        beta_rds = job_dir / "beta.rds"
 
-        # 3. BRIDGE-SCHRITT: Da ComBat geskippt wurde, extrahieren wir die Betas 
-        # direkt via schnellem R-Inline-Befehl aus der normalisierten RDS.
+        # 3. BRIDGE-SCHRITT: Beta-Extraktion
         print("[PIPELINE] Extrahiere Beta-Matrix aus normalisierten Daten...")
         r_inline_cmd = (
             f"library(minfi); "
@@ -157,33 +158,30 @@ def run_downstream_analysis_workflow(job_id: str, job_dir: str):
             f"saveRDS(beta, '{beta_rds}')"
         )
         
-        extract_proc = subprocess.run([
+        subprocess.run([
             "docker", "exec", "swtp-ss26-bigtom-r_worker-1", 
             "Rscript", "-e", r_inline_cmd
         ], capture_output=True, text=True, check=True)
 
-        # 4. DMP SKRIPT AUFRUFEN
-        # Argumente laut deinem Skript: <beta.rds> <sample_sheet.csv> <job_dir>
-        print("[PIPELINE] Starte DMP-Analyse (dmp.R)...")
-        dmp_cmd = [
-            "docker", "exec", "swtp-ss26-bigtom-r_worker-1", "Rscript",
-            "/app/r_backend/dmp.R", beta_rds, sample_sheet_path, job_dir
-        ]
-        subprocess.run(dmp_cmd, capture_output=True, text=True, check=True)
-        print("[PIPELINE] DMP-Analyse erfolgreich beendet. CSV generiert.")
-
-        # 5. DMR SKRIPT AUFRUFEN
-        # Argumente laut deinem Skript: <beta.rds> <sample_sheet.csv> <job_dir>
+        # 4. DMR SKRIPT AUFRUFEN (Logische Reihenfolge FIX: Muss zuerst laufen!)
+        # Erzeugt die dmr.rds im job_dir
         print("[PIPELINE] Starte DMR-Analyse (dmr.R)...")
         dmr_cmd = [
             "docker", "exec", "swtp-ss26-bigtom-r_worker-1", "Rscript",
-            "/app/r_backend/dmr.R", beta_rds, sample_sheet_path, job_dir
+            "/app/r_backend/dmr.R", str(beta_rds), str(sample_sheet_path), str(job_dir)
         ]
         subprocess.run(dmr_cmd, capture_output=True, text=True, check=True)
-        print("[PIPELINE] DMR-Analyse erfolgreich beendet. CSV generiert.")
+        print("[PIPELINE] DMR-Analyse erfolgreich beendet. CSV und rds generiert.")
 
-        # 6. Workflow erfolgreich beenden
-        # batch_service.set_job_status(job_id, status_str="completed", phase="done")
+        # 5. DMP SKRIPT AUFRUFEN (Nutzt jetzt die frisch erzeugte dmr.rds für die Regionen-Verknüpfung)
+        print("[PIPELINE] Starte DMP-Analyse (dmp.R)...")
+        dmp_cmd = [
+            "docker", "exec", "swtp-ss26-bigtom-r_worker-1", "Rscript",
+            "/app/r_backend/dmp.R", str(beta_rds), str(sample_sheet_path), str(job_dir)
+        ]
+        subprocess.run(dmp_cmd, capture_output=True, text=True, check=True)
+        print("[PIPELINE] DMP-Analyse erfolgreich beendet. Regionen verknüpft und CSV generiert.")
+
         print(f"[PIPELINE SUCCESS] Downstream-Analyse für Job {job_id} komplett abgeschlossen!")
 
     except subprocess.CalledProcessError as e:
@@ -192,6 +190,89 @@ def run_downstream_analysis_workflow(job_id: str, job_dir: str):
         print(f"[R-STDOUT] Grund:\n{e.stdout}", flush=True)
         print(f"[R-STDERR] (Warnungen & Logs):\n{e.stderr}", flush=True)
     except Exception as e:
-        # Sonstige Python/Datei-Fehler
-        # batch_service.set_job_status(job_id, status_str="failed", phase="none")
         print(f"[PIPELINE ERROR] Allgemeiner Fehler im Workflow: {str(e)}")
+
+
+def find_sample_sheet_name(job_dir: str) -> str:
+    matches = glob.glob(str(Path(job_dir) / "*SampleSheet*.csv"))
+    if not matches:
+        raise FileNotFoundError(f"Kein SampleSheet in {job_dir} gefunden")
+    return Path(matches[0]).name 
+
+def get_available_columns_from_samplesheet(job_dir: Path) -> list:
+    """
+    Sucht das Samplesheet, parst die Datenzeilen und gibt NUR Spalten zurück,
+    die statistisch für ComBat geeignet sind (>= 2 Levels und < Anzahl Proben).
+    """
+    try:
+        sample_sheet_name = find_sample_sheet_name(str(job_dir))
+        sheet_path = job_dir / sample_sheet_name
+    except FileNotFoundError:
+        raise BatchException(
+            ErrorTypes.SAMPLE_SHEET_NOT_FOUND,
+            detail=f"Es wurde kein Samplesheet im Verzeichnis für Job '{job_dir.name}' gefunden."
+        )
+
+    try:
+        with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+
+        # 1. [Data] Sektion finden
+        data_index = -1
+        for i, line in enumerate(lines):
+            if "[Data]" in line:
+                data_index = i
+                break
+
+        # Slicing ab [Data]+1, falls nicht gefunden nehmen wir die ganze Datei
+        data_lines = lines[data_index + 1:] if data_index != -1 else lines
+        # Bereinigen von reinen Leerzeilen am Ende der Datei
+        data_lines = [line.strip() for line in data_lines if line.strip()]
+
+        if not data_lines:
+            return []
+
+        # 2. Trennzeichen ermitteln & CSV-Reader aufsetzen
+        header_line = data_lines[0]
+        delimiter = ";" if ";" in header_line else ","
+        
+        reader = csv.reader(data_lines, delimiter=delimiter)
+        rows = list(reader)
+        
+        headers = [h.strip() for h in rows[0] if h.strip()]
+        data_rows = rows[1:]
+        total_samples = len(data_rows)
+
+        if total_samples == 0:
+            return []
+
+        # 3. Werte pro Spalte sammeln (nur befüllte Werte zählen)
+        num_cols = len(headers)
+        col_values = {i: set() for i in range(num_cols)}
+
+        for row in data_rows:
+            # Falls Zeilen unvollständig sind, mit Leerstrings auffüllen
+            while len(row) < num_cols:
+                row.append("")
+            for i in range(num_cols):
+                val = row[i].strip()
+                if val:  # Ignoriere leere Zellen
+                    col_values[i].add(val)
+
+        # 4. Filter-Logik nach ComBat-Kriterien anwenden
+        eligible_columns = []
+        for i, header in enumerate(headers):
+            unique_count = len(col_values[i])
+            
+            # REGEL 1: Mindestens 2 verschiedene Werte nötig (verhindert leere/konstante Spalten)
+            # REGEL 2: Weniger eindeutige Werte als Gesamtproben (verhindert eindeutige IDs wie Sample_Name)
+            if 2 <= unique_count < total_samples:
+                eligible_columns.append(header)
+
+        return eligible_columns
+
+    except Exception as e:
+        raise BatchException(
+            ErrorTypes.INVALID_CSV_CONTENT,
+            detail=f"Das Samplesheet konnte nicht statistisch validiert werden: {str(e)}"
+        )

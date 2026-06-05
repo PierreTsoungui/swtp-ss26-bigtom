@@ -62,9 +62,14 @@ if (!file.exists(beta_path)) {
 
 beta <- readRDS(beta_path)
 
-if (!is.matrix(beta)) {
-  beta <- as.matrix(beta)
+# S4 minfi-Objekt -> Beta-Matrix extrahieren
+if (isS4(beta)) {
+  log_msg("running", "S4-Objekt erkannt, extrahiere Beta-Matrix via minfi", "load_beta")
+  suppressPackageStartupMessages(library(minfi))
+  beta <- minfi::getBeta(beta)
 }
+
+beta <- as.matrix(beta)
 
 # Schutzschild für batch-korrigierte Daten
 if (any(beta < 0, na.rm = TRUE) || any(beta > 1, na.rm = TRUE)) {
@@ -216,6 +221,37 @@ dmp_filtered <- dmp[!is.na(dmp$ADJ_P) & dmp$ADJ_P <= adjPVal, ]
 
 if (nrow(dmp_filtered) == 0) {
   exit_with_error(paste0("Nach Filter (adjPVal <= ", adjPVal, ") keine DMPs übrig. Min p-Wert: ", round(min(dmp$ADJ_P, na.rm = TRUE), 6)), "validate_output")
+}
+
+# ── DMR-Linking über genomische Position ───
+log_msg("running", "Verknüpfe DMPs mit DMRs", "dmr_link")
+
+dmr_rds_path <- file.path(job_dir, "dmr_results.rds")
+
+if (file.exists(dmr_rds_path)) {
+  dmr_data <- readRDS(dmr_rds_path)
+  
+  if (!is.null(dmr_data) && nrow(dmr_data) > 0) {
+    dmp_filtered$DMR_ID <- vapply(seq_len(nrow(dmp_filtered)), function(i) {
+      dmp_chr <- as.character(dmp_filtered$CHR[i])
+      dmp_pos <- as.numeric(dmp_filtered$POS[i])
+      
+      hit <- which(
+        as.character(dmr_data$CHR) == dmp_chr &
+        as.numeric(dmr_data$START) <= dmp_pos &
+        as.numeric(dmr_data$STOP)  >= dmp_pos
+      )
+      
+      if (length(hit) == 0) "-" else dmr_data$ID[hit[1]]
+    }, character(1))
+    
+    n_linked <- sum(dmp_filtered$DMR_ID != "-")
+    log_msg("running", paste0(n_linked, " DMPs mit DMR verknüpft"), "dmr_link")
+  } else {
+    log_msg("running", "dmr_results.rds leer - kein Linking", "dmr_link")
+  }
+} else {
+  log_msg("running", "dmr_results.rds nicht gefunden - DMR_ID bleibt '-'", "dmr_link")
 }
 
 # ── Speichern ───
