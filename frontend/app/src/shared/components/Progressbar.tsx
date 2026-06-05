@@ -1,9 +1,5 @@
 import LinearProgress from '@mui/material/LinearProgress';
 import type { JobStatus } from '../../features/analysis/utils/types.ts';
-import CancelButton from './CancelButton.tsx';
-import {useJobCancel} from "../../features/analysis/hooks/useJobCancel.ts";
-import ErrorMessage from "../error-handling/components/ErrorMessage.tsx";
-import {useNavigate} from "react-router";
 
 /**
  * Props, die an die Progressbar übergeben werden
@@ -27,24 +23,20 @@ type ProgressbarProps = {
  * @returns Die gerenderte Fortschrittsanzeige
  */
 function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, onNext }: ProgressbarProps) {
-    const navigate = useNavigate();
-    const handleCancelSuccess = () => {
-        navigate("/upload");
-    };
-
-    const { cancelJob, isLoading: isLoadingJobAbort, error: cancelError } = useJobCancel(jobStatus.job_id, handleCancelSuccess);
+    // const navigate = useNavigate();
+    // const { cancelJob, isLoading: isLoadingJobAbort, error: cancelError } = useJobCancel(jobStatus.job_id, handleCancelSuccess);
 
     return (
         <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             {/* Error PopUp Snackbar */}
-            {cancelError && (
+            {/*cancelError && (
                 <ErrorMessage
                     open={true}
                     error={cancelError}
                     vertical={"top"}
                     horizontal={"center"}
                 />
-            )}
+            )*/}
 
             {/* Header */}
             <div className="mb-4 flex items-center justify-between">
@@ -74,9 +66,9 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
             </div>
 
             {/* Cancel Status*/}
-            {isLoadingJobAbort && (
+            {/*isLoadingJobAbort && (
                 <p className="text-sm text-gray-500 mb-3">Job wird abgebrochen...</p>
-            )}
+            )*/}
 
             {/* Infos */}
             <div className="space-y-3 text-sm text-gray-700">
@@ -102,10 +94,10 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
             {/* Footer */}
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <CancelButton
+                {/*<CancelButton
                     onCancel={cancelJob}
                     disabled={isLoadingJobAbort}
-                />
+                />*/}
 
                 {showNextButton && (
                     <button
