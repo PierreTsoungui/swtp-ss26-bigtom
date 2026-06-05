@@ -207,7 +207,30 @@ async def run_normalization_background(job_id: str, job_dir: str, method: str):
         )
 
 def find_sample_sheet_name(job_dir: str) -> str:
+    """
+    Finndet die SampleSheet-Datei.
+    Nach dem Fix in save_sample_sheet() heißt sie immer 'SampleSheet.csv'.
+    Als Fallback wird trotzdem nach dem alten Muster gesucht.
+    """
+    from app.core.error_types import ErrorTypes
+
+    # Primär: normalisierter Name
+    normalized_path = Path(job_dir) / "SampleSheet.csv"
+    if normalized_path.exists():
+        return "SampleSheet.csv"
+
+    # Fallback: altes Suchmuster (für Abwärtskompatibilität)
     matches = glob.glob(str(Path(job_dir) / "*SampleSheet*.csv"))
-    if not matches:
-        raise FileNotFoundError(f"Kein SampleSheet in {job_dir} gefunden")
-    return Path(matches[0]).name
+    if matches:
+        return Path(matches[0]).name
+
+    # Keine Datei gefunden → sauberer Fehler
+    raise HTTPException(
+        status_code=404,
+        detail=problem_detail(
+            error_type=ErrorTypes.SAMPLE_SHEET_NOT_FOUND,
+            detail=f"Keine SampleSheet-Datei in {job_dir} gefunden. Erwartet: 'SampleSheet.csv'",
+            instance=f"/api/v1/normalize",
+            job_id=job_dir.split("/")[-1]
+        )
+    )

@@ -31,6 +31,9 @@ class ErrorTypes:
     COVARIATE_EQUALS_BATCH = ErrorType("/errors/covariate-equals-batch", 400, "Covariate equals batch variable")
     BATCH_NOT_ALLOWED = ErrorType("/errors/batch-not-allowed", 409, "Batch correction not allowed")
 
+    # ── SAMPLE SHEET ERRORS ────────────────────────────────────────────
+    SAMPLE_SHEET_NOT_FOUND = ErrorType("/errors/sample-sheet-not-found", 404, "Sample sheet not found")
+
 def problem_detail(
     error_type: ErrorType,
     detail: str,

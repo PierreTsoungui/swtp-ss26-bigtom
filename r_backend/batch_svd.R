@@ -5,6 +5,7 @@
 suppressPackageStartupMessages({
   library(jsonlite)
   library(readr)
+  library(minfi)
 })
 
 #' ── Logging ───────────────────────────────────────────────────────────────────

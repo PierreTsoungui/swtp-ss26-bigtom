@@ -171,7 +171,7 @@ async def upload_files(
         process_upload_background,
         job_id,
         job_dir,
-        sample_sheet.filename,
+        "SampleSheet.csv", # GEÄNDERT: Vorher: sample_sheet.filename
         filter_settings_model
     )
 

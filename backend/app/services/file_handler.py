@@ -282,11 +282,11 @@ def save_idat_files(files: List[UploadFile], job_dir: Path) -> List[str]:
 
     return saved_paths
 
-
+# ÄNDERUNG
 def save_sample_sheet(file: UploadFile, job_dir: Path) -> str:
     file.file.seek(0)
 
-    safe_name = Path(file.filename).name
+    safe_name = "SampleSheet.csv" # Path(file.filename).name
     file_path = job_dir / safe_name
     try:
         file_path.resolve().relative_to(job_dir.resolve())
