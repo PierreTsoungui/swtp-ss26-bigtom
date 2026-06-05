@@ -60,5 +60,28 @@ it("cycles sorting: none → asc → desc → none", () => {
   ).toBe(null);
 });
 
+<<<<<<< HEAD
+=======
+it("updates page independently per tab", () => {
+  const { result } =
+    renderHook(() => useTableState());
+
+  act(() => {
+    result.current.updatePage(
+      "dmp",
+      5
+    );
+  });
+
+  expect(
+    result.current.pagination.dmp.page
+  ).toBe(5);
+
+  expect(
+    result.current.pagination.dmr.page
+  ).toBe(1);
+});
+
+>>>>>>> feature/us-45-pagination
 
 });

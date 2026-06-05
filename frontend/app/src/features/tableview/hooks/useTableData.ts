@@ -6,8 +6,9 @@ export function useTableData(
   table: string,
   sort_by: string | null,
   sort_order: string | null,
-  filters?: TableFilters
-
+  filters?: TableFilters,
+  page: number = 1,
+  pageSize: number = 75
 ) {
   const [data, setData] = useState<any>(null);
 
@@ -27,6 +28,10 @@ export function useTableData(
         params.append("sort_by", sort_by);
         params.append("sort_order", sort_order);
       }
+
+      params.append("page",String(page));
+      params.append("page_size",String(pageSize));
+
       if (filters?.chromosome) {
         params.append(
           "filter_chr",
@@ -94,7 +99,7 @@ export function useTableData(
     };
 
     fetchData();
-  }, [jobId, table, sort_by, sort_order, filters]);
+  }, [jobId, table, sort_by, sort_order, filters, page, pageSize]);
 
   return {
   data,
