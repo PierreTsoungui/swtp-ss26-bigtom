@@ -16,11 +16,16 @@ const TERMINAL_STATES: JobStatusValue[] = [
  * Custom Hook, der den Status eines Jobs überwacht, indem er regelmäßig die API abfragt.
  * @param jobId Die ID des Jobs, dessen Status überwacht werden soll. Wenn `null`, wird kein Polling durchgeführt.
  */
-export function useJobPolling(jobId: string | null): JobStatus | null {
+export function useJobPolling(jobId: string | null, resetKey? : number): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   // const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const failCountRef = useRef<number>(0);
   const MAX_FAILURES = 3;
+
+  useEffect(() => {
+    setJobStatus(null);
+    failCountRef.current = 0;
+  }, [resetKey]);
 
   useEffect(() => {
     if (!jobId) return;
@@ -83,7 +88,7 @@ export function useJobPolling(jobId: string | null): JobStatus | null {
         clearTimeout(timeoutId);
       }
     };
-  }, [jobId]);
+  }, [jobId, resetKey]);
 
   return jobStatus;
 }

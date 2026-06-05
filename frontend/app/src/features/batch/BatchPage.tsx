@@ -1,5 +1,5 @@
-import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
 
 import { BatchForm } from "./components/BatchForm";
 import { SvdPlot } from "./components/SvdPlot";
@@ -14,8 +14,6 @@ import type { BatchFormData } from "./utils/types";
 
 const BatchPage: React.FC = () => {
   const { job_id } = useParams<{ job_id: string }>();
-  const navigate = useNavigate();
-
   const [showProgressBar, setShowProgressBar] = useState(false);
 
   // Dropdown Werte
@@ -31,26 +29,33 @@ const BatchPage: React.FC = () => {
     error,
     runBatch,
     skipBatch,
+    fetchHistory,
     isSubmitting,
-    globalStatus,
   } = useBatchCorrection(job_id, () => {});
+
+  const [pollingKey, setPollingKey] = useState(0);
 
   // Status Polling
   const jobStatus = useJobPolling(
-      showProgressBar && job_id ? job_id : null
+      showProgressBar && job_id ? job_id : null,
+      pollingKey
   );
+
+  const batchRunning = isSubmitting && jobStatus?.status === "running";
+
+
+
 
   // Erfolgreich beendet
   useEffect(() => {
-    if (!jobStatus || !job_id) return;
-
-    if (
-        jobStatus.status === "batch_done" ||
-        jobStatus.status === "waiting"
-    ) {
-      navigate(`/results/${job_id}`);
+    if (!jobStatus) return;
+    console.log("[BATCH STATUS]", jobStatus);
+    const finished = jobStatus.status === "waiting" || jobStatus.status === "batch_done"
+    if (finished && showProgressBar) {
+      setShowProgressBar(false);
+      fetchHistory();
     }
-  }, [jobStatus, job_id, navigate]);
+  }, [jobStatus, showProgressBar, fetchHistory]);
 
   if (!job_id) {
     return (
@@ -75,12 +80,13 @@ const BatchPage: React.FC = () => {
         covariates: data.covariates,
       },
     });
-
+    setPollingKey(prev => prev + 1); // Reset Polling
     setShowProgressBar(true);
   };
 
   const handleSkip = async () => {
     await skipBatch();
+    setPollingKey(prev => prev + 1); // Reset Polling
     setShowProgressBar(true);
   };
 
@@ -150,10 +156,7 @@ const BatchPage: React.FC = () => {
         {parameters && (
             <BatchForm
                 parameters={parameters}
-                isLoading={
-                    isSubmitting ||
-                    globalStatus === "running"
-                }
+                isLoading={batchRunning}
                 onSubmit={handleSubmit}
                 onSkip={handleSkip}
             />
