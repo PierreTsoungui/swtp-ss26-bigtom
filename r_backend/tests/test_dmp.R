@@ -38,8 +38,12 @@ run_dmp <- function(beta      = BETA_PATH,
   
   status <- withCallingHandlers(
     tryCatch(
-      system2("Rscript", c(shQuote(DMP_SCRIPT), shQuote(beta), shQuote(samples), 
-                           shQuote(job_dir), shQuote(adjPVal), shQuote(arraytype)),
+      system2("Rscript", c(shQuote(DMP_SCRIPT), 
+                           shQuote(samples),   # args[1]: SampleSheet zuerst!
+                           shQuote(job_dir),   # args[2]: Job-Verzeichnis als zweites!
+                           shQuote(beta),      # args[3]: Beta-Pfad als drittes!
+                           shQuote(adjPVal),   # args[4]
+                           shQuote(arraytype)), # args[5]
               stdout = TRUE, stderr = TRUE),
       error = function(e) NULL
     ),
@@ -78,8 +82,9 @@ test_that("Standardlauf (Happy Path) funktioniert fehlerfrei", {
   expect_true(file.exists(file.path(res$job_dir, "dmp_results.csv")))
   expect_true(file.exists(file.path(res$job_dir, "dmp_results.rds")))
   
-  statuses <- sapply(res$logs, function(x) x$status)
-  expect_true("done" %in% statuses, info = "Das finale 'done'-Signal fehlt in den JSON-Logs!")
+  # FIX: Nutzt 'type' aus dem progress.R-Vertrag statt des alten 'status' Fields
+  types <- sapply(res$logs, function(x) x$type)
+  expect_true("done" %in% types, info = "Das finale 'done'-Signal fehlt in den JSON-Logs!")
   
   df <- read.csv(file.path(res$job_dir, "dmp_results.csv"), check.names = FALSE)
   expect_true(all(c("ID", "CHR", "POS", "GENE", "FEATURE", "CGI",
@@ -106,24 +111,25 @@ test_that("Fehlende Beta-Datei → Sauberer Abbruch via JSON-Log", {
   res <- run_dmp(beta = "nicht_vorhanden.rds")
   expect_equal(res$status, 1L)
   
-  statuses <- sapply(res$logs, function(x) x$status)
-  expect_true("error" %in% statuses, info = "Fehlende Datei triggerte keinen geordneten JSON-Error-Status")
+  # FIX: Prüfung via 'type' Key
+  types <- sapply(res$logs, function(x) x$type)
+  expect_true("error" %in% types, info = "Fehlende Datei triggerte keinen geordneten JSON-Error-Status")
 })
 
 test_that("Spaltenanzahl Beta != Sample-Sheet-Zeilen → Kontrollierter Exit", {
   skip_if_no_data()
   
-  # FIX: Statt das S4-Objekt zu manipulieren, beschneiden wir das CSV Sample-Sheet fliegend!
   raw_samples <- read_csv(SAMPLES_PATH, show_col_types = FALSE)
   tmp_sheet <- tempfile(fileext = ".csv")
-  write_csv(raw_samples[1:2, ], tmp_sheet) # Nur 2 Proben übrig lassen -> Mismatch zur Beta-Matrix
+  write_csv(raw_samples[1:2, ], tmp_sheet) 
   on.exit(unlink(tmp_sheet))
   
   res <- run_dmp(samples = tmp_sheet)
   expect_equal(res$status, 1L, info = "Pipeline brach bei Dimensionskonflikt nicht ab!")
   
-  statuses <- sapply(res$logs, function(x) x$status)
-  expect_true("error" %in% statuses)
+  # FIX: Prüfung via 'type' Key
+  types <- sapply(res$logs, function(x) x$type)
+  expect_true("error" %in% types)
 })
 
 test_that("adjPVal = 0 → Keine signifikanten Daten → Geordneter Abbruch", {
@@ -132,9 +138,9 @@ test_that("adjPVal = 0 → Keine signifikanten Daten → Geordneter Abbruch", {
   res <- run_dmp(adjPVal = "0")
   expect_equal(res$status, 1L)
   
-  # FIX: Wir prüfen auf den generellen Error-Status statt auf hardcodierte Schrittnamen
-  statuses <- sapply(res$logs, function(x) x$status)
-  expect_true("error" %in% statuses, info = "Kein Error-Status bei 0 signifikanten DMPs emittiert.")
+  # FIX: Prüfung via 'type' Key
+  types <- sapply(res$logs, function(x) x$type)
+  expect_true("error" %in% types, info = "Kein Error-Status bei 0 signifikanten DMPs emittiert.")
 })
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -144,7 +150,7 @@ test_that("Fachlicher Edge-Case: Nur 1 biologische Gruppe im Sheet → Keine unk
   skip_if_no_data()
   
   raw_samples <- read_csv(SAMPLES_PATH, show_col_types = FALSE)
-  raw_samples$Sample_Group <- "G1" # Alle Proben in dieselbe Gruppe werfen
+  raw_samples$Sample_Group <- "G1" 
   
   tmp_sheet <- tempfile(fileext = ".csv")
   write_csv(raw_samples, tmp_sheet)
@@ -152,15 +158,12 @@ test_that("Fachlicher Edge-Case: Nur 1 biologische Gruppe im Sheet → Keine unk
   
   res <- run_dmp(samples = tmp_sheet)
   
-  # Das Skript muss entweder kontrolliert abbrechen (1) oder stabil durchlaufen (0)
   expect_true(res$status %in% c(0L, 1L), info = "Pipeline ist unkontrolliert im mathematischen Modell abgestürzt!")
   
-  # Wenn es mit 0 durchläuft, akzeptieren wir das mathematische Intercept-Ergebnis (nrow > 0)
   if (res$status == 0L) {
     result_file <- file.path(res$job_dir, "dmp_results.csv")
     if (file.exists(result_file)) {
       df <- read.csv(result_file, check.names = FALSE)
-      # Test besteht, solange eine gültige Struktur zurückgegeben wird und R nicht gecrasht ist
       expect_true(is.data.frame(df), info = "Ausgabedatei ist keine gültige Tabelle.")
     }
   }

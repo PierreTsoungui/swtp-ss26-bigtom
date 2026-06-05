@@ -8,6 +8,7 @@ import os
 from typing import Optional
 import glob
 import csv
+import asyncio
 
 from app.core.error_types import BatchException, ErrorTypes
 from app.services.r_executor import run_r_script
@@ -184,16 +185,29 @@ async def run_batch_pipeline_task(job_id: str, settings_dict: dict, next_round: 
             current_step=f"Kritischer Systemfehler: {str(e)}"
         )
 
-def run_downstream_analysis_workflow(job_id: str, job_dir_raw: str):
+async def run_downstream_analysis_workflow(
+    job_id: str, 
+    job_dir_raw: str, 
+    adj_pval: float = 0.05, 
+    array_type: str = "EPICv2",
+    extract_from_normalized: bool = True
+):
     """
-    Extrahiert die Beta-Matrix (da Batch-Korrektur geskippt wurde)
-    und führt nacheinander die DMR- und danach die DMP-Skripte aus.
+    Führt nacheinander die DMR- und danach die DMP-Skripte aus – mit Live-Fortschritt.
+    Extrahiert die Beta-Matrix nur dann, wenn extract_from_normalized=True (Skip-Szenario).
     """
     try:
-        # FIX: Sicherstellen, dass job_dir ein Path-Objekt ist, sonst crashst du bei .glob()
         job_dir = Path(job_dir_raw).resolve()
-        
-        print(f"[PIPELINE] Starte Downstream-Analyse für Job {job_id}...")
+        print(f"[PIPELINE] Starte Downstream-Analyse für Job {job_id}...", flush=True)
+
+        # 1. Initialisierung im Frontend
+        job_manager.update_job(
+            job_id,
+            status="running",
+            phase="downstream_analysis",
+            progress_percent=0,
+            current_step="Starte Downstream-Analyse-Pipeline..."
+        )
 
         # 2. Dynamisch das SampleSheet im Job-Verzeichnis finden
         csv_files = list(job_dir.glob("*SampleSheet*.csv"))
@@ -201,53 +215,128 @@ def run_downstream_analysis_workflow(job_id: str, job_dir_raw: str):
             raise FileNotFoundError(f"Kein SampleSheet im Verzeichnis {job_dir} gefunden!")
         sample_sheet_path = csv_files[0]
 
-        # Pfade definieren
         normalized_rds = job_dir / "normalized_data.rds"
         beta_rds = job_dir / "beta.rds"
 
-        # 3. BRIDGE-SCHRITT: Beta-Extraktion
-        print("[PIPELINE] Extrahiere Beta-Matrix aus normalisierten Daten...")
-        r_inline_cmd = (
-            f"library(minfi); "
-            f"normalized <- readRDS('{normalized_rds}'); "
-            f"beta <- getBeta(normalized); "
-            f"saveRDS(beta, '{beta_rds}')"
+        # 3. KONDITIONELLER BRIDGE-SCHRITT: Beta-Extraktion
+        if extract_from_normalized:
+            # SZNARIO A: User hat Batch-Korrektur übersprungen -> Aus normalized extrahieren
+            print("[PIPELINE] Batch-Korrektur übersprungen. Extrahiere unkorrigierte Beta-Matrix...", flush=True)
+            job_manager.update_job(
+                job_id,
+                status="running",
+                phase="downstream_analysis",
+                progress_percent=2,
+                current_step="Extrahiere Beta-Matrix aus normalisierten Daten..."
+            )
+            
+            r_inline_cmd = (
+                f"library(minfi); "
+                f"normalized <- readRDS('{normalized_rds}'); "
+                f"beta <- getBeta(normalized); "
+                f"saveRDS(beta, '{beta_rds}')"
+            )
+            
+            proc = await asyncio.create_subprocess_exec(
+                "docker", "exec", "swtp-ss26-bigtom-r_worker-1", "Rscript", "-e", r_inline_cmd,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            
+            if proc.returncode != 0:
+                raise RuntimeError(f"Beta-Extraktion fehlgeschlagen: {stderr.decode('utf-8', errors='ignore')}")
+        else:
+            # SZENARIO B: Korrektur lief vorher -> 'beta.rds' enthält bereits die korrigierten Daten!
+            print("[PIPELINE] Nutze bereits vorhandene, korrigierte 'beta.rds' aus der Batch-Korrektur.", flush=True)
+            job_manager.update_job(
+                job_id,
+                status="running",
+                phase="downstream_analysis",
+                progress_percent=5,
+                current_step="Lade korrigierte Batch-Daten..."
+            )
+
+        # 4. DMR SKRIPT AUFRUFEN
+        print("[PIPELINE] Starte DMR-Analyse (dmr.R)...", flush=True)
+        
+        async def on_dmr_progress(data: dict):
+            if data.get("type") == "progress":
+                progress = 10 + int(data["percent"] * 0.45)
+                job_manager.update_job(
+                    job_id,
+                    status="running",
+                    phase="downstream_analysis",
+                    progress_percent=progress,
+                    current_step=f"DMR: {data['message']}"
+                )
+
+        dmr_args = ["beta.rds", "3", "NULL", str(adj_pval), "1000", array_type, "10", "1"]
+
+        dmr_result = await run_r_script(
+            script="dmr.R",
+            job_id=job_id,
+            job_dir=str(job_dir),
+            sample_sheet=sample_sheet_path.name,
+            mode="dmr_analysis",
+            script_args=dmr_args,
+            on_progress=on_dmr_progress
+        )
+
+        if dmr_result.get("returncode") != 0:
+            raise RuntimeError("Das DMR-Skript hat einen Fehler gemeldet.")
+
+        print("[PIPELINE] DMR-Analyse erfolgreich beendet.", flush=True)
+
+        # 5. DMP SKRIPT AUFRUFEN
+        print("[PIPELINE] Starte DMP-Analyse (dmp.R)...", flush=True)
+
+        async def on_dmp_progress(data: dict):
+            if data.get("type") == "progress":
+                progress = 55 + int(data["percent"] * 0.43)
+                job_manager.update_job(
+                    job_id,
+                    status="running",
+                    phase="downstream_analysis",
+                    progress_percent=progress,
+                    current_step=f"DMP: {data['message']}"
+                )
+
+        dmp_args = ["beta.rds", str(adj_pval), array_type]
+
+        dmp_result = await run_r_script(
+            script="dmp.R",
+            job_id=job_id,
+            job_dir=str(job_dir),
+            sample_sheet=sample_sheet_path.name,
+            mode="dmp_analysis",
+            script_args=dmp_args,
+            on_progress=on_dmp_progress
+        )
+
+        if dmp_result.get("returncode") != 0:
+            raise RuntimeError("Das DMP-Skript hat einen Fehler gemeldet.")
+
+        print("[PIPELINE] DMP-Analyse erfolgreich beendet.", flush=True)
+
+        # 6. FINALE VOLLENDUNG
+        job_manager.update_job(
+            job_id,
+            status="analysis_done",
+            phase="downstream_analysis",
+            progress_percent=100,
+            current_step="Downstream-Analyse erfolgreich beendet!"
+        )
+        print(f"[PIPELINE SUCCESS] Downstream-Analyse für Job {job_id} komplett abgeschlossen!", flush=True)
+
+    except Exception as e:
+        print(f"[PIPELINE ERROR] Allgemeiner Fehler im Workflow: {str(e)}", flush=True)
+        job_manager.update_job(
+            job_id,
+            status="failed",
+            phase="downstream_analysis",
+            current_step=f"Fehler in der Analyse: {str(e)}"
         )
         
-        subprocess.run([
-            "docker", "exec", "swtp-ss26-bigtom-r_worker-1", 
-            "Rscript", "-e", r_inline_cmd
-        ], capture_output=True, text=True, check=True)
-
-        # 4. DMR SKRIPT AUFRUFEN (Logische Reihenfolge FIX: Muss zuerst laufen!)
-        # Erzeugt die dmr.rds im job_dir
-        print("[PIPELINE] Starte DMR-Analyse (dmr.R)...")
-        dmr_cmd = [
-            "docker", "exec", "swtp-ss26-bigtom-r_worker-1", "Rscript",
-            "/app/r_backend/dmr.R", str(beta_rds), str(sample_sheet_path), str(job_dir)
-        ]
-        subprocess.run(dmr_cmd, capture_output=True, text=True, check=True)
-        print("[PIPELINE] DMR-Analyse erfolgreich beendet. CSV und rds generiert.")
-
-        # 5. DMP SKRIPT AUFRUFEN (Nutzt jetzt die frisch erzeugte dmr.rds für die Regionen-Verknüpfung)
-        print("[PIPELINE] Starte DMP-Analyse (dmp.R)...")
-        dmp_cmd = [
-            "docker", "exec", "swtp-ss26-bigtom-r_worker-1", "Rscript",
-            "/app/r_backend/dmp.R", str(beta_rds), str(sample_sheet_path), str(job_dir)
-        ]
-        subprocess.run(dmp_cmd, capture_output=True, text=True, check=True)
-        print("[PIPELINE] DMP-Analyse erfolgreich beendet. Regionen verknüpft und CSV generiert.")
-
-        print(f"[PIPELINE SUCCESS] Downstream-Analyse für Job {job_id} komplett abgeschlossen!")
-
-    except subprocess.CalledProcessError as e:
-        set_job_status(job_id, status_str="failed", phase_str="none")
-        print(f"[PIPELINE ERROR] Fehler im R-Skript aufgetreten!", flush=True)
-        print(f"[R-STDOUT] Grund:\n{e.stdout}", flush=True)
-        print(f"[R-STDERR] (Warnungen & Logs):\n{e.stderr}", flush=True)
-    except Exception as e:
-        print(f"[PIPELINE ERROR] Allgemeiner Fehler im Workflow: {str(e)}")
-
 # ÄNDERUNG: Um mögliche Probleme mit dem Suchen des SampleSheets für batch zu lösen
 def find_sample_sheet_name(job_dir: str) -> str:
     """

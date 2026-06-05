@@ -5,83 +5,102 @@
 #' Ausführung:
 #' Rscript dmp.R <beta.rds> <sample_sheet.csv> <job_dir> [adjPVal] [arraytype]
 
-# ── Verwendete Bibliotheken ───
+# ── Verwendete Bibliotheken ───────────────────────────────────────────────────
 suppressPackageStartupMessages({
   library(ChAMP)
   library(readr)
   library(jsonlite)
 })
 
-# ── Logging ───
-log_msg <- function(status, message, step = NULL) {
-  cat(toJSON(list(status = status, step = step, message = message),
-             auto_unbox = TRUE), "\n")
-}
+# ── Progress-Vertrag einbinden ───────────────────────────────────────────────
+source("/app/r_backend/utils/progress.R")
 
-exit_with_error <- function(message, step = NULL) {
-  log_msg("error", message, step)
-  quit(save = "no", status = 1)
-}
-
-# ── Eingabeparameter ───
+# ── Eingabeparameter ─────────────────────────────────────────────────────────
 args <- commandArgs(trailingOnly = TRUE)
 
 if (length(args) < 3) {
-  stop("Usage: Rscript dmp.R <beta.rds> <sample_sheet.csv> <job_dir> [adjPVal] [arraytype]")
+  emit_error("Insufficient arguments. Expected: <sample_sheet_path> <job_dir> <beta_filename>")
 }
 
-beta_path         <- args[1]
-sample_sheet_path <- args[2]
-job_dir           <- args[3]
+sample_sheet_path <- args[1]
+job_dir           <- args[2]
+beta_filename     <- args[3]
 
-adjPVal   <- ifelse(length(args) >= 4, as.numeric(args[4]), 0.05)
-arraytype <- ifelse(length(args) >= 5, args[5], "EPICv2")
+# FIX: Erkennt flexibel, ob ein absoluter oder relativer Pfad übergeben wurde
+beta_path <- if (file.exists(beta_filename)) {
+  beta_filename
+} else {
+  file.path(job_dir, beta_filename)
+}
+
+adjPVal           <- if (length(args) >= 4) as.numeric(args[4]) else 0.05
+arraytype         <- if (length(args) >= 5) args[5]             else "EPICv2"
 
 # Arraytype normalisieren
 if (arraytype %in% c("EPIC", "850K")) {
-  log_msg("running", paste0("arraytype '", arraytype, "' wird zu 'EPICv1' normalisiert"), "init")
   arraytype <- "EPICv1"
 }
 
 if (!arraytype %in% c("EPICv2", "EPICv1", "450K")) {
-  exit_with_error(paste0("Ungültiger arraytype: '", arraytype, "'. Erlaubt: EPICv2, EPICv1, 450K"), "init")
+  emit_error(sprintf("Invalid arraytype provided: '%s'. Allowed values are: EPICv2, EPICv1, 450K", arraytype))
 }
-
-log_msg("running", paste0("adjPVal=", adjPVal, " | arraytype=", arraytype), "init")
 
 if (!dir.exists(job_dir)) {
   dir.create(job_dir, recursive = TRUE)
 }
 
-# ── Beta-Matrix laden ───
-log_msg("running", "Laden von Beta", "load_beta")
+# Initialisierung an Backend melden
+emit_progress(0, "Initializing Differential Methylation Probe (DMP) workflow")
+
+# ── Beta-Matrix laden ─────────────────────────────────────────────────────────
+emit_progress(15, "Loading and validating methylation beta matrix")
 
 if (!file.exists(beta_path)) {
-  exit_with_error("Beta fehlt", "load_beta")
+  emit_error(sprintf("Beta matrix file not found at path: %s", beta_path))
 }
 
 beta <- readRDS(beta_path)
 
 # S4 minfi-Objekt -> Beta-Matrix extrahieren
 if (isS4(beta)) {
-  log_msg("running", "S4-Objekt erkannt, extrahiere Beta-Matrix via minfi", "load_beta")
   suppressPackageStartupMessages(library(minfi))
   beta <- minfi::getBeta(beta)
 }
 
 beta <- as.matrix(beta)
 
-# Schutzschild für batch-korrigierte Daten
+# Schutzschild für batch-korrigierte Daten (Werte auf Intervall [0,1] kappen)
 if (any(beta < 0, na.rm = TRUE) || any(beta > 1, na.rm = TRUE)) {
-  log_msg("running", "Batch-korrigierte Beta-Werte leicht außerhalb von [0,1] detektiert. Kappe Werte auf Intervall.", "load_beta")
   beta[beta < 0] <- 0
   beta[beta > 1] <- 1
 }
 
-log_msg("running", paste0("Beta geladen: ", nrow(beta), " CpGs x ", ncol(beta), " Proben"), "load_beta")
+if (nrow(beta) == 0 || ncol(beta) == 0) {
+  emit_error("Loaded beta matrix is empty (0 features or 0 samples)")
+}
 
-# ── Sample Sheet laden ───
-log_msg("running", "Laden von Sample Sheet", "load_samples")
+# ──────────────────────────────────────────────────────────────────────────────
+#  MATHEMATISCHES SCHUTZSCHILD: Invariante & unvollständige Sonden eliminieren
+# ──────────────────────────────────────────────────────────────────────────────
+row_sds <- apply(beta, 1, sd, na.rm = TRUE)
+has_nas  <- apply(beta, 1, anyNA)
+
+# Nur Sonden behalten, die keine NAs enthalten und eine echte Varianz aufweisen
+valid_probes <- which(!has_nas & !is.na(row_sds) & row_sds > 1e-5)
+
+if (length(valid_probes) == 0) {
+  emit_error("Data anomaly: No valid probes remaining after filtering out invariant or incomplete rows.")
+}
+
+beta <- beta[valid_probes, , drop = FALSE]
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Sample Sheet laden ────────────────────────────────────────────────────────
+emit_progress(35, "Loading and parsing sample sheet metadata")
+
+if (!file.exists(sample_sheet_path)) {
+  emit_error(sprintf("Sample sheet file not found at path: %s", sample_sheet_path))
+}
 
 all_lines  <- readLines(sample_sheet_path)
 data_start <- which(grepl("^\\[Data\\]", all_lines))
@@ -91,11 +110,11 @@ samples <- read_csv(sample_sheet_path, skip = skip_lines, show_col_types = FALSE
 
 required <- c("Sample_Name", "Sample_Group")
 if (!all(required %in% colnames(samples))) {
-  exit_with_error(paste("Fehlende Pflichtspalten. Gefunden:", paste(colnames(samples), collapse = ", ")), "validate_samples")
+  emit_error(sprintf("Sample sheet is missing mandatory columns. Found: %s", paste(colnames(samples), collapse = ", ")))
 }
 
-# ── Robustes Alignment ───
-log_msg("running", "Abgleich und Sortierung von Beta-Spalten und Sample Sheet", "validate_alignment")
+# ── Robustes Alignment ────────────────────────────────────────────────────────
+emit_progress(55, "Aligning sample sheet metadata with beta matrix columns")
 
 beta_samples <- colnames(beta)
 
@@ -116,33 +135,29 @@ if (all(beta_samples %in% samples$Sample_Name)) {
 }
 
 if (is.null(id_col)) {
-  exit_with_error(paste0("Keine Übereinstimmung zwischen Beta-Spalten und den Identifikatoren im Sample Sheet gefunden."), "validate_alignment")
+  emit_error("Sample alignment failed: No matching sample identifiers found between the beta matrix columns and sample sheet.")
 }
 
-# HIER WAR DER FEHLER - JETZT KORREKT %in%
 samples_filtered <- samples[samples[[id_col]] %in% beta_samples, , drop = FALSE]
 match_idx        <- match(beta_samples, samples_filtered[[id_col]])
 samples_aligned  <- samples_filtered[match_idx, , drop = FALSE]
 
 if (nrow(samples_aligned) != ncol(beta)) {
-  exit_with_error("Die Anzahl der alignierten Samples stimmt nicht mit der Beta-Matrix überein.", "validate_alignment")
+  emit_error("Sample alignment mismatch: Aligned samples count does not match beta matrix columns.")
 }
 
 pheno <- factor(samples_aligned$Sample_Group)
 
 if (length(levels(pheno)) != 2) {
-  exit_with_error(paste0("Genau 2 Gruppen sind für den DMP-Vergleich notwendig. Gefunden: ", paste(levels(pheno), collapse = ", ")), "validate_groups")
+  emit_error(sprintf("Statistical group error: Exactly 2 distinct groups are required for DMP analysis. Found: %s", paste(levels(pheno), collapse = ", ")))
 }
 
 group1 <- levels(pheno)[1]
 group2 <- levels(pheno)[2]
 
-log_msg("running", paste0("Gruppen-Zuweisung nach Alignment: '", group1, "' (n=", sum(pheno == group1), ") vs '", group2, "' (n=", sum(pheno == group2), ")"), "validate_groups")
-
 # ── Hotfix für Single-Sample-Gruppen (Verhindert ChAMP-Dimension-Drop) ────────
 for (g in levels(pheno)) {
   if (sum(pheno == g) == 1) {
-    log_msg("running", paste0("Hotfix: Gruppe '", g, "' hat nur 1 Probe. Dupliziere Spalte mit minimalem Rauschen für ChAMP."), "dmp")
     idx <- which(pheno == g)
     
     set.seed(42)
@@ -159,8 +174,8 @@ for (g in levels(pheno)) {
   }
 }
 
-# ── DMP-Analyse via champ.DMP ───
-log_msg("running", "DMP-Analyse (champ.DMP)", "dmp")
+# ── DMP-Analyse via champ.DMP ─────────────────────────────────────────────────
+emit_progress(75, "Executing statistical differential methylation test (champ.DMP)")
 
 dmp_raw <- tryCatch({
   champ.DMP(
@@ -170,23 +185,21 @@ dmp_raw <- tryCatch({
     arraytype = arraytype
   )
 }, error = function(e) {
-  exit_with_error(e$message, "dmp")
+  emit_error(sprintf("ChAMP DMP mathematical execution failed: %s", e$message))
 })
 
-# ── Ergebnis extrahieren ───
-log_msg("running", "Vorbereiten von Output", "format")
+# ── Ergebnis extrahieren ──────────────────────────────────────────────────────
+emit_progress(85, "Extracting statistical contrasts and computing metrics")
 
 if (is.null(dmp_raw) || length(dmp_raw) == 0) {
-  exit_with_error("champ.DMP hat keine Ergebnisse zurückgegeben.", "format")
+  emit_error("Analysis anomaly: champ.DMP returned an empty result object.")
 }
 
 comparison_key <- names(dmp_raw)[1]
-log_msg("running", paste0("Extrahiere Daten für Key: '", comparison_key, "'"), "format")
-
 dmp_table <- dmp_raw[[comparison_key]]
 
 if (is.null(dmp_table) || nrow(dmp_table) == 0) {
-  exit_with_error("dmp_table ist leer. Prüfe den arraytype.", "format")
+  emit_error("DMP extraction failed: Table is empty. Verify that the arraytype matches the dataset architecture.")
 }
 
 p_col <- intersect(c("adj.P.Val", "adj.p.val", "P.Value", "p.value"), colnames(dmp_table))[1]
@@ -215,16 +228,16 @@ dmp <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# NA-Bereinigung
+# NA-Bereinigung & Filterung
 dmp <- dmp[!is.na(dmp$GROUP1_AVG) & !is.na(dmp$GROUP2_AVG), ]
 dmp_filtered <- dmp[!is.na(dmp$ADJ_P) & dmp$ADJ_P <= adjPVal, ]
 
 if (nrow(dmp_filtered) == 0) {
-  exit_with_error(paste0("Nach Filter (adjPVal <= ", adjPVal, ") keine DMPs übrig. Min p-Wert: ", round(min(dmp$ADJ_P, na.rm = TRUE), 6)), "validate_output")
+  emit_error(sprintf("Filtering constraint violation: No significant DMPs remaining after threshold filter (adjPVal <= %g). Minimum observed p-value was: %g", adjPVal, min(dmp$ADJ_P, na.rm = TRUE)))
 }
 
-# ── DMR-Linking über genomische Position ───
-log_msg("running", "Verknüpfe DMPs mit DMRs", "dmr_link")
+# ── DMR-Linking über genomische Position ─────────────────────────────────────
+emit_progress(95, "Overlapping found DMPs with genomic DMR region coordinates")
 
 dmr_rds_path <- file.path(job_dir, "dmr_results.rds")
 
@@ -244,20 +257,23 @@ if (file.exists(dmr_rds_path)) {
       
       if (length(hit) == 0) "-" else dmr_data$ID[hit[1]]
     }, character(1))
-    
-    n_linked <- sum(dmp_filtered$DMR_ID != "-")
-    log_msg("running", paste0(n_linked, " DMPs mit DMR verknüpft"), "dmr_link")
-  } else {
-    log_msg("running", "dmr_results.rds leer - kein Linking", "dmr_link")
   }
-} else {
-  log_msg("running", "dmr_results.rds nicht gefunden - DMR_ID bleibt '-'", "dmr_link")
 }
 
-# ── Speichern ───
-log_msg("running", "Speichern", "save")
-write.csv(dmp_filtered, file.path(job_dir, "dmp_results.csv"), row.names = FALSE)
-saveRDS(dmp_filtered,   file.path(job_dir, "dmp_results.rds"))
+# ── Speichern ─────────────────────────────────────────────────────────────────
+emit_progress(100, "Saving computed DMP results into pipeline assets")
 
-log_msg("done", paste0("DMP erfolgreich abgeschlossen: ", nrow(dmp_filtered), " DMPs gespeichert"), "complete")
+output_csv <- file.path(job_dir, "dmp_results.csv")
+output_rds <- file.path(job_dir, "dmp_results.rds")
+
+write.csv(dmp_filtered, output_csv, row.names = FALSE)
+saveRDS(dmp_filtered,   output_rds)
+
+# Finale Erfolgsmeldung an das Backend abgeben
+emit_done(
+  output_csv = output_csv,
+  output_rds = output_rds,
+  total_dmps = nrow(dmp_filtered)
+)
+
 quit(save = "no", status = 0)

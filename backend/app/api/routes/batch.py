@@ -91,20 +91,20 @@ def run_batch_correction(job_id: str, payload: BatchSettingsPayload, background_
 
 @router.post("/{job_id}/skip", status_code=status.HTTP_202_ACCEPTED, response_model=BatchSkipResponse)
 def skip_batch_correction(job_id: str, background_tasks: BackgroundTasks):
-    # 1. Job-Verzeichnis holen oder 404 werfen
     job_dir = batch_service.get_job_dir_or_404(job_id)
     
-    # 2. Status sofort auf "running" setzen, damit das Frontend weiß, es passiert was
+    current_job = job_manager.get_job(job_id)
+    if current_job and current_job.status == "running":
+        raise BatchException(
+            ErrorTypes.BATCH_NOT_ALLOWED,
+            detail="A workflow is already running for this job."
+        )
+    
     batch_service.set_job_status(job_id, status_str="running", phase_str="downstream_analysis")
     
-    # 3. FIX: Über 'batch_service.' den Hintergrund-Task korrekt triggern
     background_tasks.add_task(batch_service.run_downstream_analysis_workflow, job_id, job_dir)
     
-    # 4. Sofort dem Frontend antworten (HTTP 202)
-    return {
-        "job_id": job_id,
-        "status": "running"
-    }
+    return {"job_id": job_id, "status": "running"}
 
 
 @router.get("/{job_id}/batch-options", response_model=BatchOptionsResponse)
