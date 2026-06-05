@@ -1,33 +1,33 @@
 import { useEffect, useState } from "react";
-import type { BatchParametersResponse } from "../utils/types";
+import type {BatchParametersResponse} from "../utils/types.ts";
 
 export function useBatchParameters(jobId: string | null) {
     const [parameters, setParameters] = useState<BatchParametersResponse | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
+    const [isLoading, setIsLoading] = useState(true);
+    // TODO: API CALL ANPASSEN NACH BACKEND INTEGRATION
+    // Aktuell MVerwendung von Mockdaten
     useEffect(() => {
         if (!jobId) return;
 
-        const fetchParameters = async () => {
-            setIsLoading(true);
-            setError(null);
+        setTimeout(() => {
+            setParameters({
+                job_id: jobId,
+                available_columns: [
+                    "Sample_Group",
+                    "Slide",
+                    "Sentrix_ID",
+                    "Sentrix_Position",
+                    "Sex",
+                    "Age"
+                ]
+            });
 
-            try {
-                const response = await fetch(`/api/v1/batch/${jobId}/batch-options`);
-                if (!response.ok) throw new Error("Parameter konnten nicht geladen werden");
-
-                const data = await response.json();
-                setParameters(data);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : "Unbekannter Fehler");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchParameters();
+            setIsLoading(false);
+        }, 300);
     }, [jobId]);
 
-    return { parameters, isLoading, error };
+    return {
+        parameters,
+        isLoading
+    };
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import type { BatchFormData, BatchParametersResponse } from "../utils/types";
 import {
     FormControl,
@@ -7,8 +7,7 @@ import {
     MenuItem,
     TextField,
     Autocomplete,
-    Chip,
-    Box,
+    Alert,
 } from "@mui/material";
 
 interface BatchFormProps {
@@ -33,7 +32,10 @@ export function BatchForm({
         setCovariates(covariates.filter((c) => c !== value));
     };
 
-    const handleCovariatesChange = (_event: any, newValue: string[]) => {
+    const handleCovariatesChange = (
+        _event: React.SyntheticEvent,
+        newValue: string[]
+    ) => {
         // Verhindere, dass die Batch Variable in Covariates aufgenommen wird
         const filtered = newValue.filter((c) => c !== batchVariable);
         setCovariates(filtered);
@@ -48,9 +50,13 @@ export function BatchForm({
         onSubmit({ batch_variable: batchVariable, covariates });
     };
 
+    const filteredOptions = parameters.available_columns.filter(
+        (col) => col !== batchVariable
+    );
+
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Batch Variable (Required) */}
+            {/* Batch Variable (Required) - SELECT Dropdown */}
             <div className="space-y-3">
                 <label className="block text-sm font-semibold text-slate-900">
                     Batch Variable <span className="text-red-500">*</span>
@@ -70,7 +76,7 @@ export function BatchForm({
                         label="Bitte auswählen..."
                         onChange={(e) => handleBatchVariableChange(e.target.value)}
                     >
-                        {parameters.eligible_columns.map((col) => (
+                        {parameters.available_columns.map((col) => (
                             <MenuItem key={col} value={col}>
                                 {col}
                             </MenuItem>
@@ -79,7 +85,7 @@ export function BatchForm({
                 </FormControl>
             </div>
 
-            {/* Covariates (Optional Multi-Select) */}
+            {/* Covariates (Optional Multi-Select) - AUTOCOMPLETE */}
             <div className="space-y-3">
                 <label className="block text-sm font-semibold text-slate-900">
                     Covariates (Optional)
@@ -92,20 +98,12 @@ export function BatchForm({
                 <Autocomplete
                     multiple
                     id="covariates-autocomplete"
-                    options={parameters.eligible_columns.filter(
-                        (col) => col !== batchVariable
-                    )}
+                    options={filteredOptions}
                     value={covariates}
                     onChange={handleCovariatesChange}
                     disabled={isLoading}
-                    renderValue={(value, getTagProps) =>
-                        value.map((option, index) => (
-                            <Chip
-                                label={option}
-                                {...getTagProps({ index })}
-                            />
-                        ))
-                    }
+                    freeSolo={false}
+                    noOptionsText="Keine Optionen verfügbar"
                     renderInput={(params) => (
                         <TextField
                             {...params}
@@ -118,15 +116,26 @@ export function BatchForm({
             </div>
 
             {/* Info Box */}
-            <Box
-                className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4"
-            >
+            {/*<Box className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
                 <p className="text-sm text-amber-900">
-                    <span className="font-semibold">ℹ️ Hinweis:</span> Die Covariates
-                    dürfen nicht identisch mit der Batch Variable sein, um biologische
-                    Signale zu erhalten.
+                    <Alert severity="info">Die Covariates
+                        dürfen nicht identisch mit der Batch Variable sein, um biologische
+                        Signale zu erhalten.</Alert>
                 </p>
-            </Box>
+            </Box>*/}
+            <Alert
+                severity="info"
+                variant="outlined"
+                className="rounded-lg"
+                sx={{
+                    bgcolor: 'amber.50',
+                    borderColor: 'amber.200',
+                    '& .MuiAlert-message': { color: 'amber.900' },
+                    '& .MuiAlert-icon': { color: 'amber.600' } // Adjust icon color to match
+                }}
+            >
+                Die Covariates dürfen nicht identisch mit der Batch Variable sein, um biologische Signale zu erhalten.
+            </Alert>
 
             {/* Buttons */}
             <div className="flex gap-4">
@@ -139,7 +148,7 @@ export function BatchForm({
                             : "bg-slate-300 text-slate-500 cursor-not-allowed"
                     }`}
                 >
-                    {isLoading ? "Korrektur läuft..." : "Korrektur starten"}
+                    {isLoading ? "Batch ongoing..." : "Start Batch"}
                 </button>
 
                 {onSkip && (
@@ -149,7 +158,7 @@ export function BatchForm({
                         disabled={isLoading}
                         className="flex-1 px-6 py-3 rounded-lg font-semibold border-2 border-slate-300 text-slate-700 hover:bg-slate-50 transition"
                     >
-                        Überspringen
+                        Skip
                     </button>
                 )}
             </div>

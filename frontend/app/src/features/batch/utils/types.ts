@@ -5,7 +5,7 @@ export interface BatchSettings {
 
 export interface BatchParametersResponse {
   job_id: string;
-  eligible_columns: string[];
+  available_columns: string[];
 }
 
 export interface BatchFormData {

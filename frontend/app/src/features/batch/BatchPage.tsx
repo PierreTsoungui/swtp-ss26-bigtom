@@ -1,182 +1,165 @@
-import { useNavigate, useParams } from "react-router";
-import { useBatchParameters } from "./hooks/useBatchParameters";
-import { BatchForm } from "./components/BatchForm";
-import { useState, useEffect } from "react";
-import type { BatchFormData } from "./utils/types";
-import Progressbar from "../../shared/components/Progressbar.tsx";
-import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
+import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 
-export function BatchPage() {
+import { BatchForm } from "./components/BatchForm";
+import { SvdPlot } from "./components/SvdPlot";
+
+import { useBatchParameters } from "./hooks/useBatchParameters";
+import { useBatchCorrection } from "./hooks/useBatchCorrection";
+import { useJobPolling } from "../analysis/hooks/useJobPolling";
+
+import Progressbar from "../../shared/components/Progressbar";
+
+import type { BatchFormData } from "./utils/types";
+
+const BatchPage: React.FC = () => {
   const { job_id } = useParams<{ job_id: string }>();
   const navigate = useNavigate();
 
-  // ── State Management ───────────────────────────────────────────
   const [showProgressBar, setShowProgressBar] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ── Data Fetching ──────────────────────────────────────────────
-  const { parameters, isLoading: parametersLoading } = useBatchParameters(job_id ?? null);
-  const jobStatus = useJobPolling(showProgressBar && job_id ? job_id : null);
+  // Dropdown Werte
+  const {
+    parameters,
+    isLoading: parametersLoading,
+  } = useBatchParameters(job_id ?? null);
 
-  // ── Auto-Navigation wenn Batch fertig ──────────────────────────
+  // Batch Workflow
+  const {
+    history,
+    loading: historyLoading,
+    error,
+    runBatch,
+    skipBatch,
+    isSubmitting,
+    globalStatus,
+  } = useBatchCorrection(job_id, () => {});
+
+  // Status Polling
+  const jobStatus = useJobPolling(
+      showProgressBar && job_id ? job_id : null
+  );
+
+  // Erfolgreich beendet
   useEffect(() => {
     if (!jobStatus || !job_id) return;
 
     if (
-        jobStatus.status === "waiting" &&
-        jobStatus.phase === "waiting_selection"
+        jobStatus.status === "batch_done" ||
+        jobStatus.status === "waiting"
     ) {
       navigate(`/results/${job_id}`);
     }
-  }, [jobStatus?.status, jobStatus?.phase, job_id, navigate]);
+  }, [jobStatus, job_id, navigate]);
 
   if (!job_id) {
     return (
-        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600">Fehler</h1>
-            <p className="mt-2 text-slate-600">Keine Job-ID verfügbar</p>
-          </div>
-        </main>
+        <div className="p-8">
+          <h2>Keine Job-ID vorhanden</h2>
+        </div>
     );
   }
 
-  // ── PROGRESSBAR ────────────────────────────────────────────────
-  if (showProgressBar) {
-    if (!jobStatus) {
-      return (
-          <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-            <p className="text-slate-600">Verbindung wird aufgebaut...</p>
-          </main>
+  if (parametersLoading || historyLoading) {
+    return (
+        <div className="p-8">
+          Lade Batch-Daten...
+        </div>
+    );
+  }
+
+  const handleSubmit = async (data: BatchFormData) => {
+    await runBatch({
+      batch_correction: {
+        batch_variable: data.batch_variable,
+        covariates: data.covariates,
+      },
+    });
+
+    setShowProgressBar(true);
+  };
+
+  const handleSkip = async () => {
+    await skipBatch();
+    setShowProgressBar(true);
+  };
+
+  const isGlobalError =
+      error &&
+      (
+          error.error === "BATCH_FAILED" ||
+          error.error === "NETWORK_ERROR"
       );
-    }
 
-    if (jobStatus.status === "running" || jobStatus.status === "failed") {
-      return (
-          <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-            <div className="w-full max-w-2xl space-y-4">
-              {jobStatus.status === "failed" && (
-                  <section className="rounded-lg border-2 border-red-200 bg-red-50 p-4">
-                    <p className="font-semibold text-red-900">
-                      Fehler bei der Batch-Korrektur
-                    </p>
-                    <p className="mt-1 text-sm text-red-800">
-                      {jobStatus.current_step}
-                    </p>
-                    <button
-                        onClick={() => {
-                          setShowProgressBar(false);
-                          setIsSubmitting(false);
-                        }}
-                        className="mt-3 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
-                    >
-                      ← Zurück
-                    </button>
-                  </section>
-              )}
+  return (
+      <div
+          style={{
+            maxWidth: "1200px",
+            margin: "0 auto",
+            padding: "20px",
+          }}
+      >
+        <h2>Step 3: Batch Effect Correction</h2>
 
+        <p style={{ color: "#666" }}>
+          Job ID: {job_id}
+        </p>
+
+        {isGlobalError && (
+            <div
+                style={{
+                  padding: "15px",
+                  backgroundColor: "#f8d7da",
+                  color: "#721c24",
+                  borderRadius: "4px",
+                  marginBottom: "20px",
+                }}
+            >
+              <strong>System Error:</strong>{" "}
+              {error.message}
+            </div>
+        )}
+
+        {/* Progressbar */}
+
+        {showProgressBar && jobStatus && (
+            <div
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                  margin: "20px 0",
+                }}
+            >
               <Progressbar
                   jobStatus={jobStatus}
-                  onNext={() => {}}
-                  showNextButton={false}
-                  nextDisabled={true}
               />
             </div>
-          </main>
-      );
-    }
-  }
+        )}
 
-  // ── LADEN DER PARAMETER ────────────────────────────────────────
-  if (parametersLoading) {
-    return (
-        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-          <div className="text-center">
-            <p className="text-slate-600">Parameter werden geladen...</p>
-          </div>
-        </main>
-    );
-  }
+        {/* SVD Plot */}
 
-  if (!parameters) {
-    return (
-        <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-          <div className="w-full max-w-2xl rounded-lg border-2 border-red-200 bg-red-50 p-6">
-            <h1 className="text-xl font-bold text-red-900">
-              Parameter konnten nicht geladen werden
-            </h1>
-            <button
-                onClick={() => navigate(`/analysis/${job_id}`)}
-                className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition"
-            >
-              Zurück
-            </button>
-          </div>
-        </main>
-    );
-  }
+        {history && (
+            <div style={{ marginBottom: "30px" }}>
+              <SvdPlot rounds={history.rounds} />
+            </div>
+        )}
 
-  // ── HAUPTSEITE: BATCH-FORM ────────────────────────────────────
-  return (
-      <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
-        <div className="w-full max-w-2xl space-y-8">
-          {/* Header */}
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Batch-Effekt Analyse
-            </h1>
-            <p className="text-slate-600">
-              Wählen Sie einen technischen Faktor zur Batch-Korrektur aus.
-            </p>
-          </div>
+        {/* Batch Form */}
 
-          {/* Info Box */}
-          <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
-            <p className="text-sm text-blue-900">
-              <span className="font-semibold">Batch-Effekte:</span> Pinke
-              Quadrate im SVD-Plot deuten auf technische Batch-Effekte hin. Diese
-              können optional korrigiert werden.
-            </p>
-          </div>
-
-          {/* SVD-Plot (wenn vorhanden) */}
-          {/* TODO: SVD-Plot Komponente hier einfügen */}
-
-          {/* Batch Form */}
-          <div className="rounded-lg border-2 border-slate-200 bg-white p-6">
+        {parameters && (
             <BatchForm
                 parameters={parameters}
-                isLoading={isSubmitting}
+                isLoading={
+                    isSubmitting ||
+                    globalStatus === "running"
+                }
                 onSubmit={handleSubmit}
-                onSkip={() => navigate(`/results/${job_id}`)}
+                onSkip={handleSkip}
             />
-          </div>
-        </div>
-      </main>
+        )}
+      </div>
   );
+};
 
-  async function handleSubmit(data: BatchFormData) {
-    if (!job_id) return;
-
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch(`/api/v1/batch-correct/${job_id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      // ✅ Batch-Korrektur gestartet → Progressbar anzeigen
-      setShowProgressBar(true);
-    } catch (error) {
-      console.error("Fehler beim Starten der Batch-Korrektur:", error);
-      alert("Fehler beim Starten der Batch-Korrektur");
-      setIsSubmitting(false);
-    }
-  }
-}
+export default BatchPage;

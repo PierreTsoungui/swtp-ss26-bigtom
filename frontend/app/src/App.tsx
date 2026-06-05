@@ -5,7 +5,7 @@ import {NormalizationPage} from "./features/normalisation/NormalizationPage.tsx"
 import { AppLayout } from './shared/layout/AppLayout';
 import { DatenschutzPage } from './shared/pages/DatenschutzPage';
 import "./App.css";
-import {BatchPage} from "./features/batch/BatchPage.tsx";
+import BatchPage from "./features/batch/BatchPage.tsx";
 
 
 /**
@@ -24,7 +24,7 @@ function App() {
         <Route path='/analysis/:job_id' element={<AnalysisPage />} />
         <Route path='/normalization/:job_id' element={<NormalizationPage />} />
         <Route path='/datenschutz' element={<DatenschutzPage />} />
-        <Route path="/batch/:jobId" element={<BatchPage />} />
+        <Route path="/batch/:job_id" element={<BatchPage />} />
       </Routes>
     </AppLayout>
   );

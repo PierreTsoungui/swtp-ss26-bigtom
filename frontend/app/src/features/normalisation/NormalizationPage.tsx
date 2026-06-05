@@ -23,6 +23,7 @@ import MethodCard from "./components/MethodCard.tsx";
  */
 export function NormalizationPage() {
   const { job_id } = useParams<{ job_id: string }>();
+  console.log("[NormalizationPage] job_id aus Params:", job_id);
   const navigate = useNavigate();
 
   const { data, isLoading, error } = useNormalizationPreview(job_id ?? null);
@@ -34,8 +35,10 @@ export function NormalizationPage() {
   const jobStatus : JobStatus | null  = useJobPolling(isNormalising ? (job_id ?? null) : null);
 
   useEffect(() => {
+      console.log("[NormalizationPage] useEffect - jobStatus:", jobStatus?.status, "job_id:", job_id);
       if (!jobStatus) return;
       if (jobStatus.status === "ready_for_batch") {
+        console.log("Navigiere zu /batch/", job_id, "aktueller jobStatus:", jobStatus);
         navigate(`/batch/${job_id}`);
       }
   }, [jobStatus?.status, job_id, navigate]);
