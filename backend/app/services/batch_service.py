@@ -65,28 +65,65 @@ def set_job_status(job_id: str, status_str: str, phase_str: Optional[str] = None
 
 
 async def run_batch_pipeline_task(job_id: str, settings_dict: dict, next_round: int, job_dir: Path):
-    """Orchestriert die R-Skripte nacheinander im Hintergrund."""
+    """Orchestriert die R-Skripte nacheinander im Hintergrund mit Live-Fortschritt."""
     try:
+        # 0. Initialisierung: Fortschritt für die neue Phase auf 0% zurücksetzen!
+        job_manager.update_job(
+            job_id,
+            status="running",
+            phase="batch_correction",
+            progress_percent=0,
+            current_step="Initialisiere Batch-Korrektur..."
+        )
+
         # 1. Schritt: R-Korrektur ausführen
         print(f"[PIPELINE] Starte Batch-Korrektur für Job {job_id}...", flush=True)
         covariates_str = ",".join(settings_dict.get("covariates", []))
         
+        # NEU: Das Callback-System fängt die R-Ausgaben ab und updatet das Frontend
+        async def on_progress(data: dict):
+            if data.get("type") == "progress":
+                # Das R-Skript geht von 0-100%. Wir mappen das hier auf 0% bis 85%,
+                # damit noch Puffer für den nachfolgenden SVD-Plot bleibt.
+                progress = int(data["percent"] * 0.85)
+                job_manager.update_job(
+                    job_id,
+                    status="running",
+                    phase="batch_correction",
+                    progress_percent=progress,
+                    current_step=data["message"]
+                )
+
         correction_result = await run_r_script(
             script="batch_correct.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet="",
             mode="batch_correction",
-            script_args=[settings_dict["batch_variable"], covariates_str]
+            script_args=[settings_dict["batch_variable"], covariates_str],
+            on_progress=on_progress  # <--- HIER WAR DER FEHLER: Jetzt übergeben!
         )
         
         if correction_result.get("returncode") != 0:
             print(f"[PIPELINE ERROR] Batch-Korrektur für Job {job_id} fehlgeschlagen.", flush=True)
-            set_job_status(job_id, status_str="failed")
+            job_manager.update_job(
+                job_id,
+                status="failed",
+                phase="batch_correction",
+                current_step="Fehler während der mathematischen Batch-Korrektur."
+            )
             return
 
         # 2. Schritt: SVD-Plot generieren
         print(f"[PIPELINE] Generiere SVD-Plot für Runde {next_round}...", flush=True)
+        # SVD-Plot manuell auf 90% setzen
+        job_manager.update_job(
+            job_id,
+            status="running",
+            phase="batch_correction",
+            progress_percent=90,
+            current_step=f"Generiere SVD-Plot für Runde {next_round}..."
+        )
 
         sample_sheet_name = find_sample_sheet_name(str(job_dir))
 
@@ -96,15 +133,21 @@ async def run_batch_pipeline_task(job_id: str, settings_dict: dict, next_round: 
             job_dir=str(job_dir),
             sample_sheet="",
             mode="svd_plot",
-            script_args=["corrected_data.rds", sample_sheet_name, f"svd_plot_{next_round}.png"]
+            script_args=["corrected_data.rds", sample_sheet_name, f"svd_plot_{next_round}.png"],
+            on_progress=None
         )
         
         if plot_result.get("returncode") != 0:
             print(f"[PIPELINE ERROR] SVD-Plot Generierung für Job {job_id} fehlgeschlagen.", flush=True)
-            set_job_status(job_id, status_str="failed")
+            job_manager.update_job(
+                job_id,
+                status="failed",
+                phase="batch_correction",
+                current_step="Fehler bei der SVD-Plot-Visualisierung."
+            )
             return
 
-        # 3. Schritt: Historie aktualisieren
+        # 3. Schritt: Historie aktualisieren & Abschluss
         print(f"[PIPELINE] Beide R-Skripte erfolgreich. Aktualisiere Historie...", flush=True)
         history_data = load_history(job_dir, job_id)
         
@@ -121,12 +164,25 @@ async def run_batch_pipeline_task(job_id: str, settings_dict: dict, next_round: 
         history_data["correction_applied"] = True
         
         save_history(job_dir, history_data)
-        set_job_status(job_id, status_str="batch_done")
+        
+        # Finale Vollendung: 100% und Status auf batch_done abändern
+        job_manager.update_job(
+            job_id,
+            status="batch_done",
+            phase="batch_correction",
+            progress_percent=100,
+            current_step="Batch-Korrektur erfolgreich abgeschlossen!"
+        )
         print(f"[PIPELINE SUCCESS] Workflow für Job {job_id} komplett abgeschlossen!", flush=True)
 
     except Exception as e:
         print(f"[PIPELINE CRITICAL] Unerwarteter Fehler im Ablauf: {str(e)}", flush=True)
-        set_job_status(job_id, status_str="failed")
+        job_manager.update_job(
+            job_id,
+            status="failed",
+            phase="batch_correction",
+            current_step=f"Kritischer Systemfehler: {str(e)}"
+        )
 
 def run_downstream_analysis_workflow(job_id: str, job_dir_raw: str):
     """
