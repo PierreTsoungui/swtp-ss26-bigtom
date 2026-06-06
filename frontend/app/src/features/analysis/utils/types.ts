@@ -54,6 +54,7 @@ export type JobStatusValue =
   | "batch_done"
   | "completed"
   | "failed"
+  | "analysis_done"
   | "canceled";
 
 export type JobPhase =
@@ -65,6 +66,7 @@ export type JobPhase =
   | "waiting_selection"
   | "normalizing"
   | "batch_correction"
+  | "downstream_analysis"
   | "completed"
   | "reset";
 

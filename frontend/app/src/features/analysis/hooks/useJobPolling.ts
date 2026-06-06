@@ -9,7 +9,8 @@ const TERMINAL_STATES: JobStatusValue[] = [
   "completed",
   "failed",
   "canceled",
-  "ready_for_batch"
+  "ready_for_batch",
+  "analysis_done"
 ];
 
 /**
@@ -164,6 +165,7 @@ function isJobStatusValue(value: unknown): value is JobStatusValue {
     value === "normalization_done" ||
     value === "ready_for_batch" ||
     value === "batch_done" ||
+    value == "analysis_done" ||
     value === "completed" ||
     value === "failed" ||
     value === "canceled"
@@ -181,6 +183,7 @@ function isJobPhase(value: unknown): value is JobPhase {
     value === "waiting_selection" ||
     value === "normalizing" ||
     value === "batch_correction" ||
+    value == "downstream_analysis" ||
     value === "completed" ||
     value === "reset"
   );

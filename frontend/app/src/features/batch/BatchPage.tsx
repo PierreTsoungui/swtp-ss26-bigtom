@@ -43,19 +43,32 @@ const BatchPage: React.FC = () => {
 
   const batchRunning = isSubmitting && jobStatus?.status === "running";
 
-
-
-
   // Erfolgreich beendet
   useEffect(() => {
     if (!jobStatus) return;
     console.log("[BATCH STATUS]", jobStatus);
-    const finished = jobStatus.status === "waiting" || jobStatus.status === "batch_done"
-    if (finished && showProgressBar) {
+
+    // DMP/DMR läuft
+    if (jobStatus.phase === "downstream_analysis" && jobStatus.status === "running" ) {
+      setShowProgressBar(true);
+      return;
+    }
+    // DMP/DMR fertig
+    else if (jobStatus.phase === "downstream_analysis" && jobStatus.status === "analysis_done") {
+      setShowProgressBar(false);
+      console.log("[DOWNSTREAM ANALYSIS FINISHED]", jobStatus.status);
+      fetchHistory();
+      // TODO: Navigate zur Tabelle hinzufügen
+      // navigate(`/results/${jobId}`);
+      return;
+    }
+    const batch_finished = jobStatus.status === "waiting" || jobStatus.status === "batch_done"
+    if (batch_finished && showProgressBar) {
       setShowProgressBar(false);
       fetchHistory();
     }
-  }, [jobStatus, showProgressBar, fetchHistory]);
+
+  }, [jobStatus, showProgressBar, fetchHistory, /* navigate ,*/ job_id ]);
 
   if (!job_id) {
     return (
