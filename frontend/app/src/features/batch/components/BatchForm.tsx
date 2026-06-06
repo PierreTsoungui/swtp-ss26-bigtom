@@ -156,9 +156,19 @@ export function BatchForm({
                         type="button"
                         onClick={onSkip}
                         disabled={isLoading}
-                        className="flex-1 px-6 py-3 rounded-lg font-semibold border-2 border-slate-300 text-slate-700 hover:bg-slate-50 transition"
+                        className="
+                            flex-1 px-6 py-3
+                            rounded-lg font-semibold
+                            border-2 border-slate-300
+                            text-slate-700
+                            bg-white
+                            transition-colors duration-200 ease-in-out
+                            hover:bg-slate-100 hover:border-slate-400
+                            active:bg-slate-200
+                            disabled:opacity-50 disabled:cursor-not-allowed
+                            disabled:hover:bg-white disabled:hover:border-slate-300"
                     >
-                        Skip
+                        {isLoading ? "Läuft..." : "Skip"}
                     </button>
                 )}
             </div>
