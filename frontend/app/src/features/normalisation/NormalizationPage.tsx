@@ -1,116 +1,132 @@
-import { useState } from "react";
+import {useEffect, useState} from "react";
 import { useParams, useNavigate } from "react-router";
-import type {NormalizationMethod} from "./utils/types.ts";
-import {useNormalizationPreview} from "./hooks/useNormalizationPreview.ts";
+import type { NormalizationMethod } from "./utils/types";
+import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
+import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
+import Progressbar from "../../shared/components/Progressbar.tsx";
+import type {JobStatus} from "../analysis/utils/types.ts";
+import PlotModal from "./components/PlotModal.tsx";
+import LoadingScreen from "./components/LoadingScreen.tsx";
+import MethodCard from "./components/MethodCard.tsx";
 
+
+/**
+ * Page zur Auswahl der Normalisierungsmethode.
+ * Zeigt für jede Methode zwei Plots (Dichte und PCA) als Vorschau an.
+ * Der Nutzer kann eine Methode auswählen und bestätigen, um die Normalisierung zu starten.
+ * Während der Normalisierung wird ein Fortschrittsbalken angezeigt, bis die Batch-Seite geladen wird.
+ *
+ * @note Die Plots werden als URLs vom Backend geliefert und direkt eingebunden.
+ *       Für eine bessere UX können die Plots angeklickt werden, um sie in einem Modal zu vergrößern.
+ *
+ * @returns JSX.Element
+ */
 export function NormalizationPage() {
-    const { job_id } = useParams<{ job_id: string }>();
-    const navigate = useNavigate();
-    const { data, isLoading, error } = useNormalizationPreview(job_id ?? null);
-    const [selected, setSelected] = useState<NormalizationMethod | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const { job_id } = useParams<{ job_id: string }>();
+  console.log("[NormalizationPage] job_id aus Params:", job_id);
+  const navigate = useNavigate();
 
-    const handleConfirm = async () => {
-        if (!selected || !job_id) return;
-        setIsSubmitting(true);
-        try {
-            const res = await fetch(`/api/v1/normalize/${job_id}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ method: selected }),
-            });
-            if (!res.ok) throw new Error(`Fehler: ${res.status}`);
-            navigate(`/analysis/${job_id}`); // zurück zum Ladescreen
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+  const { data, isLoading, error } = useNormalizationPreview(job_id ?? null);
+  const [selected, setSelected] = useState<NormalizationMethod | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [isNormalising, setIsNormalising] = useState(false);
 
-    // Ladescreen während Plots berechnet werden
-    if (isLoading) {
-        return (
-            <main className="flex min-h-screen items-center justify-center">
-                <p className="text-slate-500">Normalisierungsvorschauen werden geladen...</p>
-            </main>
-        );
+  const jobStatus : JobStatus | null  = useJobPolling(isNormalising ? (job_id ?? null) : null);
+
+  useEffect(() => {
+      console.log("[NormalizationPage] useEffect - jobStatus:", jobStatus?.status, "job_id:", job_id);
+      if (!jobStatus) return;
+      if (jobStatus.status === "ready_for_batch") {
+        console.log("Navigiere zu /batch/", job_id, "aktueller jobStatus:", jobStatus);
+        navigate(`/batch/${job_id}`);
+      }
+  }, [jobStatus?.status, job_id, navigate]);
+
+  const handleConfirm = async () => {
+    if (!selected || !job_id) return;
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch(`/api/v1/normalize/${job_id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: selected }),
+      });
+
+      if (!res.ok) throw new Error(`Fehler: ${res.status}`);
+      setIsNormalising(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
     }
+  };
 
-    if (error) {
-        return (
-            <main className="flex min-h-screen items-center justify-center">
-                <p className="text-red-500">{error}</p>
-            </main>
-        );
-    }
+  if (isLoading) { return <LoadingScreen message="Normalisierungsvorschauen werden geladen..." /> }
+  if (error) { return <LoadingScreen message={error} /> }
+  if (!data) return null;
 
-    if (!data) return null;
+  const handleImageClick = (url: string, title: string) => {
+    setPreviewImage({ url, title });
+  };
 
-    return (
-        <main className="min-h-screen bg-slate-50 px-6 py-10">
-            <h1 className="mb-2 text-2xl font-semibold text-slate-900">
-                Normalisierungsmethode auswählen
-            </h1>
-            <p className="mb-8 text-slate-500">
-                Empfohlen: <strong>{data.recommendation}</strong>
-            </p>
+  const isDisabled : boolean = !selected || isSubmitting || isNormalising;
 
-            {/* 5 Plots nebeneinander */}
-            <div className="grid grid-cols-5 gap-4 mb-8">
-                {data?.plots?.map((p) => {
-                    return (
-                        <label
-                            key={p.method}
-                            className={`cursor-pointer rounded-lg border-2 p-3 transition-colors ${
-                                 p.method === "raw"
-                                   ? "cursor-not-allowed opacity-60 border-slate-200 bg-slate-100"
-                                :selected ===p.method
-                                    ? "border-blue-500 bg-blue-50"
-                                    : "border-slate-200 bg-white"
-                            }`}
-                        >
-                            <img
-                                src={p.url}
-                                alt={`Normalisierung: ${p.method}`}
-                                className="w-full rounded"
-                            />
-                            <div className="mt-2 flex items-center gap-2">
-                                <input
-                                    type="radio"
-                                    name="normalization"
-                                    value={p.method}
-                                    checked={selected ===p.method}
-                                    onChange={() =>{ 
-                                        if(p.method!="raw"){
-                                        setSelected(p.method);
-                                    }
-                                    }}
-                                />
-                                <span className="text-sm font-medium">{p.method}</span>
-                                {p.quality_score != undefined && (
-                                    <span className="ml-auto text-xs text-slate-400">
-                    {p.quality_score.toFixed(2)}
-                  </span>
-                                )}
-                            </div>
-                        </label>
-                    );
-                })}
-            </div>
+  return (
+    <main className="min-h-screen bg-slate-50 px-6 py-10">
+      {/* MODAL für Plot-Vorschau */}
+      {previewImage && (
+        <PlotModal
+          imageURL={previewImage.url}
+          title={previewImage.title}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
 
-            {/* Bestätigen */}
-            <div className="flex justify-center">
-                <button
-                    onClick={handleConfirm}
-                    disabled={!selected || isSubmitting}
-                    className="rounded-full bg-blue-600 px-10 py-3 font-bold text-white
-                     transition-colors hover:bg-blue-700
-                     disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                    {isSubmitting ? "Wird gestartet..." : "Methode bestätigen"}
-                </button>
-            </div>
-        </main>
-    );
+      <h1 className="mb-2 text-2xl font-semibold text-slate-900">
+        Normalisierungsmethode auswählen
+      </h1>
+      <p className="mb-8 text-slate-500">
+        Klicken Sie auf einen Plot für eine vergrößerte Ansicht
+      </p>
+
+      {/* METHOD CARDS (5 methods) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-10">
+        {data.plots.map((group) => (
+            <MethodCard
+                group={group}
+                isSelected={selected === group.method}
+                onSelect={setSelected}
+                onImageClick={handleImageClick}
+            />
+        ))}
+      </div>
+
+      {/* Ladebalken */}
+      {isNormalising && jobStatus && (
+          <div className="mb-5">
+            <Progressbar jobStatus={jobStatus} showNextButton={false} onNext={() => {}} />
+          </div>
+      )}
+
+      {/* CONFIRM BUTTON */}
+      <div className="flex justify-center">
+        <button
+          onClick={handleConfirm}
+          disabled={isDisabled}
+          className={`
+            rounded-full px-10 py-3 font-bold text-white
+            transition-colors
+            ${isDisabled
+              ? "cursor-not-allowed bg-slate-300"
+              : "bg-blue-600 hover:bg-blue-700"
+            }
+          `}
+        >
+          {isSubmitting ? "Wird gestartet..." : `Methode bestätigen`}
+        </button>
+      </div>
+    </main>
+  );
 }

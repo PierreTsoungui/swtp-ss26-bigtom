@@ -1,14 +1,18 @@
-
+import os
+import shutil
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
-from app.services.job_manager import get_job, update_job
-from app.services.r_executor import run_r_script
+
 from app.core.error_types import ErrorTypes, problem_detail
 from app.models.job import NormalizeRequest, NormalizeResponse
-from datetime import datetime
+from app.services.job_manager import get_job, update_job
+from app.services.r_executor import run_r_script
+from app.services.batch_service import find_sample_sheet_name
+
 router = APIRouter()
 
-
-VALID_METHODS = {"noob", "quantile", "swan", "funnorm"}
+# "raw" zu den erlaubten Methoden hinzufügen
+VALID_METHODS = {"noob", "quantile", "swan", "funnorm", "raw"}
 
 
 @router.post("/normalize/{job_id}", response_model=NormalizeResponse, status_code=202)
@@ -25,9 +29,9 @@ async def start_normalization(
     - quantile: Quantile normalization
     - swan: SWAN normalization
     - funnorm: Functional normalization
+    - raw: Keine Normalisierung (Rohdaten direkt weiterverwenden)
     """
     
-   
     job = get_job(job_id)
     if not job:
         raise HTTPException(
@@ -40,7 +44,6 @@ async def start_normalization(
             )
         )
     
-    
     if job.expires_at < datetime.now():
         raise HTTPException(
             status_code=410,
@@ -51,23 +54,6 @@ async def start_normalization(
                 job_id=job_id
             )
         )
-    
-    """
-   # AUSKOMMENTIERT, DA NORMALISIERUNG NUR NACH FILTERUNG ERLAUBT SEIN SOLL
-
-
-    if job.status != "waiting_selection":
-        raise HTTPException(
-            status_code=409,
-            detail=problem_detail(
-                error_type=ErrorTypes.NORMALIZATION_NOT_ALLOWED,  
-                detail=f"Normalisierung kann erst nach abgeschlossener Filterung gestartet werden (aktuelle Phase: {job.phase})",
-                instance=request.url.path,
-                job_id=job_id,
-                current_phase=job.phase
-            )
-        )
-    """
    
     method = body.method.lower()
     if method not in VALID_METHODS:
@@ -82,17 +68,15 @@ async def start_normalization(
                 allowed_methods=list(VALID_METHODS)
             )
         )
-    
    
     update_job(
         job_id,
         status="running",
         phase="normalizing",
         progress_percent=0,
-        current_step=f"Starte Normalisierung mit Methode '{method}'...",
+        current_step=f"Starte Normalisierungsphase mit Methode '{method}'...",
         normalization_method=method
     )
-    
    
     background_tasks.add_task(
         run_normalization_background,
@@ -109,46 +93,133 @@ async def start_normalization(
 
 
 async def run_normalization_background(job_id: str, job_dir: str, method: str):
-    """Führt Normalisierung im Hintergrund aus"""
+    """Führt Normalisierung im Hintergrund aus und berechnet danach den initialen SVD-Plot (Runde 0)"""
     
-    async def on_progress(progress_data: dict):
+    print(f"[DEBUG] run_normalization_background aufgerufen mit job_dir='{job_dir}'", flush=True)
+    
+    # 1. Callback für die Normalisierung (0% bis 100%)
+    async def on_norm_progress(progress_data: dict):
         update_job(
             job_id,
             status="running",
             phase="normalizing",
-            progress_percent=progress_data.get("progress", 0),
-            current_step=progress_data.get("step", "Normalisierung läuft...")
+            progress_percent=int(progress_data.get("percent", 0)),  # "percent" statt "progress"
+            current_step=progress_data.get("message", "Normalisierung läuft...")  # "message" statt "step"
+        )
+
+    async def on_svd_progress(progress_data: dict):
+        update_job(
+            job_id,
+            status="running",
+            phase="normalizing",
+            progress_percent=int(progress_data.get("percent", 0)),  # "percent" statt "progress"
+            current_step=f"SVD-Analyse (Runde 0): {progress_data.get('message', 'Berechne Plot...')}"  # "message" statt "step"
         )
     
     try:
-       
+        # --- SCHRITT 1: NORMALISIERUNG ---
+        if method == "raw":
+            update_job(
+                job_id,
+                status="running",
+                phase="normalizing",
+                progress_percent=0,
+                current_step="Nutze unkorrigierte Rohdaten. Kopiere Filter-Assets..."
+            )
+            
+            filtered_file = os.path.join(job_dir, "filtered_data.rds")
+            normalized_file = os.path.join(job_dir, "normalized_data.rds")
+            
+            if not os.path.exists(filtered_file):
+                raise FileNotFoundError(f"Die gefilterten Rohdaten wurden unter '{filtered_file}' nicht gefunden.")
+            
+            shutil.copyfile(filtered_file, normalized_file)
+            
+            # Bei "raw" sind wir sofort fertig mit diesem Schritt
+            update_job(
+                job_id,
+                status="running",
+                phase="normalizing",
+                progress_percent=100,
+                current_step="Rohdaten erfolgreich bereitgestellt."
+            )
+            
+        else:
+            result = await run_r_script(
+                script="normalize.R",
+                job_id=job_id,
+                job_dir=job_dir,
+                sample_sheet="",
+                mode="normalization",
+                script_args=[method],
+                on_progress=on_norm_progress # Nutzt den Normalisierungs-Callback
+            )
+            
+            if result["returncode"] != 0:
+                update_job(
+                    job_id,
+                    status="failed",
+                    phase="normalizing",
+                    error_message=result.get("stderr", "Normalisierung fehlgeschlagen")
+                )
+                return
         
-        result = await run_r_script(
-            script="normalize.R",
+        # --- SCHRITT 2: SVD-PLOT GENERIEREN ---
+        round_zero_file = "svd_plot_0.png"
+        
+        # Initialer Reset auf 0% für den SVD-Start
+        update_job(
+            job_id,
+            status="running",
+            phase="normalizing",
+            progress_percent=0,
+            current_step="Normalisierung abgeschlossen. Starte SVD-Plot-Generierung (Runde 0)..."
+        )
+        
+        from app.services.batch_service import find_sample_sheet_name
+        try:
+            sample_sheet_name = find_sample_sheet_name(job_dir)
+        except Exception as sheet_err:
+            print(f"[DEBUG] Fehler bei find_sample_sheet_name: {str(sheet_err)}. Fallback.", flush=True)
+            sample_sheet_name = "sample_sheet.csv"
+        
+        svd_args = ["normalized_data.rds", sample_sheet_name, round_zero_file]
+        
+        svd_result = await run_r_script(
+            script="batch_svd.R",  
             job_id=job_id,
             job_dir=job_dir,
             sample_sheet="",
-            mode="normalization",
-            script_args=[method],
-            on_progress=on_progress
+            mode="batch_init",
+            script_args=svd_args,
+            on_progress=on_svd_progress # JETZT MIT CALLBACK!
         )
         
-        if result["returncode"] != 0:
+        if svd_result["returncode"] != 0:
             update_job(
                 job_id,
                 status="failed",
                 phase="normalizing",
-                error_message=result.get("stderr", "Normalisierung fehlgeschlagen")
+                error_message=svd_result.get("stderr", "SVD-Plot-Generierung für Runde 0 fehlgeschlagen")
             )
             return
+
+        # --- SCHRITT 3: BATCH-HISTORIE ---
+        initial_round = {
+            "round_number": 0,
+            "plot_file": round_zero_file,
+            "batch_variable": None,
+            "covariates": [],
+            "timestamp": datetime.now().isoformat()
+        }
         
-       
         update_job(
             job_id,
-            status="normalization_done",
-            phase="normalizing",
+            status="ready_for_batch",
+            phase="batch_correction",
             progress_percent=100,
-            current_step=f"Normalisierung mit {method} abgeschlossen"
+            current_step="Normalisierungsphase abgeschlossen. Bereit für Batch-Effekt-Korrektur.",
+            batch_history={"rounds": [initial_round]}
         )
         
     except Exception as e:

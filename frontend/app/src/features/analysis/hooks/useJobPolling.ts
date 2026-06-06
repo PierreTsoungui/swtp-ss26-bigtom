@@ -1,96 +1,146 @@
 import { useState, useEffect, useRef } from "react";
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
-import type { FilterStats, JobPhase, JobStatus, JobStatusValue } from "../utils/types";
+import type { JobPhase, JobStatus, JobStatusValue} from "../utils/types";
 
 const TERMINAL_STATES: JobStatusValue[] = [
   "normalization_done",
+  "ready_for_batch",
+  "batch_done",
   "completed",
   "failed",
   "canceled",
-  "filtering_done",
+  "ready_for_batch",
+  "analysis_done"
 ];
 
 /**
  * Custom Hook, der den Status eines Jobs überwacht, indem er regelmäßig die API abfragt.
  * @param jobId Die ID des Jobs, dessen Status überwacht werden soll. Wenn `null`, wird kein Polling durchgeführt.
  */
-export function useJobPolling(jobId: string | null): JobStatus | null {
+export function useJobPolling(jobId: string | null, resetKey? : number): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failCountRef = useRef<number>(0);
+  const MAX_FAILURES = 3;
+
+  useEffect(() => {
+    setJobStatus(null);
+    failCountRef.current = 0;
+  }, [resetKey]);
 
   useEffect(() => {
     if (!jobId) return;
 
-    intervalRef.current = setInterval(async () => {
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
       try {
         const res = await fetch(`/api/v1/status/${jobId}`);
+
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
         const body: unknown = await res.json();
+        console.log("[RAW STATUS RESPONSE]", body);
         const data = parseJobStatus(body);
+        failCountRef.current = 0; // Reset failure count on success
         setJobStatus(data);
 
-        const isWaitingForSelection =
-          data.status === "waiting" && data.phase === "waiting_selection";
+        const isWaitingForSelection: boolean = data.status === "waiting" && data.phase === "waiting_selection";
 
-        if (TERMINAL_STATES.includes(data.status) || isWaitingForSelection) {
-          clearInterval(intervalRef.current!);
+        const shouldStop = TERMINAL_STATES.includes(data.status) || isWaitingForSelection;
+
+        if (!shouldStop && !cancelled) {
+          timeoutId = setTimeout(poll, 1500);
         }
-      } catch {
-        setJobStatus((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "failed",
-                error: {
-                  type: "http://localhost:3000/analysis/errors#connection-error",
-                  title: "Verbindungsfehler",
-                  status: 503,
-                  detail: "Verbindung zum Server unterbrochen.",
-                  instance: `/api/v1/status/${jobId}`,
-                },
-              }
-            : null
-        );
-        clearInterval(intervalRef.current!);
-      }
-    }, 1500);
+      } catch (err) {
+        failCountRef.current += 1;
+        console.warn(`[POLLING] Anfrage fehlgeschlagen (${failCountRef.current}/${MAX_FAILURES})`, err);
+        if (failCountRef.current >= MAX_FAILURES) {
+          setJobStatus((prev) =>
+              prev
+                  ? {
+                    ...prev,
+                    status: "failed",
+                    error: {
+                      type: "http://localhost:3000/analysis/errors#connection-error",
+                      title: "Verbindungsfehler",
+                      status: 503,
+                      detail: "Verbindung zum Server nach 3 Versuchen unterbrochen.",
+                      instance: `/api/v1/status/${jobId}`,
+                    },
+                  }
+                  : null
+          );
 
-    return () => clearInterval(intervalRef.current!);
-  }, [jobId]);
+        } else if (!cancelled) {
+          timeoutId = setTimeout(poll, 1500 * failCountRef.current); // Exponentielles Backoff
+        }
+      }
+    };
+
+    poll();
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [jobId, resetKey]);
 
   return jobStatus;
 }
 
 function parseJobStatus(value: unknown): JobStatus {
   if (!isRecord(value)) {
+    console.error("[PARSING ERROR] Expected an object but got:", value);
     throw new Error("Invalid job status response");
   }
 
-  const {
-    job_id,
-    status,
-    phase,
-    progress_percent,
-    current_step,
-    steps_total,
-    steps_completed,
-    filter_stats,
-    estimated_seconds_remaining,
-    error,
-  } = value;
+  const job_id = value.job_id;
+  const status = value.status;
+  const phase = value.phase;
+  const progress_percent = value.progress_percent;
+  const current_step = value.current_step;
+  const steps_total = value.steps_total;
+  const steps_completed = value.steps_completed;
+  const estimated_seconds_remaining = value.estimated_seconds_remaining;
+  const error = value.error;
 
-  if (
-    typeof job_id !== "string" ||
-    !isJobStatusValue(status) ||
-    !isJobPhase(phase) ||
-    !isFiniteNumber(progress_percent) ||
-    typeof current_step !== "string" ||
-    !isNonNegativeInteger(steps_total) ||
-    !isNonNegativeInteger(steps_completed) ||
-    !isFilterStatsOrNull(filter_stats) ||
-    !isNullableNonNegativeNumber(estimated_seconds_remaining)
-  ) {
-    throw new Error("Invalid job status response");
+  if (typeof job_id !== "string") {
+    throw new Error("Invalid job status response: job_id");
   }
+  if (!isJobStatusValue(status)) {
+    console.error("[PARSING ERROR] Unknown status value:", status);
+    throw new Error("Invalid job status response: status");
+  }
+  if (!isJobPhase(phase)) {
+    console.error("[PARSING ERROR] Unknown phase value:", phase);
+    throw new Error("Invalid job status response: phase");
+  }
+  if (!isFiniteNumber(progress_percent)) {
+    throw new Error("Invalid job status response: progress_percent");
+  }
+  if (typeof current_step !== "string") {
+    throw new Error("Invalid job status response: current_step");
+  }
+  if (!isNonNegativeInteger(steps_total)) {
+    throw new Error("Invalid job status response: steps_total");
+  }
+  if (!isNonNegativeInteger(steps_completed)) {
+    throw new Error("Invalid job status response: steps_completed");
+  }
+
+  // estimated_seconds_remaining: null oder number, undefined auch erlaubt
+  const parsedEstimated: number | null =
+    estimated_seconds_remaining === undefined || estimated_seconds_remaining === null
+      ? null
+      : isFiniteNumber(estimated_seconds_remaining)
+      ? estimated_seconds_remaining
+      : null;
 
   return {
     job_id,
@@ -100,8 +150,7 @@ function parseJobStatus(value: unknown): JobStatus {
     current_step,
     steps_total,
     steps_completed,
-    filter_stats,
-    estimated_seconds_remaining,
+    estimated_seconds_remaining: parsedEstimated,
     ...(isProblemDetail(error) ? { error } : {}),
   };
 }
@@ -114,6 +163,9 @@ function isJobStatusValue(value: unknown): value is JobStatusValue {
     value === "filtering" ||
     value === "filtering_done" ||
     value === "normalization_done" ||
+    value === "ready_for_batch" ||
+    value === "batch_done" ||
+    value == "analysis_done" ||
     value === "completed" ||
     value === "failed" ||
     value === "canceled"
@@ -131,29 +183,12 @@ function isJobPhase(value: unknown): value is JobPhase {
     value === "waiting_selection" ||
     value === "normalizing" ||
     value === "batch_correction" ||
+    value == "downstream_analysis" ||
     value === "completed" ||
     value === "reset"
   );
 }
 
-function isFilterStatsOrNull(value: unknown): value is FilterStats | null {
-  if (value === null) return true;
-  if (!isRecord(value) || !Array.isArray(value.steps)) return false;
-
-  return (
-    isNonNegativeNumber(value.total_before) &&
-    value.steps.every(isFilterStep) &&
-    isNonNegativeNumber(value.remaining)
-  );
-}
-
-function isFilterStep(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    isNonNegativeNumber(value.removed)
-  );
-}
 
 function isProblemDetail(value: unknown): value is ProblemDetail {
   if (!isRecord(value)) return false;
@@ -185,14 +220,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
-}
-
-function isNonNegativeNumber(value: unknown): value is number {
-  return isFiniteNumber(value) && value >= 0;
-}
-
-function isNullableNonNegativeNumber(value: unknown): value is number | null {
-  return value === null || isNonNegativeNumber(value);
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

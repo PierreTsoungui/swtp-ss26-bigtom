@@ -1,12 +1,22 @@
 import { useState, useEffect } from "react";
 import type { NormalizationPreview } from "../utils/types";
 
+/**
+ * Interface für die Rückgabewerte des useNormalizationPreview Hooks.
+    * - data: Die Normalisierungsvorschau, wenn erfolgreich geladen, sonst null.
+    * - isLoading: Gibt an, ob die Daten geladen werden.
+    * - error: Fehlermeldung, falls ein Fehler auftritt.
+ */
 interface Result {
     data: NormalizationPreview | null;
     isLoading: boolean;
     error: string | null;
 }
 
+/**
+ * Hook zur Abfrage der Normalisierungsvorschauen für einen bestimmten Job.
+ * @param jobId
+ */
 export function useNormalizationPreview(jobId: string | null): Result {
     const [data, setData] = useState<NormalizationPreview | null>(null);
     const [isLoading, setIsLoading] = useState(false);

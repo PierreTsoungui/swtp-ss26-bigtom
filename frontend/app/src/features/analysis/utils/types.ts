@@ -1,34 +1,46 @@
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
 
-export interface FilterStep {
-  name: string;
+export interface BaseFilterStats {
+  enabled: boolean;
   removed: number;
+  after: number;
 }
-
-export interface FilterStats {
-  total_before: number;
-  steps: FilterStep[];
-  remaining: number;
+export interface BeadCountStats extends BaseFilterStats {}
+export interface DetPStats extends BaseFilterStats {
+  cutoff: number;
 }
+export interface MultiHitStats extends BaseFilterStats {}
+export interface NonCpgStats extends BaseFilterStats {}
+export interface SnpStats extends BaseFilterStats {}
+export interface XyChromosomeStats extends BaseFilterStats {}
 
-export interface FilteringStep {
-  name: string;
-  probesBefore: number;
-  removed: number;
-  probesAfter: number;
+export interface SampleQualityStats {
+  enabled: boolean;
+
+  detection_p_cutoff: number;
+  sample_failure_rate: number;
+
+  enable_pca_outlier_detection: boolean;
+  remove_failed_samples: boolean;
+
+  samples_before: number;
+  samples_after: number;
+  samples_removed: number;
 }
 
 export interface FilteringStatsType {
-  steps: FilteringStep[];
-  finalProbeCount: number;
-}
+  total_start: number;
+  total_end: number;
+  total_removed: number;
 
-export type FilteringStatsStatus = "idle" | "filtering" | "filtering_done" | "error";
+  bead_count: BeadCountStats;
+  det_p: DetPStats;
+  multi_hit: MultiHitStats;
+  non_cpg: NonCpgStats;
+  snp: SnpStats;
+  xy_chromosomes: XyChromosomeStats;
 
-export interface FilteringStatsResponse {
-  status: FilteringStatsStatus;
-  filterStats?: FilteringStatsType;
-  error?: string;
+  sample_quality: SampleQualityStats;
 }
 
 export type JobStatusValue =
@@ -38,8 +50,11 @@ export type JobStatusValue =
   | "filtering"
   | "filtering_done"
   | "normalization_done"
+  | "ready_for_batch"
+  | "batch_done"
   | "completed"
   | "failed"
+  | "analysis_done"
   | "canceled";
 
 export type JobPhase =
@@ -51,6 +66,7 @@ export type JobPhase =
   | "waiting_selection"
   | "normalizing"
   | "batch_correction"
+  | "downstream_analysis"
   | "completed"
   | "reset";
 
@@ -62,43 +78,6 @@ export interface JobStatus {
   current_step: string;
   steps_total: number;
   steps_completed: number;
-  filter_stats: FilterStats | null;
   estimated_seconds_remaining: number | null;
   error?: ProblemDetail;
 }
-
-export type ResultsTableCellValue = string | number | null;
-
-export interface ResultsTableResponse {
-  columns: string[];
-  rows: Array<Record<string, ResultsTableCellValue>>;
-  page: number;
-  page_size: number;
-  total_rows: number;
-}
-
-export type SortOrder = "asc" | "desc";
-
-export interface ResultsTableSorting {
-  column: string;
-  order: SortOrder;
-}
-
-export type ResetStatusTpe = {
-  reset: boolean;
-  status: JobStatusValue;
-}
-
-
-// Typdefinition für eine einzelne Methylierungs-Zeile
-export type MethylationRow = {
-  cpgId: string;           // ID des CpG-Sites
-  geneSymbol: string;      // Name des zugehörigen Gens
-  deltaBeta: number;       // Differenz der Beta-Werte (behandelt vs. Kontrolle)
-  pValue: number;          // Statistische Signifikanz
-  region: string;          // Genregion (Promotor, Körper, etc.)
-  status: string;          // Status (signifikant/nicht signifikant)
-  chromosome: string;      // Chromosomen-Nummer
-  position: number;        // Genomische Position
-  geneDescription?: string; // Optionale Genbeschreibung
-};

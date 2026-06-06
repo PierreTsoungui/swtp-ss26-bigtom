@@ -1,4 +1,5 @@
 import { useState } from "react"
+import type {FilterSettings} from "../utils/types.ts";
 
 /**
  * Type für den Upload-Status, enthält die Antwortdaten, Ladezustand und Fehlernachricht.
@@ -13,7 +14,7 @@ type UploadState = {
   // data: { job_id: string } | null
   isLoading: boolean
   error: string | null
-  upload: (idatFiles: File[], sampleSheet: File) => Promise<string | null>
+  upload: (idatFiles: File[], sampleSheet: File, filterSettings : FilterSettings) => Promise<string | null>
 }
 
 /**
@@ -26,17 +27,18 @@ export function useUpload() : UploadState {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const upload = async (idatFiles: File[], sampleSheet: File): Promise<string | null> => {
+  const upload = async (idatFiles: File[], sampleSheet: File, filterSettings : FilterSettings): Promise<string | null> => {
     setIsLoading(true)
     setError(null)
     // setData(null)
 
     const formData = new FormData()
-    idatFiles.forEach((file) => formData.append("idat_files", file))
+    idatFiles.forEach((file) => formData.append("idat_files", file, file.name))
     formData.append("sample_sheet", sampleSheet)
+    formData.append("filter_settings", JSON.stringify(filterSettings))
 
     try {
-      const response = await fetch("http://localhost:8000/api/v1/upload", {
+      const response = await fetch("/api/v1/upload", {
         method: "POST",
         body: formData,
       })

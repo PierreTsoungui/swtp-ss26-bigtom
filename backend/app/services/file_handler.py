@@ -2,8 +2,10 @@ from email import header
 import shutil
 from pathlib import Path
 from typing import List, Tuple, Dict
+
 from fastapi import UploadFile
 import os
+import json
 
 UPLOAD_BASE_DIR = Path(os.getenv("JOB_BASE_DIR", "./jobs"))
 
@@ -12,7 +14,7 @@ ALLOWED_IDAT_EXTENSIONS = {".idat"}
 ALLOWED_SHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
 
-MAX_TOTAL_SIZE = 200 * 1024 * 1024  # 200 MB (mehr als genug für 30 MB + Puffer)
+MAX_TOTAL_SIZE = 600 * 1024 * 1024  # 200 MB (mehr als genug für 30 MB + Puffer)
 MAX_SAMPLE_SHEET_SIZE = 10 * 1024 * 1024
 
 # ==================== HILFSFUNKTIONEN ====================
@@ -261,20 +263,52 @@ def validate_sample_sheet(file: UploadFile) -> Tuple[bool, Dict]:
 
 def save_idat_files(files: List[UploadFile], job_dir: Path) -> List[str]:
     saved_paths = []
+
     for file in files:
         file.file.seek(0)
-        file_path = job_dir / file.filename
+
+        safe_name = Path(file.filename).name
+        file_path = job_dir / safe_name
+
+        if file_path.exists():
+            raise ValueError(
+                f"Doppelter Dateiname erkannt: {safe_name}"
+            )
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+
         saved_paths.append(str(file_path))
+
     return saved_paths
 
-
+# ÄNDERUNG
 def save_sample_sheet(file: UploadFile, job_dir: Path) -> str:
     file.file.seek(0)
-    file_path = job_dir / file.filename
+
+    safe_name = "SampleSheet.csv" # Path(file.filename).name
+    file_path = job_dir / safe_name
+    try:
+        file_path.resolve().relative_to(job_dir.resolve())
+    except ValueError:
+        raise ValueError("Ungültiger Dateiname")
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    return str(file_path)
+
+def save_filter_settings(filter_settings: Dict, job_dir: Path) -> str:
+    """
+    Speichert die filter_settings als JSON-Datei im Job-Ordner.
+    Erwartet ein bereits geparstes Dict (aus JSON).
+    Gibt den Pfad zur gespeicherten Datei als String zurück.
+    """
+    job_dir = Path(job_dir)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    file_path = job_dir / "filter_settings.json"
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(filter_settings, f)
     return str(file_path)
 
 

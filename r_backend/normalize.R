@@ -1,16 +1,13 @@
 library(minfi)
 
-# ── Progress-Hilfsfunktion ──────────────────────────────────────────────────
-progress <- function(percent, step) {
-  cat(sprintf('{"type":"progress","percent":%d,"step":"%s"}\n', percent, step))
-  flush.connection(stdout())
-}
+# ── Progress Vertrag einbinden ───────────────────────────────────────────────
+source("/app/r_backend/utils/progress.R")
 
 # ── Argumente einlesen ──────────────────────────────────────────────────────
 args <- commandArgs(trailingOnly = TRUE)
 
 if (length(args) < 2) {
-  stop('{"type":"error","message":"Zu wenige Argumente. Erwartet: <job_dir> <method>"}')
+  emit_error("Zu wenige Argumente. Erwartet: <job_dir> <method>")
 }
 
 job_dir <- args[1]
@@ -19,29 +16,30 @@ method  <- args[2]
 VALID_METHODS <- c("noob", "quantile", "swan", "funnorm")
 
 if (!method %in% VALID_METHODS) {
-  stop(sprintf(
-    '{"type":"error","message":"Ungültige Methode: %s. Erlaubt: %s"}',
+  emit_error(sprintf(
+    "Ungültige Methode: %s. Erlaubt: %s",
     method, paste(VALID_METHODS, collapse = ", ")
   ))
 }
 
-progress(0, "Starte Normalisierung")
+# Gemäß Entwickler-Checkliste Punkt 2: Initialisierung melden
+emit_progress(0, "Starte Normalisierung")
 
 # ── filtered_data.rds laden ─────────────────────────────────────────────────
-rds_path <- file.path(job_dir, "filtered_data.rds")
+rds_path = file.path(job_dir, "filtered_data.rds")
 
 if (!file.exists(rds_path)) {
-  stop(sprintf(
-    '{"type":"error","message":"filtered_data.rds nicht gefunden in: %s"}',
+  emit_error(sprintf(
+    "filtered_data.rds nicht gefunden in: %s",
     job_dir
   ))
 }
 
-progress(10, "Lade gefilterte Daten")
+emit_progress(10, "Lade gefilterte Daten")
 raw_data <- readRDS(rds_path)
 
 # ── Normalisierung ──────────────────────────────────────────────────────────
-progress(30, paste("Normalisiere mit Methode:", method))
+emit_progress(30, paste("Normalisiere mit Methode:", method))
 
 normalized <- switch(method,
   "noob"     = preprocessNoob(raw_data),
@@ -50,21 +48,23 @@ normalized <- switch(method,
   "funnorm"  = preprocessFunnorm(raw_data)
 )
 
-progress(70, "Extrahiere Beta-Werte")
-beta <- getBeta(normalized)
+# ── Validierung (Sanity Check) ──────────────────────────────────────────────
+emit_progress(70, "Überprüfe Datenqualität")
+beta_check <- getBeta(normalized)
 
-# Sanity check
-if (any(beta < 0 | beta > 1, na.rm = TRUE)) {
-  stop('{"type":"error","message":"Beta-Werte ausserhalb des gueltigen Bereichs [0,1]"}')
+if (any(beta_check < 0 | beta_check > 1, na.rm = TRUE)) {
+  emit_error("Beta-Werte ausserhalb des gueltigen Bereichs [0,1]")
 }
+rm(beta_check) # Speicher direkt wieder freigeben
 
 # ── Speichern ───────────────────────────────────────────────────────────────
-progress(85, "Speichere Ergebnisse")
+emit_progress(85, "Speichere normalisiertes Objekt")
 
-saveRDS(beta, file.path(job_dir, "beta_matrix.rds"))
+# WICHTIG: Wir speichern das ganze minfi-Objekt, damit spätere Skripte 
+# alle Annotationen und Metadaten behalten!
+output_rds <- file.path(job_dir, "normalized_data.rds")
+saveRDS(normalized, output_rds)
 
-output_path <- file.path(job_dir, "output.csv")
-write.csv(as.data.frame(beta), output_path, row.names = TRUE)
-
-progress(100, "Normalisierung abgeschlossen")
-cat(sprintf('{"type":"done","method":"%s","output":"%s"}\n', method, output_path))
+# Finale Erfolgsmeldung und anschließendes Done-Signal an das Backend senden
+emit_progress(100, "Normalisierung abgeschlossen")
+emit_done(method = method, output = output_rds)
