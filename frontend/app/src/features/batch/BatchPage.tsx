@@ -11,10 +11,12 @@ import { useJobPolling } from "../analysis/hooks/useJobPolling";
 import Progressbar from "../../shared/components/Progressbar";
 
 import type { BatchFormData } from "./utils/types";
+import {useNavigate} from "react-router";
 
 const BatchPage: React.FC = () => {
   const { job_id } = useParams<{ job_id: string }>();
   const [showProgressBar, setShowProgressBar] = useState(false);
+  const navigate = useNavigate();
 
   // Dropdown Werte
   const {
@@ -58,8 +60,7 @@ const BatchPage: React.FC = () => {
       setShowProgressBar(false);
       console.log("[DOWNSTREAM ANALYSIS FINISHED]", jobStatus.status);
       fetchHistory();
-      // TODO: Navigate zur Tabelle hinzufügen
-      // navigate(`/results/${jobId}`);
+      navigate(`/results/${job_id}`);
       return;
     }
     const batch_finished = jobStatus.status === "waiting" || jobStatus.status === "batch_done"

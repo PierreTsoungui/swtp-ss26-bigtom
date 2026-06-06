@@ -6,6 +6,7 @@ import { AppLayout } from './shared/layout/AppLayout';
 import { DatenschutzPage } from './shared/pages/DatenschutzPage';
 import "./App.css";
 import BatchPage from "./features/batch/BatchPage.tsx";
+import {ResultsPage} from "./features/tableview/ResultsPage.tsx";
 
 
 /**
@@ -25,6 +26,7 @@ function App() {
         <Route path='/normalization/:job_id' element={<NormalizationPage />} />
         <Route path='/datenschutz' element={<DatenschutzPage />} />
         <Route path="/batch/:job_id" element={<BatchPage />} />
+        <Route path="/results/:job_id" element={<ResultsPage />} />
       </Routes>
     </AppLayout>
   );
