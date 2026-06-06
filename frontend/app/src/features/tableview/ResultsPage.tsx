@@ -1,4 +1,4 @@
-import { TableContainer } from "../features/tableView/components/TableContainer";
+import {TableContainer} from "./components/TableContainer.tsx";
 
 export function ResultsPage() {
   return (

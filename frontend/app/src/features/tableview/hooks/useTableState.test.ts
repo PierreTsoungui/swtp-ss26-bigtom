@@ -60,8 +60,6 @@ it("cycles sorting: none → asc → desc → none", () => {
   ).toBe(null);
 });
 
-<<<<<<< HEAD
-=======
 it("updates page independently per tab", () => {
   const { result } =
     renderHook(() => useTableState());
@@ -82,6 +80,5 @@ it("updates page independently per tab", () => {
   ).toBe(1);
 });
 
->>>>>>> feature/us-45-pagination
 
 });
