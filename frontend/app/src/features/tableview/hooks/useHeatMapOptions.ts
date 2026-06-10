@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
-import type {HeatMapOptionsResponse} from "../components/utils/types.ts";
+import type {HeatMapOptionsResponse} from "../utils/types.ts";
 
 
+/**
+ * Hook zum Abrufen der verfügbaren Optionen für die Heatmap-Generierung, basierend auf der Job-ID.
+ * Diese Optionen umfassen die Spalten, die für die Gruppierung in der Heatmap verwendet werden können.
+ * @param jobId
+ */
 export const useHeatMapOptions = (jobId: string | null) => {
     const [data, setData] = useState<HeatMapOptionsResponse | null>(null);
     const [isLoading, setIsLoading] = useState(false);

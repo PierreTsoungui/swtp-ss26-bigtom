@@ -1,8 +1,12 @@
 import { useState } from "react";
-import type {HeatMapErrorResponse, HeatMapRequest, HeatMapResponse} from "../components/utils/types.ts";
+import type {HeatMapErrorResponse, HeatMapRequest, HeatMapResponse} from "../utils/types.ts";
 
 
-
+/**
+ * Hook für die Generierung einer Heatmap basierend auf den ausgewählten Gruppierungsoptionen.
+ * Sendet eine POST-Anfrage an den Endpoint /heatmap/{job_id} mit den entsprechenden Parametern und verwaltet den Lade- und Fehlerstatus.
+ * @param jobId
+ */
 export const useGenerateHeatMap = (jobId: string | null) => {
     const [data, setData] = useState<HeatMapResponse | null>(null);
     const [isLoading, setIsLoading] = useState(false);
