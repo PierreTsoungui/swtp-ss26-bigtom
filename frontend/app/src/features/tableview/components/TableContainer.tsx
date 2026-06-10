@@ -8,6 +8,7 @@ import { AnalysisTable } from "./AnalysisTable";
 import { useTableState } from "../hooks/useTableState";
 import { useTableData } from "../hooks/useTableData";
 import { useTableFilters } from "../hooks/useTableFilters";
+import HeatMap from "./heatmap/HeatMap.tsx";
 
 export function TableContainer() {
   const { job_id } = useParams();
@@ -119,6 +120,13 @@ export function TableContainer() {
             onPageChange={handlePageChange}
           />
         </div>
+      )}
+
+      {/* HeatMap */}
+      {activeTab === "dmp" && (
+          <div className="flex justify-center py-12 mt-3">
+            <HeatMap />
+          </div>
       )}
     </div>
   );

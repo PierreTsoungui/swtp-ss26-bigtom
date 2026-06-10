@@ -1,0 +1,63 @@
+import { useState } from "react";
+import type {HeatMapErrorResponse, HeatMapRequest, HeatMapResponse} from "../components/utils/types.ts";
+
+
+
+export const useGenerateHeatMap = (jobId: string | null) => {
+    const [data, setData] = useState<HeatMapResponse | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const generateHeatMap = async (
+        payload: HeatMapRequest,
+    ): Promise<HeatMapResponse | null> => {
+        if (!jobId) {
+            setError("Missing job id");
+            return null;
+        }
+
+        try {
+            setIsLoading(true);
+            setError(null);
+
+            const response = await fetch(`/heatmap/${jobId}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const errorResponse: HeatMapErrorResponse =
+                    await response.json();
+
+                throw new Error(errorResponse.message);
+            }
+
+            const result: HeatMapResponse =
+                await response.json();
+
+            setData(result);
+
+            return result;
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Unknown error occurred",
+            );
+
+            return null;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return {
+        data,
+        isLoading,
+        error,
+        generateHeatMap,
+    };
+};
