@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Query
+
+
+from app.services.table_filter import normalize_filters
+from fastapi import APIRouter, Query, Request
 from app.services.table_handler import get_table_data
 
 router = APIRouter()
@@ -8,6 +11,7 @@ router = APIRouter()
 def get_table(
     job_id: str,
     table: str,
+    request:Request,
     sort_by: str | None = None,
     sort_order: str | None = None,
     page: int = Query(default=1, ge=1),
@@ -44,11 +48,14 @@ def get_table(
         Strukturierte Tabellenrepräsentation inklusive Pagination-
         und Spaltenmetadaten.
     """
+    raw_filters = dict(request.query_params)
 
+    filters = normalize_filters(raw_filters)
     return get_table_data(
         job_id=job_id,
         page=page,
         table=table,
         sort_by=sort_by,
-        sort_order=sort_order
+        sort_order=sort_order,
+        filters=filters, 
     )
