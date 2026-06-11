@@ -24,7 +24,7 @@ export const useGenerateHeatMap = (jobId: string | null) => {
             setIsLoading(true);
             setError(null);
             console.log("[useGenerateHeatMap] Sending payload:", payload);
-            const response = await fetch(`/heatmap/${jobId}`, {
+            const response = await fetch(`/api/v1/heatmap/${jobId}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
