@@ -23,7 +23,7 @@ export const useGenerateHeatMap = (jobId: string | null) => {
         try {
             setIsLoading(true);
             setError(null);
-
+            console.log("[useGenerateHeatMap] Sending payload:", payload);
             const response = await fetch(`/heatmap/${jobId}`, {
                 method: "POST",
                 headers: {
@@ -31,11 +31,13 @@ export const useGenerateHeatMap = (jobId: string | null) => {
                 },
                 body: JSON.stringify(payload),
             });
+            console.log("[useGenerateHeatMap] Response status:", response.status);
+            console.log("[useGenerateHeatMap] Response body:", await response.json());
 
             if (!response.ok) {
                 const errorResponse: HeatMapErrorResponse =
                     await response.json();
-
+                console.error("[useGenerateHeatMap] Error response:", errorResponse);
                 throw new Error(errorResponse.message);
             }
 

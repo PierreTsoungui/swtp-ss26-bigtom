@@ -243,7 +243,7 @@ export function TableContainer() {
       {/* HeatMap */}
       {activeTab === "dmp" && (
           <div className="flex justify-center py-12 mt-3">
-            <HeatMap />
+            <HeatMap dmp_filter={appliedFilters} />
           </div>
       )}
     </div>

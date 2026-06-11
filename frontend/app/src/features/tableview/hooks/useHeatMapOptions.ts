@@ -22,7 +22,7 @@ export const useHeatMapOptions = (jobId: string | null) => {
                 setIsLoading(true);
                 setError(null);
 
-                const response = await fetch(`/heatmap/${jobId}/options`);
+                const response = await fetch(`/api/v1/heatmap/${jobId}/options`);
 
                 if (!response.ok) {
                     throw new Error("Failed to fetch heatmap options");
@@ -30,7 +30,8 @@ export const useHeatMapOptions = (jobId: string | null) => {
 
                 const result: HeatMapOptionsResponse =
                     await response.json();
-
+                console.log("[useHeatMapOptions] Raw response:", result);
+                console.log("[useHeatMapOptions] available_columns:", result.available_columns);
                 setData(result);
             } catch (err) {
                 setError(

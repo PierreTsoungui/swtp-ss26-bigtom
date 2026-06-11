@@ -21,6 +21,12 @@ import {useGenerateHeatMap} from "../../hooks/useGenerateHeatMap.ts";
 import Progressbar from "../../../../shared/components/Progressbar.tsx";
 import ErrorMessage from "../../../../shared/error-handling/components/ErrorMessage.tsx";
 import downloadHeatmap from "../../utils/downloadHeatmap.ts";
+import type {DmpFilter} from "../../utils/types.ts";
+
+
+type HeatMapProps = {
+    dmp_filter: DmpFilter;
+}
 
 /**
  * Hauptkomponente für die Heatmap Funktionalität. Ermöglicht die Auswahl von Gruppierungsspalten und das Generieren der Heatmap.
@@ -29,7 +35,7 @@ import downloadHeatmap from "../../utils/downloadHeatmap.ts";
  * welches in der DMP-Ansicht eingebettet ist. Sie ist nicht als eigenständige Seite gedacht.
  * @constructor
  */
-function HeatMap() {
+function HeatMap({ dmp_filter }: HeatMapProps) {
     const { job_id } = useParams<{ job_id: string }>();
     console.log("HeatMap Component - job_id:", job_id);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -51,7 +57,12 @@ function HeatMap() {
         generateHeatMap,
     } = useGenerateHeatMap(job_id ?? null);
 
+    console.log("[HeatMap] optionsLoading:", optionsLoading);
+    console.log("[HeatMap] options data:", options);
+    console.log("[HeatMap] availableColumns:", options?.available_columns);
+
     const availableColumns = options?.available_columns ?? [];
+    console.log("HeatMap Component - availableColumns:", availableColumns);
 
     const secondaryOptions = availableColumns.filter(
         (column) => column !== primaryGrouping,
@@ -64,7 +75,18 @@ function HeatMap() {
 
         await generateHeatMap({
             dmp_filter: {
-                // später die aktiven DMP Filter einsetzen
+                dmr_id: dmp_filter.dmr_id,
+                chromosome: dmp_filter.chromosome,
+                start: dmp_filter.start
+                    ? Number(dmp_filter.start)
+                    : undefined,
+                stop: dmp_filter.stop
+                    ? Number(dmp_filter.stop)
+                    : undefined,
+                p_value_max: dmp_filter.p_value_max,
+                adj_p_value_max: dmp_filter.adj_p_value_max,
+                delta_beta_min: dmp_filter.delta_beta_min,
+                delta_beta_max: dmp_filter.delta_beta_max,
             },
             grouping: {
                 primary: primaryGrouping,
@@ -72,7 +94,7 @@ function HeatMap() {
             },
         });
     };
-
+    console.log("[HeatMap] Rendering Select, availableColumns:", availableColumns);
     return (
         <Accordion
             expanded={isExpanded}
@@ -199,12 +221,11 @@ function HeatMap() {
 
                             <div className="border rounded-lg p-4 bg-slate-50">
                                 <div className="flex items-center justify-center min-h-100">
-
-                                    {/* TODO: Hier später PNG laden */}
-                                    <Typography color="text.secondary">
-                                        Heatmap Vorschau
-                                    </Typography>
-
+                                    <img
+                                        src={`/api/v1/heatmap/${job_id}`}
+                                        alt="Generierte Heatmap"
+                                        className="max-w-full max-h-96 object-contain"
+                                    />
                                 </div>
                             </div>
 

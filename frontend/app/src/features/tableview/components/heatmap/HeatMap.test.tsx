@@ -78,7 +78,7 @@ const renderWithRouter = (jobId = "eb547f74-642d-41aa-91d2-7572c1e28516") =>
     render(
         <MemoryRouter initialEntries={[`/test/${jobId}`]}>
             <Routes>
-                <Route path="/test/:job_id" element={<HeatMap />} />
+                <Route path="/test/:job_id" element={<HeatMap dmp_filter={{}} />} />
             </Routes>
         </MemoryRouter>
     );
