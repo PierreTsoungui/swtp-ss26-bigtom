@@ -31,7 +31,7 @@ import downloadHeatmap from "../../utils/downloadHeatmap.ts";
  */
 function HeatMap() {
     const { job_id } = useParams<{ job_id: string }>();
-
+    console.log("HeatMap Component - job_id:", job_id);
     const [isExpanded, setIsExpanded] = useState(false);
 
     const [primaryGrouping, setPrimaryGrouping] = useState("");

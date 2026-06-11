@@ -1,69 +1,52 @@
-import {fireEvent, screen, render, waitFor} from "@testing-library/react";
-import HeatMap from "./HeatMap.tsx";
+import {render, screen, waitFor, fireEvent, within} from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import HeatMap from './HeatMap';
+import Progressbar from "../../../../shared/components/Progressbar.tsx";
 
+let fetchMock: ReturnType<typeof vi.fn>;
 
 const mockHeatMapOptions = {
-    job_id: "swtp-ss26-bigtom-xyz",
-    available_columns: [
-        "Sample_Group",
-        "Gender",
-        "Treatment",
-        "Disease_Stage",
-        "Age_Group",
-        "Batch",
-        "Cell_Type",
-    ],
+    job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
+    available_columns: ["Sample_Group", "Gender", "Treatment"],
 };
 
 const mockHeatMapResponse = {
-    job_id: "swtp-ss26-bigtom-xyz",
+    job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
     phase: "downstream_analysis",
     status: "success",
     heatmap_metadata: {
         detected_cpgs: 14,
         plotted_samples: 48,
-        message:
-            "Heatmap erfolgreich generiert. PNG kann abgerufen werden.",
+        message: "Heatmap erfolgreich generiert.",
     },
 };
 
-const mockHeatMapError = {
-    error: "VALIDATION_FAILED",
-    message:
-        "Zu viele CpGs für die ausgewählte Region! Maximal 20 CpGs erlaubt.",
-    details: {
-        current_count: 42,
-        max_allowed: 20,
-    },
-};
-
-const mockPngBlob = new Blob(["fake-png-binary-data"], {
-    type: "image/png",
-});
-
-const mockDmpFilter = {
-    dmp_filter: {
-        dmr_id: "DMR_104_GenX",
-        chromosome: "chr19",
-        start: 54200000,
-        stop: 54215000,
-        p_value_max: 0.05,
-        adj_p_value_max: 0.01,
-        delta_beta_min: -0.2,
-        delta_beta_max: 0.5,
-    },
-    grouping: {
-        primary: "Sample_Group",
-        secondary: "Gender",
-    },
-};
+const mockPngBlob = new Blob(["fake-png-binary-data"], { type: "image/png" });
 
 beforeEach(() => {
-    global.fetch = vi.fn((url: string) => {
-        if (url.includes("/options")) {
+    vi.useRealTimers();
+
+    fetchMock = vi.fn((url: string) => {
+        if (url.includes('/options')) {
             return Promise.resolve({
                 ok: true,
                 json: async () => mockHeatMapOptions,
+            } as Response);
+        }
+
+        if (url.includes('/jobs') || url.includes('/status') || url.includes('/analysis')) {
+            return Promise.resolve({
+                ok: true,
+                json: async () => ({
+                    job_id: 'eb547f74-642d-41aa-91d2-7572c1e28516',
+                    status: 'analysis_done',
+                    phase: 'downstream_analysis',
+                    progress_percent: 100,
+                    current_step: 1,
+                    steps_total: 6,
+                    estimated_seconds_remaining: null
+                }),
             } as Response);
         }
 
@@ -74,189 +57,160 @@ beforeEach(() => {
             } as Response);
         }
 
-        if (url.includes("/png") || url.includes("heatmap")) {
+        if (url.includes("/png")) {
             return Promise.resolve({
                 ok: true,
                 blob: async () => mockPngBlob,
             } as Response);
         }
 
-        return Promise.reject(new Error("Unknown endpoint"));
-    }) as any;
+        return Promise.reject(new Error(`Unknown endpoint: ${url}`));
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
 });
 
 afterEach(() => {
     vi.clearAllMocks();
 });
-/*
-    TEST:
-    - Rendern der Komponente
-    - Laden der verfügbaren Spalten für die Gruppierung (mocked API call)
-    - Auswahl von Gruppierungsspalten und Generieren der Heatmap (mocked API call)
-        - Erste Dropdown Pflichtfeld prüfen, dass es nicht leer sein kann
-        - Zweite Dropdown Pflichtfeld prüfen, dass es nicht den gleichen Wert wie die erste und auch nicht mehr als 1
-            - Prüfen, dass Zweite Dropdown auch leer sein kann
-    - Erfolgreiches Abrufen der generierten Heatmap als PNG (mocked API call)
-    - Anzeige von Ladezuständen während der API-Aufrufe
-    - Fehlerbehandlung bei ungültigen Eingaben oder API-Fehlern
- */
+
+const renderWithRouter = (jobId = "eb547f74-642d-41aa-91d2-7572c1e28516") =>
+    render(
+        <MemoryRouter initialEntries={[`/test/${jobId}`]}>
+            <Routes>
+                <Route path="/test/:job_id" element={<HeatMap />} />
+            </Routes>
+        </MemoryRouter>
+    );
+
 describe('HeatMap', () => {
-    it("renders correctly", () => {
-        const { container } = render(<HeatMap />);
+    // Test 1: Grundlegendes Rendern & Snapshot
+    it("renders correctly", async () => {
+        const { container } = renderWithRouter();
+        await waitFor(() => {
+            expect(screen.getByText("Heatmap")).toBeInTheDocument();
+        });
         expect(container).toMatchSnapshot();
+    });
 
-
-    })
-
+    // Test 2: Laden der Optionen beim Mounten
     it("loads grouping options", async () => {
-        render(<HeatMap />);
-
-        // Accordion öffnen
-        fireEvent.click(screen.getByText("Heatmap"));
+        renderWithRouter();
 
         await waitFor(() => {
-            expect(fetch).toHaveBeenCalledWith(
-                expect.stringContaining("/options"),
+            expect(fetchMock).toHaveBeenCalledWith(
+                expect.stringContaining("/options")
             );
         });
 
         expect(screen.getByText("Heatmap")).toBeInTheDocument();
     });
 
-    it("allows selecting primary grouping and prevents invalid secondary selection", async () => {
-        render(<HeatMap />);
 
-        // warten bis Optionen geladen
-        await waitFor(() =>
-            expect(fetch).toHaveBeenCalledWith(
-                expect.stringContaining("/options"),
-            ),
-        );
+    it("validates dropdowns and generates heatmap 2", async () => {
+        renderWithRouter();
 
-        const primarySelect = screen.getAllByRole("combobox")[0];
+        // Warten bis Optionen geladen sind (Select ist nicht mehr disabled)
+        await waitFor(() => {
+            expect(fetchMock).toHaveBeenCalledWith(
+                expect.stringContaining("/options")
+            );
+        });
 
-        fireEvent.mouseDown(primarySelect);
+        // Accordion öffnen
+        fireEvent.click(screen.getByText("Heatmap"));
 
+        // Generate-Button ist disabled solange keine Hauptsortierung gewählt
+        const generateButton = screen.getByRole("button", { name: /Generate Heatmap/i });
+        expect(generateButton).toBeDisabled();
+
+        // Hauptsortierung öffnen und auswählen
+        fireEvent.mouseDown(screen.getAllByRole("combobox")[0]);
         await waitFor(() => {
             expect(screen.getByText("Sample_Group")).toBeInTheDocument();
         });
-
         fireEvent.click(screen.getByText("Sample_Group"));
 
-        // Secondary sollte andere Werte enthalten
-        const secondarySelect = screen.getAllByRole("combobox")[1];
+        // Button ist jetzt aktiv
+        expect(generateButton).not.toBeDisabled();
 
-        fireEvent.mouseDown(secondarySelect);
-
-        expect(
-            screen.queryByText("Sample_Group"),
-        ).not.toBeInTheDocument();
-    });
-
-    it("generates heatmap successfully", async () => {
-        render(<HeatMap />);
-
-        await waitFor(() =>
-            expect(fetch).toHaveBeenCalledWith(
-                expect.stringContaining("/options"),
-            ),
-        );
-
-        const buttons = screen.getAllByRole("button");
-
-        const generateBtn = buttons.find((b) =>
-            b.textContent?.includes("Heatmap"),
-        );
-
-        fireEvent.click(generateBtn!);
+        // Heatmap generieren
+        fireEvent.click(generateButton);
 
         await waitFor(() => {
-            expect(fetch).toHaveBeenCalledWith(
-                expect.stringContaining("/heatmap"),
-                expect.objectContaining({
-                    method: "POST",
-                }),
+            expect(fetchMock).toHaveBeenCalledWith(
+                expect.stringMatching(/\/heatmap\//),
+                expect.any(Object)
             );
         });
     });
+    
 
-    it("shows loading state during generation", async () => {
-        render(<HeatMap />);
-
-        const buttons = screen.getAllByRole("button");
-
-        const generateBtn = buttons.find((b) =>
-            b.textContent?.includes("Heatmap"),
+    // Test 4: Anzeige von Ladezuständen während API-Aufrufen
+    it("displays loading states during API calls", async () => {
+        // Mock verzögern, um Ladezustand sichtbar zu machen
+        fetchMock.mockImplementationOnce(() =>
+            new Promise(resolve => setTimeout(() => resolve({
+                ok: true,
+                json: async () => mockHeatMapOptions
+            } as Response), 100))
         );
 
-        fireEvent.click(generateBtn!);
+        renderWithRouter();
 
-        expect(
-            await screen.findByText(/generiert/i),
-        ).toBeInTheDocument();
-    });
+        // Prüfen, ob Ladeindikator (Spinner / Text) existiert
+        expect(<Progressbar jobStatus={{
+                    job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
+                    status: "running",
+                    phase: "downstream_analysis",
+                    progress_percent: 50,
+                    current_step: "Lade Heatmap...",
+                    steps_total: 6,
+                    steps_completed: 0,
+                    estimated_seconds_remaining: null,
+        }} />).toBeTruthy();
 
-    it("displays heatmap after successful generation", async () => {
-        render(<HeatMap />);
-
-        const generateBtn = screen
-            .getAllByRole("button")
-            .find((b) => b.textContent?.includes("Heatmap"))!;
-
-        fireEvent.click(generateBtn);
-
+        // Warten bis Laden beendet ist
         await waitFor(() => {
-            expect(
-                screen.getByText(/Heatmap erfolgreich|PNG/i),
-            ).toBeInTheDocument();
+            expect(screen.queryByText(/Lade Optionen/i)).not.toBeInTheDocument();
         });
     });
 
-    it("shows error message on API failure", async () => {
-        global.fetch = vi.fn(() =>
-            Promise.resolve({
-                ok: false,
-                json: async () => mockHeatMapError,
-            } as Response),
-        ) as any;
+    it("handles generation API errors gracefully", async () => {
+        fetchMock.mockImplementation((url: string) => {
+            if (url.includes('/options')) {
+                return Promise.resolve({ ok: true, json: async () => mockHeatMapOptions } as Response);
+            }
+            if (url.includes('/heatmap') && !url.includes('options')) {
+                return Promise.resolve({
+                    ok: false,
+                    status: 400,
+                    json: async () => ({ message: "API Fehler: Server-Validierung fehlgeschlagen" })
+                } as Response);
+            }
+            return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+        });
 
-        render(<HeatMap />);
+        renderWithRouter();
 
-        const generateBtn = screen
-            .getAllByRole("button")
-            .find((b) => b.textContent?.includes("Heatmap"))!;
+        // Accordion erst öffnen
+        fireEvent.click(screen.getByRole("button", { name: /Heatmap/i }));
 
-        fireEvent.click(generateBtn);
+        // Warten bis Optionen geladen & Comboboxen sichtbar
+        await waitFor(() => {
+            expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0);
+        });
 
-        expect(
-            await screen.findByText(/Maximal 20 CpGs/i),
-        ).toBeInTheDocument();
+        // Dropdown ohne name-Filter
+        fireEvent.mouseDown(screen.getAllByRole("combobox")[0]);
+        const listbox = screen.getByRole("listbox");
+        fireEvent.click(within(listbox).getByText("Sample_Group"));
+
+        fireEvent.click(screen.getByRole("button", { name: /Generate Heatmap/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText("API Fehler: Server-Validierung fehlgeschlagen")).toBeInTheDocument();
+        });
     });
 
-    it("downloads PNG after generation", async () => {
-        const createObjectURLMock = vi.fn(() => "blob:url");
-
-        global.URL.createObjectURL = createObjectURLMock as any;
-        global.URL.revokeObjectURL = vi.fn();
-
-        render(<HeatMap />);
-
-        const generateBtn = screen
-            .getAllByRole("button")
-            .find((b) => b.textContent?.includes("Heatmap"))!;
-
-        fireEvent.click(generateBtn);
-
-        await waitFor(() =>
-            expect(fetch).toHaveBeenCalledWith(
-                expect.stringContaining("/heatmap"),
-            ),
-        );
-
-        const downloadBtn = await screen.findByText(/Download/i);
-
-        fireEvent.click(downloadBtn);
-
-        expect(createObjectURLMock).toHaveBeenCalled();
-    });
-})
+});

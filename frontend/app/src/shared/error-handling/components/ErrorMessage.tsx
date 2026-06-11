@@ -28,6 +28,10 @@ function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) 
             return "Unknown error";
         }
 
+        if (typeof error === "string") {
+            return error;
+        }
+
         if (
             typeof error === "object" && "title" in error &&
             "detail" in error
