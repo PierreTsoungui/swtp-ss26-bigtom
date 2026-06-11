@@ -75,117 +75,113 @@ export function TableContainer() {
   };
 
   const handleDownload = async () => {
-  if (!job_id) return;
+    if (!job_id) return;
 
-  const params =
-    new URLSearchParams();
+    const params = new URLSearchParams();
 
-  if (
-    currentSort.sort_by &&
-    currentSort.sort_order
-  ) {
-    params.append(
-      "sort_by",
-      currentSort.sort_by
-    );
-
-    params.append(
-      "sort_order",
-      currentSort.sort_order
-    );
-  }
-  // params.append(
-  //   "page",
-  //   String(currentPage)
-  // );
-  const filters = appliedFilters[activeTab];
-
-if (filters.chromosome) {
-  params.append(
-    "filter_chr",
-    filters.chromosome
-  );
-}
-
-if (filters.start) {
-  params.append(
-    "filter_start",
-    filters.start
-  );
-}
-
-if (filters.stop) {
-  params.append(
-    "filter_stop",
-    filters.stop
-  );
-}
-
-if (filters.dmrId) {
-  params.append(
-    "filter_dmr",
-    filters.dmrId
-  );
-}
-
-if (filters.pValue) {
-  params.append(
-    "filter_p_value",
-    filters.pValue
-  );
-}
-
-if (filters.adjPValue) {
-  params.append(
-    "filter_adj_p_value",
-    filters.adjPValue
-  );
-}
-
-  try {
-    const response =
-      await fetch(
-        `/api/v1/table/${job_id}/${activeTab}/export?${params.toString()}`
-      );
-
-    if (!response.ok) {
-      throw new Error(
-        "Download fehlgeschlagen"
-      );
+    if (currentSort.sort_by && currentSort.sort_order) {
+      params.append("sort_by", currentSort.sort_by);
+      params.append("sort_order", currentSort.sort_order);
     }
 
-    const blob =
-      await response.blob();
+    const filters = appliedFilters[activeTab];
 
-    const url =
-      window.URL.createObjectURL(blob);
+    // DMP & DMR gemeinsame Filter
+    if ((filters as any).chr) {
+      params.append("filter_chr", (filters as any).chr);
+    }
+    if ((filters as any).start) {
+      params.append("filter_start", (filters as any).start);
+    }
+    if ((filters as any).stop) {
+      params.append("filter_stop", (filters as any).stop);
+    }
 
-    const link =
-      document.createElement("a");
+    // DMR-spezifische Filter
+    if ((filters as any).dmrid) {
+      params.append("filter_dmrid", (filters as any).dmrid);
+    }
+    if ((filters as any).p_value) {
+      params.append("filter_p_value", (filters as any).p_value);
+    }
 
-    link.href = url;
+    // DMP-spezifische Filter
+    if ((filters as any).adj_p_value) {
+      params.append("filter_adj_p_value", (filters as any).adj_p_value);
+    }
+    if ((filters as any).gene) {
+      params.append("filter_gene", (filters as any).gene);
+    }
+    if ((filters as any).delta_beta) {
+      params.append("filter_delta_beta", (filters as any).delta_beta);
+    }
+    if ((filters as any).sample_group) {
+      params.append("filter_sample_group", (filters as any).sample_group);
+    }
+    if ((filters as any).group1_avg_min) {
+      params.append("filter_group1_avg_min", (filters as any).group1_avg_min);
+    }
+    if ((filters as any).group1_avg_max) {
+      params.append("filter_group1_avg_max", (filters as any).group1_avg_max);
+    }
+    if ((filters as any).group2_avg_min) {
+      params.append("filter_group2_avg_min", (filters as any).group2_avg_min);
+    }
+    if ((filters as any).group2_avg_max) {
+      params.append("filter_group2_avg_max", (filters as any).group2_avg_max);
+    }
+    if ((filters as any).log_fc_min) {
+      params.append("filter_log_fc_min", (filters as any).log_fc_min);
+    }
+    if ((filters as any).log_fc_max) {
+      params.append("filter_log_fc_max", (filters as any).log_fc_max);
+    }
 
-    link.download =
-      `${activeTab}_results_${new Date()
-        .toISOString()
-        .slice(0,10)}.csv`;
+    // DMR-spezifische Filter
+    if ((filters as any).mean_diff_min) {
+      params.append("filter_mean_diff_min", (filters as any).mean_diff_min);
+    }
+    if ((filters as any).mean_diff_max) {
+      params.append("filter_mean_diff_max", (filters as any).mean_diff_max);
+    }
+    if ((filters as any).width_min) {
+      params.append("filter_width_min", (filters as any).width_min);
+    }
+    if ((filters as any).width_max) {
+      params.append("filter_width_max", (filters as any).width_max);
+    }
+    if ((filters as any).n_dmps_min) {
+      params.append("filter_n_dmps_min", (filters as any).n_dmps_min);
+    }
+    if ((filters as any).n_dmps_max) {
+      params.append("filter_n_dmps_max", (filters as any).n_dmps_max);
+    }
 
-    document.body.appendChild(link);
+    try {
+      const response = await fetch(
+          `/api/v1/table/${job_id}/${activeTab}/export?${params.toString()}`
+      );
 
-    link.click();
+      if (!response.ok) {
+        throw new Error("Download fehlgeschlagen");
+      }
 
-    link.remove();
-
-    window.URL.revokeObjectURL(url);
-
-  } catch (error) {
-    console.error(error);
-
-    alert(
-      "CSV konnte nicht heruntergeladen werden."
-    );
-  }
-};
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${activeTab}_results_${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      alert("CSV konnte nicht heruntergeladen werden.");
+    }
+  };
 
 
   return (

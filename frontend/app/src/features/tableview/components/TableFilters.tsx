@@ -1,15 +1,58 @@
-import type { TableFilters } from "../hooks/useTableFilters";
 import { useState } from "react";
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ArrowRightIcon from '@mui/icons-material/ArrowRight';
 
-type Props = {
-  table: "dmp" | "dmr";  
-  filters: TableFilters;
-  onChange: (key: keyof TableFilters, value: string) => void;
+
+// Filter-Definitionen pro Tabelle
+const FILTER_DEFINITIONS = {
+  dmp: [
+    { key: "chr", label: "Chromosom", type: "select", options: getChromosomeOptions() },
+    { key: "start", label: "Start Position", type: "number", group: "positional" },
+    { key: "stop", label: "Stop Position", type: "number", group: "positional" },
+    { key: "gene", label: "Gen", type: "text" },
+    { key: "adj_p_value", label: "Adj. P-Value (≤)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "delta_beta", label: "Delta Beta (abs ≥)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "group1_avg_min", label: "Group1 Avg (Min)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "group1_avg_max", label: "Group1 Avg (Max)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "group2_avg_min", label: "Group2 Avg (Min)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "group2_avg_max", label: "Group2 Avg (Max)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "log_fc_min", label: "Log FC (abs Min)", type: "number", step: 0.1 },
+    { key: "log_fc_max", label: "Log FC (abs Max)", type: "number", step: 0.1 },
+    { key: "sample_group", label: "Sample Group", type: "text" },
+  ],
+  dmr: [
+    { key: "chr", label: "Chromosom", type: "select", options: getChromosomeOptions() },
+    { key: "dmrid", label: "DMR ID", type: "text" },
+    { key: "start", label: "Start Position (≥)", type: "number", group: "positional" },
+    { key: "stop", label: "Stop Position (≤)", type: "number", group: "positional" },
+    { key: "p_value", label: "P-Value (≤)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "mean_diff_min", label: "Mean Diff (abs Min)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "mean_diff_max", label: "Mean Diff (abs Max)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "width_min", label: "Width (Min)", type: "number", min: 0 },
+    { key: "width_max", label: "Width (Max)", type: "number", min: 0 },
+    { key: "n_dmps_min", label: "N-DMPs (Min)", type: "number", min: 0 },
+    { key: "n_dmps_max", label: "N-DMPs (Max)", type: "number", min: 0 },
+  ],
+};
+
+function getChromosomeOptions() {
+  const options = Array.from({ length: 22 }, (_, i) => ({
+    value: String(i + 1),
+    label: `chr${i + 1}`,
+  }));
+  options.push({ value: "X", label: "chrX" });
+  options.push({ value: "Y", label: "chrY" });
+  return options;
+}
+
+
+interface TableFiltersProps {
+  table: "dmp" | "dmr";
+  filters: Record<string, string>;
+  onChange: (key: string, value: string) => void;
   onApply: () => void;
   onReset: () => void;
-};
+}
 
 export function TableFilters({
   table,
@@ -17,7 +60,7 @@ export function TableFilters({
   onChange,
   onApply,
   onReset,
-}: Props) {
+}: TableFiltersProps) {
   const [showFilters, setShowFilters] = useState(false);
   
   const hasFilters = Object.values(filters).some(
@@ -28,6 +71,8 @@ export function TableFilters({
   const activeFilterCount = Object.values(filters).filter(
     (v) => v !== "" && v !== null
   ).length;
+
+  const filterDefs = FILTER_DEFINITIONS[table];
 
   return (
     <div className="mb-4">
@@ -56,95 +101,59 @@ export function TableFilters({
         )}
       </div>
 
-      {/* Filter Panel (nur wenn sichtbar) */}
+      {/* Filter Panel */}
       {showFilters && (
-        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-          <div className="flex gap-3 flex-wrap">
-            {/* Chromosom Select */}
-            <select
-              value={filters.chromosome}
-              onChange={(e) => onChange("chromosome", e.target.value)}
-              className="border border-slate-300 p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Chromosom</option>
-              {Array.from({ length: 22 }, (_, i) => i + 1).map((chr) => (
-                <option key={chr} value={String(chr)}>chr{chr}</option>
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+              {filterDefs.map((filterDef) => (
+                  <div key={filterDef.key}>
+                    {filterDef.type === "select" ? (
+                        <select
+                            value={(filters as any)[filterDef.key] || ""}
+                            onChange={(e) => onChange(filterDef.key, e.target.value)}
+                            className="w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">{filterDef.label}</option>
+                          {filterDef.options?.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                          ))}
+                        </select>
+                    ) : (
+                        <input
+                            type={filterDef.type}
+                            placeholder={filterDef.label}
+                            value={(filters as any)[filterDef.key] || ""}
+                            onChange={(e) => onChange(filterDef.key, e.target.value)}
+                            step={(filterDef as any).step}
+                            min={(filterDef as any).min}
+                            max={(filterDef as any).max}
+                            className="w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    )}
+                  </div>
               ))}
-              <option value="X">chrX</option>
-              <option value="Y">chrY</option>
-            </select>
+            </div>
 
-            {/* Start/Stop - nur wenn Chromosom ausgewählt */}
-            {filters.chromosome && (
-              <>
-                <input
-                  type="number"
-                  placeholder="Start"
-                  value={filters.start}
-                  onChange={(e) => onChange("start", e.target.value)}
-                  className="border border-slate-300 p-2 rounded-md text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="number"
-                  placeholder="Stop"
-                  value={filters.stop}
-                  onChange={(e) => onChange("stop", e.target.value)}
-                  className="border border-slate-300 p-2 rounded-md text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </>
-            )}
+            {/* Action Buttons */}
+            <div className="flex gap-2 mt-4">
+              <button
+                  onClick={onApply}
+                  disabled={!hasFilters}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Anwenden
+              </button>
 
-            {/* Nur für DMR Tabelle */}
-            {table === "dmr" && (
-              <input
-                type="text"
-                placeholder="DMR ID"
-                value={filters.dmrId}
-                onChange={(e) => onChange("dmrId", e.target.value)}
-                className="border border-slate-300 p-2 rounded-md text-sm w-36 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            )}
-
-            {/* P-Value Filter */}
-            <input
-              type="number"
-              placeholder="P-Value"
-              step="0.01"
-              min="0"
-              max="1"
-              value={filters.pValue}
-              onChange={(e) => onChange("pValue", e.target.value)}
-              className="border border-slate-300 p-2 rounded-md text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-
-            <input
-              type="number"
-              placeholder="Adj. P-Value"
-              step="0.01"
-              min="0"
-              max="1"
-              value={filters.adjPValue}
-              onChange={(e) => onChange("adjPValue", e.target.value)}
-              className="border border-slate-300 p-2 rounded-md text-sm w-32 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-
-            {/* Buttons */}
-            <button
-              onClick={onApply}
-              disabled={!hasFilters}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Anwenden
-            </button>
-
-            <button
-              onClick={onReset}
-              className="px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
-            >
-              Zurücksetzen
-            </button>
+              <button
+                  onClick={onReset}
+                  className="px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                Zurücksetzen
+              </button>
+            </div>
           </div>
-        </div>
       )}
     </div>
   );
