@@ -37,11 +37,11 @@ const FILTER_DEFINITIONS = {
 
 function getChromosomeOptions() {
   const options = Array.from({ length: 22 }, (_, i) => ({
-    value: String(i + 1),
+    value: `chr${i + 1}`,
     label: `chr${i + 1}`,
   }));
-  options.push({ value: "X", label: "chrX" });
-  options.push({ value: "Y", label: "chrY" });
+  options.push({ value: "chrX", label: "chrX" });
+  options.push({ value: "chrY", label: "chrY" });
   return options;
 }
 
