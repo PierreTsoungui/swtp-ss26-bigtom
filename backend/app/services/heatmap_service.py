@@ -21,6 +21,7 @@ HEATMAP_FILENAME = "heatmap.png"
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_job_dir_or_404(job_id: str) -> Path:
+    """Gibt das Job-Verzeichnis zurück oder wirft eine RFC 9457-konforme AppException."""
     job_dir = JOBS_DIR / job_id
     if not job_dir.exists() or not job_dir.is_dir():
         raise AppException(
@@ -31,6 +32,10 @@ def get_job_dir_or_404(job_id: str) -> Path:
 
 
 def _find_dmp_rds(job_dir: Path) -> Path:
+    """
+    Sucht nach der DMP-Ergebnis-RDS-Datei.
+    Reihenfolge: dmp_results.rds → dmp.rds → erster *dmp*.rds-Treffer.
+    """
     for candidate in ("dmp_results.rds", "dmp.rds"):
         p = job_dir / candidate
         if p.exists():
@@ -53,7 +58,10 @@ def _build_r_env(
     grouping:   GroupingPayload,
     dmp_filter: Optional[DmpFilterPayload],
 ) -> dict:
-    """Baut das ENV-Dict für den Docker-Aufruf zusammen."""
+    """
+    Baut das Env-Dict für den `docker exec -e`-Aufruf zusammen.
+    Alle Werte müssen Strings sein.
+    """
     env: dict = {
         "HEATMAP_GROUP1":   grouping.primary,
         "HEATMAP_MAX_ROWS": str(MAX_CPGS),
@@ -91,64 +99,102 @@ async def run_heatmap_pipeline_task(
     job_dir:    Path,
     dmp_rds:    Path,
     sheet_name: str,
-    grouping:   GroupingPayload, 
+    grouping:   GroupingPayload,
     dmp_filter: Optional[DmpFilterPayload],
 ):
+    """
+    Führt heatmap.R im Docker-Container aus und aktualisiert den Job-Status
+    live per on_progress-Callback.  Wird als BackgroundTask gestartet.
+    """
     try:
-        # 1. ENV-Dict über den zentralen Helper bauen (kein doppelter Code)
-        extra_env = _build_r_env(grouping, dmp_filter)
+        # ── Initialisierung ────────────────────────────────────────────────────
+        job_manager.update_job(
+            job_id,
+            status="running",
+            phase="heatmap",
+            progress_percent=0,
+            current_step="Starte Heatmap-Generierung...",
+        )
 
-        # 2. Progress-Callback
-        async def on_progress_callback(progress_data: dict):
-            step_num    = progress_data.get("step", 0)
-            total_steps = progress_data.get("total_steps", 8)
-            percent     = int((step_num / total_steps) * 100) if total_steps else 0
+        # ── Progress-Callback ──────────────────────────────────────────────────
+        async def on_progress(data: dict):
+            if data.get("type") == "progress":
+                # heatmap.R meldet Schritte 1–8; wir mappen auf 5–95 %
+                step       = int(data.get("step", 1))
+                total      = int(data.get("total_steps", 8))
+                pct        = 5 + int((step / total) * 90)
+                job_manager.update_job(
+                    job_id,
+                    status="running",
+                    phase="heatmap",
+                    progress_percent=pct,
+                    current_step=data.get("message", ""),
+                )
 
-            job_manager.update_job(
-                job_id,
-                status=progress_data.get("status", "running"),
-                phase="heatmap",
-                progress_percent=percent,
-                current_step=progress_data.get("message", ""),
-            )
+        # ── R-Skript aufrufen ──────────────────────────────────────────────────
+        r_env = _build_r_env(grouping, dmp_filter)
 
-        # 3. R-Skript aufrufen
-        #    Entspricht: Rscript heatmap.R <dmp_rds> <sheet_csv> <job_dir>
         result = await run_r_script(
             script="heatmap.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet=sheet_name,
             mode="heatmap",
-            script_args=[dmp_rds.name, sheet_name, str(job_dir)],
-            on_progress=on_progress_callback,
-            extra_env=extra_env,
+            script_args=[
+                str(dmp_rds.name),   # <result.rds>      – relativ zum job_dir
+                sheet_name,          # <sample_sheet.csv>
+            ],
+            on_progress=on_progress,
+            extra_env=r_env,
         )
 
-        # 4. Finalen Status setzen
-        if result.get("returncode") == 0:
-            job_manager.update_job(
-                job_id,
-                status="success",
-                phase="heatmap",
-                progress_percent=100,
-                current_step="Heatmap erfolgreich generiert.",
-            )
-        else:
-            job_manager.update_job(
-                job_id,
-                status="failed",
-                phase="heatmap",
-                current_step=f"Fehler bei der Generierung: {result.get('stderr', 'Unbekannter Fehler')}",
-            )
+        # ── Fehlerfall ─────────────────────────────────────────────────────────
+        if result.get("returncode") != 0:
+            # Prüfen ob es ein CPG-Limit-Fehler war (kommt von R Step 3)
+            stdout = result.get("stdout", "")
+            too_many = _parse_too_many_cpgs(stdout)
 
-    except Exception as e:
+            if too_many is not None:
+                job_manager.update_job(
+                    job_id,
+                    status="failed",
+                    phase="heatmap",
+                    current_step=(
+                        f"Zu viele CpGs: {too_many} gefunden, "
+                        f"maximal {MAX_CPGS} erlaubt."
+                    ),
+                    extra={"cpg_count": too_many, "max_allowed": MAX_CPGS},
+                )
+            else:
+                job_manager.update_job(
+                    job_id,
+                    status="failed",
+                    phase="heatmap",
+                    current_step="Fehler bei der Heatmap-Generierung.",
+                )
+            return
+
+        # ── Erfolg: Metadaten aus R-Stdout parsen ──────────────────────────────
+        meta = _parse_heatmap_metadata(result.get("stdout", ""), job_dir)
+
+        job_manager.update_job(
+            job_id,
+            status="heatmap_done",
+            phase="heatmap",
+            progress_percent=100,
+            current_step="Heatmap erfolgreich generiert!",
+            extra=meta,
+        )
+
+    except Exception as exc:
+        print(f"[HEATMAP PIPELINE ERROR] {exc}", flush=True)
         job_manager.update_job(
             job_id,
             status="failed",
             phase="heatmap",
-            current_step=f"Systemfehler im Backend-Task: {str(e)}",
+            current_step=f"Kritischer Fehler: {exc}",
         )
+
 
 # ── Helper: R-Output parsen ───────────────────────────────────────────────────
 

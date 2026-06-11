@@ -36,6 +36,10 @@ class ErrorTypes:
 
     # ── SAMPLE SHEET ERRORS ────────────────────────────────────────────
     SAMPLE_SHEET_NOT_FOUND = ErrorType("/errors/sample-sheet-not-found", 404, "Sample sheet not found")
+    FILE_NOT_FOUND          = ErrorType("/errors/file-not-found", 404, "File not found")
+    HEATMAP_NOT_ALLOWED     = ErrorType("/errors/heatmap-not-allowed", 409, "Heatmap not allowed")
+    INVALID_GROUPING_COLUMN = ErrorType("/errors/invalid-grouping-column", 400, "Invalid grouping column")
+    INVALID_CSV_CONTENT     = ErrorType("/errors/invalid-csv-content", 400, "Invalid CSV content") 
 
 def problem_detail(
     error_type: ErrorType,

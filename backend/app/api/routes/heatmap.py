@@ -48,7 +48,16 @@ def run_heatmap(
     payload: HeatmapRequest,
     background_tasks: BackgroundTasks,
 ):
-    # 1. Job-Verzeichnis prüfen
+    """
+    Startet die Heatmap-Generierung als Background-Task.
+    Lehnt ab wenn:
+      - Job nicht existiert (404)
+      - Pipeline bereits läuft (409)
+      - Grouping-Spalten nicht im SampleSheet vorhanden (422)
+    Die CPG-Limit-Prüfung (max. 20) erfolgt innerhalb des R-Skripts; ein
+    entsprechender Fehler wird über den Job-Status kommuniziert.
+    """
+    # 1. Job-Verzeichnis
     job_dir = heatmap_service.get_job_dir_or_404(job_id)
 
     # 2. Parallelstart verhindern
@@ -65,30 +74,42 @@ def run_heatmap(
     if payload.grouping.primary not in available_cols:
         raise AppException(
             ErrorTypes.INVALID_GROUPING_COLUMN,
-            detail=f"Primäre Gruppierungsspalte '{payload.grouping.primary}' nicht im SampleSheet gefunden.",
+            detail=(
+                f"Primäre Gruppierungsspalte '{payload.grouping.primary}' "
+                f"nicht im SampleSheet gefunden."
+            ),
             provided=payload.grouping.primary,
             available=available_cols,
         )
 
-    if payload.grouping.secondary and payload.grouping.secondary not in available_cols:
+    if (
+        payload.grouping.secondary
+        and payload.grouping.secondary not in available_cols
+    ):
         raise AppException(
             ErrorTypes.INVALID_GROUPING_COLUMN,
-            detail=f"Sekundäre Gruppierungsspalte '{payload.grouping.secondary}' nicht im SampleSheet gefunden.",
+            detail=(
+                f"Sekundäre Gruppierungsspalte '{payload.grouping.secondary}' "
+                f"nicht im SampleSheet gefunden."
+            ),
             provided=payload.grouping.secondary,
             available=available_cols,
         )
 
-    if payload.grouping.secondary and payload.grouping.primary == payload.grouping.secondary:
+    if (
+        payload.grouping.secondary
+        and payload.grouping.primary == payload.grouping.secondary
+    ):
         raise AppException(
             ErrorTypes.INVALID_GROUPING_COLUMN,
             detail="Primäre und sekundäre Gruppierungsspalte dürfen nicht identisch sein.",
         )
 
     # 4. DMP-RDS und SampleSheet lokalisieren
-    dmp_rds = heatmap_service._find_dmp_rds(job_dir)
+    dmp_rds    = heatmap_service._find_dmp_rds(job_dir)
     sheet_name = find_sample_sheet_name(str(job_dir))
 
-    # 5. Status initialisieren
+    # 5. Status initialisieren & Task starten
     job_manager.update_job(
         job_id,
         status="running",
@@ -97,7 +118,6 @@ def run_heatmap(
         current_step="Heatmap-Job in die Warteschlange eingereiht...",
     )
 
-    # 6. Task starten und die Filter-Objekte übergeben
     background_tasks.add_task(
         heatmap_service.run_heatmap_pipeline_task,
         job_id,
