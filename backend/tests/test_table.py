@@ -142,6 +142,7 @@ def test_data_not_ready(tmp_path):
         )
 
         assert res.status_code == 409
+
 def test_filter_chr(mock_job):
     job_id, _ = mock_job
 

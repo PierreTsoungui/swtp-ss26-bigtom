@@ -10,6 +10,7 @@ import { useTableData } from "../hooks/useTableData";
 import { useTableFilters } from "../hooks/useTableFilters";
 import HeatMap from "./heatmap/HeatMap.tsx";
 import SkeletonTable from "./SkeletonTable.tsx";
+import { TableExportButton } from "./TableExportButton";
 
 export function TableContainer() {
   const { job_id } = useParams();
@@ -73,6 +74,119 @@ export function TableContainer() {
     updatePage(activeTab, newPage);
   };
 
+  const handleDownload = async () => {
+  if (!job_id) return;
+
+  const params =
+    new URLSearchParams();
+
+  if (
+    currentSort.sort_by &&
+    currentSort.sort_order
+  ) {
+    params.append(
+      "sort_by",
+      currentSort.sort_by
+    );
+
+    params.append(
+      "sort_order",
+      currentSort.sort_order
+    );
+  }
+  // params.append(
+  //   "page",
+  //   String(currentPage)
+  // );
+  const filters = appliedFilters[activeTab];
+
+if (filters.chromosome) {
+  params.append(
+    "filter_chr",
+    filters.chromosome
+  );
+}
+
+if (filters.start) {
+  params.append(
+    "filter_start",
+    filters.start
+  );
+}
+
+if (filters.stop) {
+  params.append(
+    "filter_stop",
+    filters.stop
+  );
+}
+
+if (filters.dmrId) {
+  params.append(
+    "filter_dmr",
+    filters.dmrId
+  );
+}
+
+if (filters.pValue) {
+  params.append(
+    "filter_p_value",
+    filters.pValue
+  );
+}
+
+if (filters.adjPValue) {
+  params.append(
+    "filter_adj_p_value",
+    filters.adjPValue
+  );
+}
+
+  try {
+    const response =
+      await fetch(
+        `/api/v1/table/${job_id}/${activeTab}/export?${params.toString()}`
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        "Download fehlgeschlagen"
+      );
+    }
+
+    const blob =
+      await response.blob();
+
+    const url =
+      window.URL.createObjectURL(blob);
+
+    const link =
+      document.createElement("a");
+
+    link.href = url;
+
+    link.download =
+      `${activeTab}_results_${new Date()
+        .toISOString()
+        .slice(0,10)}.csv`;
+
+    document.body.appendChild(link);
+
+    link.click();
+
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      "CSV konnte nicht heruntergeladen werden."
+    );
+  }
+};
+
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -106,6 +220,15 @@ export function TableContainer() {
       {error && (
         <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
           Fehler: {error}
+        </div>
+      )}
+
+      {/* .csv loading */}
+      {data && (
+        <div className="flex justify-end mb-4">
+          <TableExportButton
+            onDownload={handleDownload}
+          />
         </div>
       )}
 

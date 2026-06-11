@@ -1,8 +1,7 @@
-
-
-from app.services.table_filter import normalize_filters
 from fastapi import APIRouter, Query, Request
-from app.services.table_handler import get_table_data
+from fastapi.responses import Response
+from app.services.table_filter import normalize_filters
+from app.services.table_handler import (get_table_data, export_table_csv)
 
 router = APIRouter()
 
@@ -11,7 +10,7 @@ router = APIRouter()
 def get_table(
     job_id: str,
     table: str,
-    request:Request,
+    request: Request,
     sort_by: str | None = None,
     sort_order: str | None = None,
     page: int = Query(default=1, ge=1),
@@ -51,11 +50,42 @@ def get_table(
     raw_filters = dict(request.query_params)
 
     filters = normalize_filters(raw_filters)
+
     return get_table_data(
         job_id=job_id,
         page=page,
         table=table,
         sort_by=sort_by,
         sort_order=sort_order,
-        filters=filters, 
+        filters=filters,
+    )
+
+
+# EXPORT (FULL CSV)
+
+@router.get("/table/{job_id}/{table}/export")
+def export_table(
+    job_id: str,
+    table: str,
+    request: Request,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+):
+
+    filters = normalize_filters(dict(request.query_params))
+
+    csv_content = export_table_csv(
+        job_id=job_id,
+        table=table,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        filters=filters,
+    )
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{table}_{job_id}_export.csv"'
+        }
     )
