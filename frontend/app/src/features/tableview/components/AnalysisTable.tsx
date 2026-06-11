@@ -86,6 +86,16 @@ export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {} 
                   </div>
                 </th>
               ))}
+
+              {/* Pagination */}
+              {data.pagination && data.pagination.total_pages > 1 && (
+                  <TablePagination
+                      page={data.pagination.page}
+                      totalPages={data.pagination.total_pages}
+                      pageSize={data.pagination.page_size}
+                      onPageChange={onPageChange}
+                  />
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -102,7 +112,7 @@ export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {} 
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination unten */}
       {data.pagination && data.pagination.total_pages > 1 && (
         <TablePagination
           page={data.pagination.page}

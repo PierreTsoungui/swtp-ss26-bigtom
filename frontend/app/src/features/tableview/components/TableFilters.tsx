@@ -1,5 +1,7 @@
 import type { TableFilters } from "../hooks/useTableFilters";
 import { useState } from "react";
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import ArrowRightIcon from '@mui/icons-material/ArrowRight';
 
 type Props = {
   table: "dmp" | "dmr";  
@@ -35,7 +37,8 @@ export function TableFilters({
           onClick={() => setShowFilters(!showFilters)}
           className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
         >
-          {showFilters ? "▼" : "▶"} Filter
+          {showFilters ? <ArrowDropDownIcon /> : <ArrowRightIcon />}
+          Filter
           {activeFilterCount > 0 && (
             <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
               {activeFilterCount}
