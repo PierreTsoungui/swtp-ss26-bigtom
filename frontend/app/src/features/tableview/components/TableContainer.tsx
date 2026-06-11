@@ -9,6 +9,7 @@ import { useTableState } from "../hooks/useTableState";
 import { useTableData } from "../hooks/useTableData";
 import { useTableFilters } from "../hooks/useTableFilters";
 import HeatMap from "./heatmap/HeatMap.tsx";
+import SkeletonTable from "./SkeletonTable.tsx";
 
 export function TableContainer() {
   const { job_id } = useParams();
@@ -98,9 +99,7 @@ export function TableContainer() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
+        <SkeletonTable columns={6} rows={pageSize} />
       )}
 
       {/* Error */}
