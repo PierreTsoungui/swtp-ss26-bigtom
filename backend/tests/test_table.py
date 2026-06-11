@@ -8,40 +8,67 @@ client = TestClient(app)
 
 @pytest.fixture
 def mock_job(tmp_path):
-
     job_id = "test-job-123"
     job_dir = tmp_path / job_id
     job_dir.mkdir()
 
-    def create_csv(path):
+    def create_dmp_csv(path):
         with open(path, "w") as f:
-            f.write(",206891110001_R01C01,206891110001_R03C01,206891110001_R07C01,206891110001_R08C01\n")
-
+            f.write(
+                "ID,CHR,POS,GENE,FEATURE,CGI,ADJ_P,GROUP1_AVG,GROUP2_AVG,DELTA_BETA\n"
+            )
             for i in range(200):
-                v1 = round((i * 0.1) % 1, 6)
-                v2 = round((i * 0.2) % 1, 6)
-                v3 = round((i * 0.3) % 1, 6)
-                v4 = round((i * 0.4) % 1, 6)
+                f.write(
+                    f"cg{i:08d}_BC11,"
+                    f"chr1,"
+                    f"{i*10},"
+                    f"GENE{i},"
+                    f"feat,"
+                    f"cgi,"
+                    f"{0.01},"
+                    f"{0.2},"
+                    f"{0.5},"
+                    f"{0.1}\n"
+                )
 
-                f.write(f"cg{i:08d}_BC11,{v1},{v2},{v3},{v4}\n")
+    def create_dmr_csv(path):
+        with open(path, "w") as f:
+            f.write(
+                "ID,CHR,START,STOP,WIDTH,P_VALUE,MEANDIFF,N_DMPS\n"
+            )
+            for i in range(200):
+                f.write(
+                    f"DMR_{i},"
+                    f"chr1,"
+                    f"{i*10},"
+                    f"{i*10+50},"
+                    f"{50},"
+                    f"{0.01},"
+                    f"{0.3},"
+                    f"{5}\n"
+                )
 
-    create_csv(job_dir / "dmp_results.csv")
-    create_csv(job_dir / "dmr_results.csv")
+    create_dmp_csv(job_dir / "dmp_results.csv")
+    create_dmr_csv(job_dir / "dmr_results.csv")
 
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
         yield job_id, job_dir
 
 
 # HELPER
-
-def call(job_id, table, page=1):
+def call(
+    job_id,
+    table,
+    page=1,
+    **params
+):
     return client.get(
         f"/api/v1/table/{job_id}/{table}",
         params={
-            "page": page
+            "page": page,
+            **params,
         }
     )
-
 
 def test_pagination_returns_correct_rows(mock_job):
     job_id, _ = mock_job
@@ -60,15 +87,15 @@ def test_total_rows_correct(mock_job):
     assert res.json()["pagination"]["total_rows"] == 200
 
 
-def test_cpg_id_in_response(mock_job):
+def  test_id_in_response(mock_job):
     job_id, _ = mock_job
 
     res = call(job_id, "dmp")
 
     first_row = res.json()["data"][0]
 
-    assert "cpg_id" in first_row
-    assert first_row["cpg_id"].startswith("cg")
+    assert "ID" in first_row
+    assert first_row["ID"].startswith("cg")
 
 
 def test_columns_returned(mock_job):
@@ -78,8 +105,8 @@ def test_columns_returned(mock_job):
 
     col_names = [c["key"] for c in res.json()["columns"]]
 
-    assert "cpg_id" in col_names
-    assert "206891110001_R01C01" in col_names
+    assert "ID" in col_names
+    assert "CHR" in col_names
 
 
 def test_page_2_different_from_page_1(mock_job):
@@ -115,3 +142,77 @@ def test_data_not_ready(tmp_path):
         )
 
         assert res.status_code == 409
+def test_filter_chr(mock_job):
+    job_id, _ = mock_job
+
+    res = call(
+        job_id,
+        "dmp",
+        filter_chr="chr1"
+    )
+
+    assert res.status_code == 200
+
+    for row in res.json()["data"]:
+        assert row["CHR"] == "chr1"
+
+def test_filter_start(mock_job):
+    job_id, _ = mock_job
+
+    res = call(
+        job_id,
+        "dmp",
+        filter_start="2000"
+    )
+
+    assert res.status_code == 200
+
+    for row in res.json()["data"]:
+        assert row["POS"] >= 2000
+
+def test_unknown_filter_returns_400(mock_job):
+    job_id, _ = mock_job
+
+    res = call(
+        job_id,
+        "dmp",
+        filter_banana="123"
+    )
+
+    assert res.status_code == 400
+def test_invalid_numeric_filter_returns_400(mock_job):
+    job_id, _ = mock_job
+
+    res = call(
+        job_id,
+        "dmp",
+        filter_start="abc"
+    )
+
+    assert res.status_code == 400
+def test_invalid_sort_column_returns_400(mock_job):
+    job_id, _ = mock_job
+
+    res = call(
+        job_id,
+        "dmp",
+        sort_by="BANANA",
+        sort_order="asc"
+    )
+
+    assert res.status_code == 400
+def test_filter_chr_and_start(mock_job):
+    job_id, _ = mock_job
+
+    res = call(
+        job_id,
+        "dmp",
+        filter_chr="chr1",
+        filter_start="2000"
+    )
+
+    assert res.status_code == 200
+
+    for row in res.json()["data"]:
+        assert row["CHR"] == "chr1"
+        assert row["POS"] >= 2000
