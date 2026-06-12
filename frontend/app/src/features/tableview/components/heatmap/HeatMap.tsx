@@ -10,7 +10,7 @@ import {
     Typography,
 } from "@mui/material";
 import { ArrowDropDown } from "@mui/icons-material";
-import { useState } from "react";
+import {useEffect, useState} from "react";
 import { useParams } from "react-router-dom";
 
 import { useJobPolling } from "../../../analysis/hooks/useJobPolling.ts";
@@ -43,7 +43,14 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
     const [primaryGrouping, setPrimaryGrouping] = useState("");
     const [secondaryGrouping, setSecondaryGrouping] = useState("");
 
-    const jobStatus: JobStatus | null = useJobPolling(job_id ?? null);
+    // const jobStatus: JobStatus | null = useJobPolling(job_id ?? null);
+    const [isHeatmapPolling, setIsHeatmapPolling] = useState(false);
+    const [pollingKey, setPollingKey] = useState(0);
+
+    const jobStatus: JobStatus | null = useJobPolling(
+        isHeatmapPolling ? (job_id ?? null) : null,
+        pollingKey
+    );
 
     const {
         data: options,
@@ -72,6 +79,8 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         if (!primaryGrouping) {
             return;
         }
+        setPollingKey((prev => prev + 1)); // Trigger Job Status Polling
+        setIsHeatmapPolling(true);
 
         await generateHeatMap({
             dmp_filter: {
@@ -94,6 +103,18 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
             },
         });
     };
+
+    useEffect(() => {
+        if (!jobStatus) return;
+        if (
+            jobStatus.phase === "heatmap" && jobStatus.status !== "running" ||
+            jobStatus.status === "heatmap_done" ||
+            jobStatus.status === "failed"
+        ) {
+            setIsHeatmapPolling(false);
+        }
+    }, [jobStatus?.status, jobStatus?.phase]);
+
     console.log("[HeatMap] Rendering Select, availableColumns:", availableColumns);
     return (
         <Accordion
@@ -205,8 +226,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
                     </div>
 
                     {/* Progress */}
-                    {(isGenerating ||
-                        jobStatus?.status === "running") && jobStatus !== null && (
+                    {isHeatmapPolling && jobStatus && (
                         <Progressbar jobStatus={jobStatus} />
                     )}
 

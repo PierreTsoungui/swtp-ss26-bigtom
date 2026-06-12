@@ -23,37 +23,35 @@ export const useGenerateHeatMap = (jobId: string | null) => {
         try {
             setIsLoading(true);
             setError(null);
+
             console.log("[useGenerateHeatMap] Sending payload:", payload);
+
             const response = await fetch(`/api/v1/heatmap/${jobId}`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
+
             console.log("[useGenerateHeatMap] Response status:", response.status);
-            console.log("[useGenerateHeatMap] Response body:", await response.json());
+
+            // ── Einmal lesen, dann für beides verwenden ───────────
+            const body = await response.json();
+            console.log("[useGenerateHeatMap] Response body:", body);
 
             if (!response.ok) {
-                const errorResponse: HeatMapErrorResponse =
-                    await response.json();
+                const errorResponse = body as HeatMapErrorResponse;
                 console.error("[useGenerateHeatMap] Error response:", errorResponse);
                 throw new Error(errorResponse.message);
             }
 
-            const result: HeatMapResponse =
-                await response.json();
-
+            const result = body as HeatMapResponse;
             setData(result);
-
             return result;
+
         } catch (err) {
             setError(
-                err instanceof Error
-                    ? err.message
-                    : "Unknown error occurred",
+                err instanceof Error ? err.message : "Unknown error occurred"
             );
-
             return null;
         } finally {
             setIsLoading(false);
