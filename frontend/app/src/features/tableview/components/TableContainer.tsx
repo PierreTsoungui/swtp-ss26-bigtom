@@ -7,10 +7,11 @@ import { AnalysisTable } from "./AnalysisTable";
 
 import { useTableState } from "../hooks/useTableState";
 import { useTableData } from "../hooks/useTableData";
-import { useTableFilters } from "../hooks/useTableFilters";
+import {type DmpFilters, type DmrFilters, useTableFilters} from "../hooks/useTableFilters";
 import HeatMap from "./heatmap/HeatMap.tsx";
 import SkeletonTable from "./SkeletonTable.tsx";
 import { TableExportButton } from "./TableExportButton";
+import {mapDmpTableFiltersToHeatmap} from "../utils/mapDmpTableFiltersToHeatMap.ts";
 
 export function TableContainer() {
   const { job_id } = useParams();
@@ -49,7 +50,10 @@ export function TableContainer() {
     pageSize
   );
 
-  const handleApplyFilters = () => {
+  // Typsicherer Zugriff – hier ist appliedFilters.dmp vom Typ DmpTableFilters
+  const heatmapFilter = mapDmpTableFiltersToHeatmap(appliedFilters.dmp);
+
+  /*const handleApplyFilters = () => {
     applyFilters(activeTab);
     // Seite zurücksetzen auf 1 (Filter ändert Ergebnismenge)
     updatePage(activeTab, 1);
@@ -58,7 +62,7 @@ export function TableContainer() {
   const handleResetFilters = () => {
     resetFilters(activeTab);
     updatePage(activeTab, 1);
-  };
+  };*/
 
   const handleTabChange = (tab: "dmp" | "dmr") => {
     setActiveTab(tab);
@@ -190,7 +194,7 @@ export function TableContainer() {
       <TableTabs activeTab={activeTab} onChange={handleTabChange} />
 
       {/* Filter */}
-      <div className="mt-4">
+      {/*<div className="mt-4">
         <TableFilters
           table={activeTab}
           filters={draftFilters[activeTab]}
@@ -198,7 +202,39 @@ export function TableContainer() {
           onApply={handleApplyFilters}
           onReset={handleResetFilters}
         />
-      </div>
+      </div>*/}
+      {activeTab === "dmp" && (
+          <TableFilters<DmpFilters>
+              table="dmp"
+              filters={draftFilters.dmp}
+              onChange={(field, value) => updateDraftFilter("dmp", field, value)}
+              onApply={() => {
+                applyFilters("dmp");
+                updatePage("dmp", 1);
+              }}
+              onReset={() => {
+                resetFilters("dmp");
+                updatePage("dmp", 1);
+              }}
+          />
+      )}
+      {activeTab === "dmr" && (
+          <TableFilters<DmrFilters>
+              table="dmr"
+              filters={draftFilters.dmr}
+              onChange={(field, value) => updateDraftFilter("dmr", field, value)}
+              onApply={() => {
+                applyFilters("dmr");
+                updatePage("dmr", 1);
+              }}
+              onReset={() => {
+                resetFilters("dmr");
+                updatePage("dmr", 1);
+              }}
+          />
+      )}
+
+
 
       {/* Filter-Status */}
       {hasFilters(activeTab) && (
@@ -243,7 +279,7 @@ export function TableContainer() {
       {/* HeatMap */}
       {activeTab === "dmp" && (
           <div className="flex justify-center py-12 mt-3">
-            <HeatMap dmp_filter={appliedFilters} />
+            <HeatMap dmp_filter={heatmapFilter} />
           </div>
       )}
     </div>

@@ -5,7 +5,7 @@
  * @param jobId
  */
 async function downloadHeatmap(jobId: string) {
-    const response = await fetch(`/heatmap/${jobId}`);
+    const response = await fetch(`/api/v1/heatmap/${jobId}`);
 
     if (!response.ok) {
         throw new Error("Download failed");

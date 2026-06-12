@@ -21,11 +21,11 @@ import {useGenerateHeatMap} from "../../hooks/useGenerateHeatMap.ts";
 import Progressbar from "../../../../shared/components/Progressbar.tsx";
 import ErrorMessage from "../../../../shared/error-handling/components/ErrorMessage.tsx";
 import downloadHeatmap from "../../utils/downloadHeatmap.ts";
-import type {DmpFilter} from "../../utils/types.ts";
+import type {HeatmapDmpFilter} from "../../utils/types.ts";
 
 
 type HeatMapProps = {
-    dmp_filter: DmpFilter;
+    dmp_filter: HeatmapDmpFilter;
 }
 
 /**

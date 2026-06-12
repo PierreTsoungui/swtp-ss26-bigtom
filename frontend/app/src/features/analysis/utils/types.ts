@@ -55,7 +55,8 @@ export type JobStatusValue =
   | "completed"
   | "failed"
   | "analysis_done"
-  | "canceled";
+  | "canceled"
+  | "heatmap_done";
 
 export type JobPhase =
   | "uploaded"
@@ -68,7 +69,8 @@ export type JobPhase =
   | "batch_correction"
   | "downstream_analysis"
   | "completed"
-  | "reset";
+  | "reset"
+  | "heatmap";
 
 export interface JobStatus {
   job_id: string;

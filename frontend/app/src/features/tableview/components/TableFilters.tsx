@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ArrowRightIcon from '@mui/icons-material/ArrowRight';
+import type {DmpFilters, DmrFilters} from "../hooks/useTableFilters.ts";
 
 
 // Filter-Definitionen pro Tabelle
@@ -46,21 +47,21 @@ function getChromosomeOptions() {
 }
 
 
-interface TableFiltersProps {
+interface TableFiltersProps<T extends DmpFilters | DmrFilters> {
   table: "dmp" | "dmr";
-  filters: Record<string, string>;
-  onChange: (key: string, value: string) => void;
+  filters: T;
+  onChange: <K extends keyof T>(key: K, value: string) => void;
   onApply: () => void;
   onReset: () => void;
 }
 
-export function TableFilters({
+export function TableFilters<T extends DmpFilters | DmrFilters>({
   table,
   filters,
   onChange,
   onApply,
   onReset,
-}: TableFiltersProps) {
+}: TableFiltersProps<T>) {
   const [showFilters, setShowFilters] = useState(false);
   
   const hasFilters = Object.values(filters).some(
@@ -74,6 +75,9 @@ export function TableFilters({
 
   const filterDefs = FILTER_DEFINITIONS[table];
 
+  const handleChange = (key: string, value: string) => {
+    onChange(key as keyof T, value);
+  };
   return (
     <div className="mb-4">
       {/* Toggle Button */}
@@ -110,7 +114,7 @@ export function TableFilters({
                     {filterDef.type === "select" ? (
                         <select
                             value={(filters as any)[filterDef.key] || ""}
-                            onChange={(e) => onChange(filterDef.key, e.target.value)}
+                            onChange={(e) => handleChange(filterDef.key, e.target.value)}
                             className="w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">{filterDef.label}</option>
@@ -125,7 +129,7 @@ export function TableFilters({
                             type={filterDef.type}
                             placeholder={filterDef.label}
                             value={(filters as any)[filterDef.key] || ""}
-                            onChange={(e) => onChange(filterDef.key, e.target.value)}
+                            onChange={(e) => handleChange(filterDef.key, e.target.value)}
                             step={(filterDef as any).step}
                             min={(filterDef as any).min}
                             max={(filterDef as any).max}

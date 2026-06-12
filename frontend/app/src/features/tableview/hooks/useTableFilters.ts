@@ -62,20 +62,29 @@ const EMPTY_DMR_FILTERS: DmrFilters = {
   n_dmps_max: "",
 };
 
+type FilterState = {
+  dmp: DmpFilters;
+  dmr: DmrFilters;
+}
+
 export function useTableFilters(onResetPage?: () => void) {
   const [draftFilters, setDraftFilters] =
-    useState<Record<string, TableFilters>>({
+    useState<FilterState>({
       dmp: { ...EMPTY_DMP_FILTERS },
       dmr: { ...EMPTY_DMR_FILTERS },
     });
 
   const [appliedFilters, setAppliedFilters] =
-    useState<Record<string, TableFilters>>({
+    useState<FilterState>({
       dmp: { ...EMPTY_DMP_FILTERS },
       dmr: { ...EMPTY_DMR_FILTERS },
     });
 
-  const updateDraftFilter = (table: string, key: string, value: string) => {
+  const updateDraftFilter = <K extends keyof FilterState>(
+      table: K,
+      key: keyof FilterState[K],
+      value: string
+  ) => {
     setDraftFilters((prev) => ({
       ...prev,
       [table]: {
@@ -85,36 +94,22 @@ export function useTableFilters(onResetPage?: () => void) {
     }));
   };
 
-  const applyFilters = (table: string) => {
+  const applyFilters = <K extends keyof FilterState>(table: K) => {
     setAppliedFilters((prev) => ({
       ...prev,
       [table]: draftFilters[table],
     }));
   };
 
-  const resetFilters = (table: string) => {
+  const resetFilters = <K extends keyof FilterState>(table: K) => {
     const emptyFilters = table === "dmp" ? EMPTY_DMP_FILTERS : EMPTY_DMR_FILTERS;
-    setDraftFilters((prev) => ({
-      ...prev,
-      [table]: { ...emptyFilters },
-    }));
-
-    setAppliedFilters((prev) => ({
-      ...prev,
-      [table]: { ...emptyFilters },
-    }));
-
-    // Seite zurücksetzen (optional)
-    if (onResetPage) {
-      onResetPage();
-    }
+    setDraftFilters((prev) => ({ ...prev, [table]: { ...emptyFilters } }));
+    setAppliedFilters((prev) => ({ ...prev, [table]: { ...emptyFilters } }));
+    if (onResetPage) onResetPage();
   };
 
-  const hasFilters = (table: string): boolean => {
-    const filters = appliedFilters[table];
-    return Object.values(filters).some(
-      (value) => value !== "" && value !== null
-    );
+  const hasFilters = <K extends keyof FilterState>(table: K): boolean => {
+    return Object.values(appliedFilters[table]).some((v) => v !== "");
   };
 
   return {

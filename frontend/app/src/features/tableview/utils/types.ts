@@ -5,7 +5,7 @@
 /**
  * Filter für die Auswahl der DMPs, aus denen die Heatmap generiert wird.
  */
-export type DmpFilter = {
+/*export type DmpFilter = {
     dmr_id?: string;
     chromosome?: string;
     start?: number;
@@ -14,7 +14,18 @@ export type DmpFilter = {
     adj_p_value_max?: number;
     delta_beta_min?: number;
     delta_beta_max?: number;
-};
+};*/
+export interface HeatmapDmpFilter {
+    dmr_id?: string;              // optional
+    chromosome?: string;          // z.B. "chr19"
+    start?: number;
+    stop?: number;
+    p_value_max?: number;
+    adj_p_value_max?: number;
+    delta_beta_min?: number;
+    delta_beta_max?: number;
+}
+
 
 /**
  * Gruppierungsparameter für die Heatmap.
@@ -28,7 +39,7 @@ export type HeatMapGrouping = {
  * Request Body für POST /heatmap/{job_id}
  */
 export type HeatMapRequest = {
-    dmp_filter: DmpFilter;
+    dmp_filter: HeatmapDmpFilter;
     grouping: HeatMapGrouping;
 };
 
