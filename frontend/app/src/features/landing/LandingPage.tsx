@@ -143,7 +143,7 @@ export function LandingPage() {
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
             <div>
               <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-blue-700">
-                Guided methylation analysis
+                Full methylation analysis
               </p>
               <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-slate-950 lg:text-6xl">
                 DNA Methylation Analysis Platform
