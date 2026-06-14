@@ -9,6 +9,7 @@ import { useBatchCorrection } from "./hooks/useBatchCorrection";
 import { useJobPolling } from "../analysis/hooks/useJobPolling";
 
 import Progressbar from "../../shared/components/Progressbar";
+import { colors } from "../../shared/theme/colors";
 
 import type { BatchFormData } from "./utils/types";
 import {useNavigate} from "react-router";
@@ -121,7 +122,7 @@ const BatchPage: React.FC = () => {
       >
         <h2>Step 3: Batch Effect Correction</h2>
 
-        <p style={{ color: "#666" }}>
+        <p style={{ color: colors.neutral.textSecondary }}>
           Job ID: {job_id}
         </p>
 
@@ -129,8 +130,8 @@ const BatchPage: React.FC = () => {
             <div
                 style={{
                   padding: "15px",
-                  backgroundColor: "#f8d7da",
-                  color: "#721c24",
+                  backgroundColor: colors.danger.badgeBackground,
+                  color: colors.danger.badgeText,
                   borderRadius: "4px",
                   marginBottom: "20px",
                 }}

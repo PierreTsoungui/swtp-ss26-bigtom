@@ -31,7 +31,7 @@ export function TablePagination({
 
   return (
     <div className="flex items-center justify-between mt-4">
-      <div className="text-sm text-slate-500">
+      <div className="text-sm text-neutral-textSecondary">
         {pageSize} Einträge pro Seite
       </div>
 
@@ -40,7 +40,7 @@ export function TablePagination({
         <button
           onClick={() => onPageChange(1)}
           disabled={page === 1}
-          className="px-3 py-1 border border-slate-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
           title="Erste Seite"
         >
           «
@@ -50,7 +50,7 @@ export function TablePagination({
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="px-3 py-1 border border-slate-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
           title="Vorherige Seite"
         >
           ‹
@@ -64,8 +64,8 @@ export function TablePagination({
             className={`
               px-3 py-1 border rounded-md text-sm transition-colors
               ${pageNumber === page
-                ? "bg-blue-600 text-white border-blue-600"
-                : "border-slate-300 hover:bg-slate-50"
+                ? "bg-primary text-primary-text border-primary"
+                : "border-neutral-borderEmphasis hover:bg-neutral-background"
               }
             `}
           >
@@ -77,7 +77,7 @@ export function TablePagination({
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="px-3 py-1 border border-slate-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
           title="Nächste Seite"
         >
           ›
@@ -87,14 +87,14 @@ export function TablePagination({
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={page === totalPages}
-          className="px-3 py-1 border border-slate-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
           title="Letzte Seite"
         >
           »
         </button>
       </div>
 
-      <div className="text-sm text-slate-500">
+      <div className="text-sm text-neutral-textSecondary">
         Seite {page} von {totalPages}
       </div>
     </div>

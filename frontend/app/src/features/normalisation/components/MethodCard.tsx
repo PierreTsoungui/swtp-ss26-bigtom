@@ -27,7 +27,7 @@ function MethodCard({ group, isSelected, onSelect, onImageClick }: PlotCardProps
 
     return (
         <div className={`rounded-xl border-2 p-3 transition-all shadow-sm ${
-            isSelected ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-slate-200 bg-white hover:border-slate-300'
+            isSelected ? 'border-primary bg-info-badgeBackground shadow-md' : 'border-neutral-borderDefault bg-neutral-card hover:border-neutral-borderEmphasis'
         }`}>
             <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-semibold uppercase tracking-wide">{group.method}</span>
@@ -46,15 +46,15 @@ function MethodCard({ group, isSelected, onSelect, onImageClick }: PlotCardProps
                     <img
                         src={densityPlot.url}
                         alt={`${group.method} density`}
-                        className="w-full rounded-md border bg-white cursor-pointer hover:opacity-80 transition-opacity"
+                        className="w-full rounded-md border bg-neutral-card cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => onImageClick(densityPlot.url, `${group.method.toUpperCase()} - Dichteplot`)}
                     />
                 ) : (
-                    <div className="w-full rounded-md border bg-slate-100 h-32 flex items-center justify-center text-xs text-slate-400">
+                    <div className="w-full rounded-md border bg-neutral-surface h-32 flex items-center justify-center text-xs text-neutral-textDisabled">
                         kein Density-Plot
                     </div>
                 )}
-                <div className="text-[10px] text-slate-400 mt-1 text-center">Dichte • Klick für Vorschau</div>
+                <div className="text-[10px] text-neutral-textDisabled mt-1 text-center">Dichte • Klick für Vorschau</div>
             </div>
 
             {/* Scatter Plot */}
@@ -63,19 +63,19 @@ function MethodCard({ group, isSelected, onSelect, onImageClick }: PlotCardProps
                     <img
                         src={scatterPlot.url}
                         alt={`${group.method} scatter`}
-                        className="w-full rounded-md border bg-white cursor-pointer hover:opacity-80 transition-opacity"
+                        className="w-full rounded-md border bg-neutral-card cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => onImageClick(scatterPlot.url, `${group.method.toUpperCase()} - PCA Streudiagramm`)}
                     />
                 ) : (
-                    <div className="w-full rounded-md border bg-slate-100 h-32 flex items-center justify-center text-xs text-slate-400">
+                    <div className="w-full rounded-md border bg-neutral-surface h-32 flex items-center justify-center text-xs text-neutral-textDisabled">
                         kein PCA-Plot
                     </div>
                 )}
-                <div className="text-[10px] text-slate-400 mt-1 text-center">PCA • Klick für Vorschau</div>
+                <div className="text-[10px] text-neutral-textDisabled mt-1 text-center">PCA • Klick für Vorschau</div>
             </div>
 
             {group.method === 'raw' && (
-                <div className="mt-3 text-xs text-slate-400 text-center">Raw-Daten (ungefiltert)</div>
+                <div className="mt-3 text-xs text-neutral-textDisabled text-center">Raw-Daten (ungefiltert)</div>
             )}
         </div>
     );

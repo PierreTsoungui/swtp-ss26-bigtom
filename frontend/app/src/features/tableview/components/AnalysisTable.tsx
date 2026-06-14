@@ -18,11 +18,11 @@ function SortIcon({ columnKey, sorting }: { columnKey: string; sorting: Props["s
   }
   
   if (sorting?.sort_order === "asc") {
-    return <span className="text-blue-600 ml-1.5 text-base">▲</span>;
+    return <span className="text-primary ml-1.5 text-base">▲</span>;
   }
   
   if (sorting?.sort_order === "desc") {
-    return <span className="text-blue-600 ml-1.5 text-base">▼</span>;
+    return <span className="text-primary ml-1.5 text-base">▼</span>;
   }
   
   return null;
@@ -50,8 +50,8 @@ function formatCellValue(value: any, type: string): string {
 export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {}  }: Props) {
   if (!data || !data.columns || !data.data) {
     return (
-      <div className="text-center py-12 bg-slate-50 rounded-md border border-slate-200">
-        <p className="text-slate-500">Keine Daten vorhanden.</p>
+      <div className="text-center py-12 bg-neutral-background rounded-md border border-neutral-borderDefault">
+        <p className="text-neutral-textSecondary">Keine Daten vorhanden.</p>
       </div>
     );
   }
@@ -61,9 +61,9 @@ export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {} 
   return (
     <div>
       {/* Tabelle */}
-      <div className="overflow-auto border border-slate-200 rounded-md">
+      <div className="overflow-auto border border-neutral-borderDefault rounded-md">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-neutral-background border-b border-neutral-borderDefault">
             <tr>
               {data.columns.map((column: any) => (
                 <th
@@ -74,8 +74,8 @@ export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {} 
                     }
                   }}
                   className={`
-                    px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider
-                    ${column.sortable ? "cursor-pointer hover:bg-slate-100 select-none" : ""}
+                    px-4 py-3 text-left text-xs font-medium text-neutral-textSecondary uppercase tracking-wider
+                    ${column.sortable ? "cursor-pointer hover:bg-neutral-surface select-none" : ""}
                   `}
                 >
                   <div className="flex items-center gap-1">
@@ -90,9 +90,9 @@ export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {} 
           </thead>
           <tbody className="divide-y divide-slate-100">
             {data.data.map((row: any, index: number) => (
-              <tr key={index} className="hover:bg-slate-50">
+              <tr key={index} className="hover:bg-neutral-background">
                 {data.columns.map((column: any) => (
-                  <td key={column.key} className="px-4 py-3 text-slate-700">
+                  <td key={column.key} className="px-4 py-3 text-neutral-textSecondary">
                     {formatCellValue(row[column.key], column.type)}
                   </td>
                 ))}

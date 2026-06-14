@@ -101,7 +101,7 @@ function UploadView() : JSX.Element {
   return (
     <div className="container mx-auto">
       <h1 className="text-4xl font-bold text-center m-10">Upload</h1>
-      <div className="flex flex-row bg-slate-200 justify-center gap-10 p-10">
+      <div className="flex flex-row bg-neutral-surface justify-center gap-10 p-10">
 
         {/* IDAT Upload */}
         <IdatUpload 
@@ -129,7 +129,7 @@ function UploadView() : JSX.Element {
         }}
       />
       {isLoading && <p>Upload läuft...</p>}
-      {error && <p className="text-red-500">{error}</p>}
+      {error && <p className="text-danger">{error}</p>}
 
       {/* Dateiliste IDAT */}
       <FileViewList files={idatFiles} errors={idatErrors} onRemove={onRemoveIdatFile} />

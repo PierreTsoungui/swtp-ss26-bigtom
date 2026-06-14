@@ -9,6 +9,7 @@ import {
     Autocomplete,
     Alert,
 } from "@mui/material";
+import { colors } from "../../../shared/theme/colors";
 
 interface BatchFormProps {
     parameters: BatchParametersResponse;
@@ -58,10 +59,10 @@ export function BatchForm({
         <form onSubmit={handleSubmit} className="space-y-8">
             {/* Batch Variable (Required) - SELECT Dropdown */}
             <div className="space-y-3">
-                <label className="block text-sm font-semibold text-slate-900">
-                    Batch Variable <span className="text-red-500">*</span>
+                <label className="block text-sm font-semibold text-neutral-textPrimary">
+                    Batch Variable <span className="text-danger">*</span>
                 </label>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-neutral-textSecondary">
                     Technischer Faktor der korrigiert werden soll
                 </p>
 
@@ -87,10 +88,10 @@ export function BatchForm({
 
             {/* Covariates (Optional Multi-Select) - AUTOCOMPLETE */}
             <div className="space-y-3">
-                <label className="block text-sm font-semibold text-slate-900">
+                <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Covariates (Optional)
                 </label>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-neutral-textSecondary">
                     Biologische Gruppen die NICHT verändert werden dürfen. Mehrfachauswahl
                     möglich.
                 </p>
@@ -116,8 +117,8 @@ export function BatchForm({
             </div>
 
             {/* Info Box */}
-            {/*<Box className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm text-amber-900">
+            {/*<Box className="rounded-lg border-2 border-warning bg-warning-badgeBackground p-4">
+                <p className="text-sm text-warning-badgeText">
                     <Alert severity="info">Die Covariates
                         dürfen nicht identisch mit der Batch Variable sein, um biologische
                         Signale zu erhalten.</Alert>
@@ -128,10 +129,10 @@ export function BatchForm({
                 variant="outlined"
                 className="rounded-lg"
                 sx={{
-                    bgcolor: 'amber.50',
-                    borderColor: 'amber.200',
-                    '& .MuiAlert-message': { color: 'amber.900' },
-                    '& .MuiAlert-icon': { color: 'amber.600' } // Adjust icon color to match
+                    bgcolor: colors.info.badgeBackground,
+                    borderColor: colors.info.DEFAULT,
+                    '& .MuiAlert-message': { color: colors.info.badgeText },
+                    '& .MuiAlert-icon': { color: colors.info.DEFAULT }
                 }}
             >
                 Die Covariates dürfen nicht identisch mit der Batch Variable sein, um biologische Signale zu erhalten.
@@ -144,8 +145,8 @@ export function BatchForm({
                     disabled={!batchVariable || isLoading}
                     className={`flex-1 px-6 py-3 rounded-lg font-semibold transition ${
                         batchVariable && !isLoading
-                            ? "bg-blue-600 text-white hover:bg-blue-700"
-                            : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                            ? "bg-primary text-primary-text hover:bg-primary-hover"
+                            : "bg-neutral-borderEmphasis text-neutral-textSecondary cursor-not-allowed"
                     }`}
                 >
                     {isLoading ? "Batch ongoing..." : "Start Batch"}
@@ -159,14 +160,14 @@ export function BatchForm({
                         className="
                             flex-1 px-6 py-3
                             rounded-lg font-semibold
-                            border-2 border-slate-300
-                            text-slate-700
-                            bg-white
+                            border-2 border-neutral-borderEmphasis
+                            text-neutral-textSecondary
+                            bg-neutral-card
                             transition-colors duration-200 ease-in-out
-                            hover:bg-slate-100 hover:border-slate-400
-                            active:bg-slate-200
+                            hover:bg-neutral-surface hover:border-neutral-textDisabled
+                            active:bg-neutral-borderDefault
                             disabled:opacity-50 disabled:cursor-not-allowed
-                            disabled:hover:bg-white disabled:hover:border-slate-300"
+                            disabled:hover:bg-neutral-card disabled:hover:border-neutral-borderEmphasis"
                     >
                         {isLoading ? "Läuft..." : "Skip"}
                     </button>

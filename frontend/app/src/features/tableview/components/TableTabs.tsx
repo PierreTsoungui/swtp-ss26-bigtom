@@ -4,7 +4,7 @@ type Props = {
 };
 export function TableTabs({ activeTab, onChange }: Props) {
   return (
-    <div className="border-b border-gray-200">
+    <div className="border-b border-neutral-borderDefault">
       <div className="flex gap-6" role="tablist">  
         <button
           role="tab"  
@@ -13,8 +13,8 @@ export function TableTabs({ activeTab, onChange }: Props) {
           className={`
             px-1 py-3 text-sm font-medium transition-colors
             ${activeTab === "dmp" 
-              ? "text-blue-600 border-b-2 border-blue-600" 
-              : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+              ? "text-primary border-b-2 border-primary"
+              : "text-neutral-textSecondary hover:text-neutral-textPrimary border-b-2 border-transparent"
             }
           `}
         >
@@ -27,8 +27,8 @@ export function TableTabs({ activeTab, onChange }: Props) {
           className={`
             px-1 py-3 text-sm font-medium transition-colors
             ${activeTab === "dmr" 
-              ? "text-blue-600 border-b-2 border-blue-600" 
-              : "text-gray-500 hover:text-gray-700 border-b-2 border-transparent"
+              ? "text-primary border-b-2 border-primary"
+              : "text-neutral-textSecondary hover:text-neutral-textPrimary border-b-2 border-transparent"
             }
           `}
         >

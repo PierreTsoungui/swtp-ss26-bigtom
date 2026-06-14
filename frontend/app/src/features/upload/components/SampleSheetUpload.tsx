@@ -21,7 +21,7 @@ type SampleSheetUploadProps = {
 const SampleSheetUpload: React.FC<SampleSheetUploadProps> = ({ sampleSheet, sampleSheetError, onSampleSheetChange }) => {
     return (
         <div className="flex flex-col gap-2">
-          <label className="cursor-pointer bg-slate-400 hover:bg-slate-500 rounded-full p-4 px-8 text-center">
+          <label className="cursor-pointer bg-secondary hover:bg-secondary-hover rounded-full p-4 px-8 text-center">
             Sample Sheet auswählen
             <input
               type="file"
@@ -33,10 +33,10 @@ const SampleSheetUpload: React.FC<SampleSheetUploadProps> = ({ sampleSheet, samp
 
           <p className="text-sm"><b>Erlaubte Dateien:</b> *.csv, *.xlsx</p>
           {sampleSheet && (
-            <p className="text-sm text-green-600"><CheckIcon fontSize="small" /> {sampleSheet.name}</p>
+            <p className="text-sm text-success"><CheckIcon fontSize="small" /> {sampleSheet.name}</p>
           )}
           {sampleSheetError && (
-            <p className="text-sm text-red-600"><WarningIcon fontSize="small" /> {sampleSheetError}</p>
+            <p className="text-sm text-danger"><WarningIcon fontSize="small" /> {sampleSheetError}</p>
           )}
         </div>
     );

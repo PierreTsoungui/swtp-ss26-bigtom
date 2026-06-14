@@ -74,7 +74,7 @@ export function NormalizationPage() {
   const isDisabled : boolean = !selected || isSubmitting || isNormalising;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10">
+    <main className="min-h-screen bg-neutral-background px-6 py-10">
       {/* MODAL für Plot-Vorschau */}
       {previewImage && (
         <PlotModal
@@ -84,10 +84,10 @@ export function NormalizationPage() {
         />
       )}
 
-      <h1 className="mb-2 text-2xl font-semibold text-slate-900">
+      <h1 className="mb-2 text-2xl font-semibold text-neutral-textPrimary">
         Normalisierungsmethode auswählen
       </h1>
-      <p className="mb-8 text-slate-500">
+      <p className="mb-8 text-neutral-textSecondary">
         Klicken Sie auf einen Plot für eine vergrößerte Ansicht
       </p>
 
@@ -116,11 +116,11 @@ export function NormalizationPage() {
           onClick={handleConfirm}
           disabled={isDisabled}
           className={`
-            rounded-full px-10 py-3 font-bold text-white
+            rounded-full px-10 py-3 font-bold text-primary-text
             transition-colors
             ${isDisabled
-              ? "cursor-not-allowed bg-slate-300"
-              : "bg-blue-600 hover:bg-blue-700"
+              ? "cursor-not-allowed bg-neutral-borderEmphasis"
+              : "bg-primary hover:bg-primary-hover"
             }
           `}
         >
