@@ -17,9 +17,15 @@ interface InformationCard {
   icon: ReactNode;
 }
 
+
+interface FaqItem {
+  question: string;
+  answer: string;
+}
+
 interface FaqCategory {
   title: string;
-  questions: string[];
+  questions: FaqItem[];
 }
 
 const workflowSteps: InformationCard[] = [
@@ -38,7 +44,7 @@ const workflowSteps: InformationCard[] = [
   {
     title: "Normalization",
     description:
-      "Compare available normalization methods using density and PCA plots, then select one method or continue without normalization.",
+      "Reduce technical differences between samples to make measurements more comparable and improve the reliability of the analysis. Compare available normalization methods using density and PCA plots, then select one method or continue without normalization.",
     icon: <InsightsIcon fontSize="large" />,
   },
   {
@@ -50,7 +56,7 @@ const workflowSteps: InformationCard[] = [
   {
     title: "Results",
     description:
-      "View DMP and DMR result tables, filter and sort the data, and generate heatmaps for selected genomic regions.",
+      "Explore statistically significant methylation differences, apply filters, sort results and generate visualizations such as heatmaps.",
     icon: <AnalyticsIcon fontSize="large" />,
   },
 ];
@@ -78,63 +84,173 @@ const beginnerTopics: InformationCard[] = [
     icon: <BiotechIcon />,
   },
 ];
-
 const faqCategories: FaqCategory[] = [
   {
     title: "Upload & Files",
     questions: [
-      "What file formats are supported for the Sample Sheet?",
-      "How many IDAT files do I need to upload?",
-      "What is the maximum upload size?",
-      "Why do IDAT files always come in pairs?",
-      "What columns must the Sample Sheet contain?",
-      "Can I upload an Excel file instead of a CSV?",
+      {
+        question: "What file formats are supported for the Sample Sheet?",
+        answer:
+          "The Sample Sheet can be uploaded as a CSV (.csv) or Excel (.xlsx) file.",
+      },
+      {
+        question: "How many IDAT files do I need to upload?",
+        answer:
+          "Each sample requires two IDAT files: one Red channel file and one Green channel file. All samples referenced in the Sample Sheet must have matching IDAT pairs.",
+      },
+      {
+        question: "What is the maximum upload size?",
+        answer:
+          "The maximum upload size depends on the server configuration. Large studies with many samples may require additional storage resources.",
+      },
+      {
+        question: "Why do IDAT files always come in pairs?",
+        answer:
+          "Illumina methylation arrays generate measurements in two color channels (Red and Green). Both files are required to correctly process the data.",
+      },
+      {
+        question: "What columns must the Sample Sheet contain?",
+        answer:
+          "The Sample Sheet must contain the information required to identify samples and assign them to experimental groups. Required columns may vary depending on the analysis configuration.",
+      },
+      {
+        question: "Can I upload an Excel file instead of a CSV?",
+        answer:
+          "Yes. Both CSV and Excel files are supported for Sample Sheet uploads.",
+      },
     ],
   },
   {
     title: "Analysis Process",
     questions: [
-      "What is a Sample Sheet and what information does it contain?",
-      "What does the filtering step do and which probes are removed?",
-      "What is normalization and why is it necessary?",
-      "How do I choose the right normalization method?",
-      "What is a Batch Effect and how do I know if my data is affected?",
-      "How long does the analysis take?",
-      "Can I cancel a running analysis?",
+      {
+        question: "What is a Sample Sheet and what information does it contain?",
+        answer:
+          "A Sample Sheet describes the samples included in the analysis and contains metadata such as sample identifiers, group assignments, and other experimental information.",
+      },
+      {
+        question: "What does the filtering step do and which probes are removed?",
+        answer:
+          "Filtering removes unreliable probes that may produce inaccurate measurements. This improves the quality and reliability of downstream analyses.",
+      },
+      {
+        question: "What is normalization and why is it necessary?",
+        answer:
+          "Normalization reduces technical variation between samples so that observed differences are more likely to reflect biological effects rather than measurement artifacts.",
+      },
+      {
+        question: "How do I choose the right normalization method?",
+        answer:
+          "The platform provides density plots and PCA plots to compare methods. In general, choose the method that improves consistency between samples while preserving biological differences.",
+      },
+      {
+        question: "What is a Batch Effect and how do I know if my data is affected?",
+        answer:
+          "Batch effects are unwanted technical differences caused by processing samples under different conditions. PCA and SVD visualizations can help identify such effects.",
+      },
+      {
+        question: "How long does the analysis take?",
+        answer:
+          "Runtime depends on the number of samples and selected processing steps. Small datasets may finish within minutes, while larger datasets require more time.",
+      },
+      {
+        question: "Can I cancel a running analysis?",
+        answer:
+          "If supported by the current deployment, running analyses can be cancelled before completion.",
+      },
     ],
   },
   {
     title: "Results & Tables",
     questions: [
-      "What is a DMP (Differentially Methylated Position)?",
-      "What is a DMR (Differentially Methylated Region)?",
-      "What is a p-value and what threshold should I use?",
-      "What does Delta-Beta mean?",
-      "What is the difference between hyper- and hypomethylation?",
-      "How do I filter the results table by gene name?",
-      "Can I export the results?",
+      {
+        question: "What is a DMP ?",
+        answer:
+          "A DMP(Differentially Methylated Position) is a single CpG site that shows a statistically significant methylation difference between comparison groups.",
+      },
+      {
+        question: "What is a DMR ?",
+        answer:
+          "A DMR (Differentially Methylated Region) is a genomic region containing multiple nearby CpG sites that collectively show significant methylation differences.",
+      },
+      {
+        question: "What is a p-value and what threshold should I use?",
+        answer:
+          "A p-value measures the statistical significance of an observed difference. A threshold of 0.05 is commonly used, although stricter thresholds may be appropriate.",
+      },
+      {
+        question: "What does Delta-Beta mean?",
+        answer:
+          "Delta-Beta describes the magnitude of methylation difference between groups. Larger absolute values indicate stronger biological differences.",
+      },
+      {
+        question: "What is the difference between hyper- and hypomethylation?",
+        answer:
+          "Hypermethylation means increased methylation in one group, while hypomethylation means decreased methylation compared to another group.",
+      },
+      {
+        question: "How do I filter the results table by gene name?",
+        answer:
+          "Use the table filter controls and enter the gene name to restrict the displayed results.",
+      },
+      {
+        question: "Can I export the results?",
+        answer:
+          "Yes. DMP and DMR result tables can be exported as CSV files for further analysis.",
+      },
     ],
   },
   {
     title: "Visualizations",
     questions: [
-      "What does the PCA plot show?",
-      "What does the SVD plot show and how do I interpret it?",
-      "What is a density plot?",
-      "How do I create a heatmap for a specific genomic region?",
+      {
+        question: "What does the PCA plot show?",
+        answer:
+          "A PCA plot visualizes similarities and differences between samples. Samples that cluster together have similar methylation profiles.",
+      },
+      {
+        question: "What does the SVD plot show and how do I interpret it?",
+        answer:
+          "The SVD plot helps identify factors that explain variation in the dataset and can reveal potential batch effects.",
+      },
+      {
+        question: "What is a density plot?",
+        answer:
+          "A density plot shows the distribution of methylation values across samples and helps evaluate normalization quality.",
+      },
+      {
+        question: "How do I create a heatmap for a specific genomic region?",
+        answer:
+          "Select a genomic region from the results table and generate a heatmap to visualize methylation patterns across samples.",
+      },
     ],
   },
   {
     title: "Data Privacy & Security",
     questions: [
-      "Is my data stored on the server?",
-      "How long is my session data kept?",
-      "Is my data transfer encrypted?",
-      "Who has access to my uploaded data?",
+      {
+        question: "Is my data stored on the server?",
+        answer:
+          "Uploaded data is stored only for analysis purposes and handled according to the deployment configuration.",
+      },
+      {
+        question: "How long is my session data kept?",
+        answer:
+          "Retention time depends on the server configuration and project policies.",
+      },
+      {
+        question: "Is my data transfer encrypted?",
+        answer:
+          "When deployed with HTTPS, all communication between browser and server is encrypted.",
+      },
+      {
+        question: "Who has access to my uploaded data?",
+        answer:
+          "Access is restricted to authorized users and system administrators responsible for operating the platform.",
+      },
     ],
   },
 ];
-
 export function LandingPage() {
   return (
     <div className="bg-slate-50 text-slate-800">
@@ -149,14 +265,19 @@ export function LandingPage() {
                 DNA Methylation Analysis Platform
               </h1>
               <p className="mt-6 max-w-4xl text-base leading-8 text-slate-600 lg:text-lg">
-                MethylAnalyzer provides a guided workflow for processing biological methylation
-                data from IDAT files and Sample Sheets. The application supports seamless upload,
-                quality filtering, interactive comparison of normalization methods and optional
-                batch effect correction. It helps users identify differentially methylated
-                positions and regions through reliable statistical analysis. Results are presented
-                as interactive tables and visualizations such as heatmaps. Complex R-based
-                methylation pipelines become accessible through a modern web interface without
-                requiring coding or R knowledge.
+                MethylAnalyzer is a web-based platform for DNA methylation analysis.
+                It helps researchers process raw methylation data from Illumina IDAT files
+                without requiring programming or bioinformatics expertise.
+
+                The application guides users through data upload, quality control,
+                normalization, optional batch effect correction, and statistical analysis.
+                Results are presented in interactive tables and visualizations, making it
+                easy to identify biologically relevant methylation differences between
+                sample groups.
+
+                Whether you are new to methylation analysis or an experienced researcher,
+                MethylAnalyzer provides a transparent and user-friendly workflow from raw
+                data to interpretable results.
               </p>
             </div>
 
@@ -224,10 +345,10 @@ export function LandingPage() {
               New to DNA methylation analysis?
             </h2>
             <p className="mt-4 leading-7 text-slate-600">
-              This section will later explain the biological and technical concepts behind the
-              workflow, including filtering, normalization, batch correction, DMPs, DMRs and
-              visualizations. For now, it provides a short overview to help new users understand
-              the purpose of each analysis step.
+            DNA methylation analysis involves several processing steps before reliable
+            biological conclusions can be drawn. The concepts below provide a simple
+            introduction to the most important parts of the workflow and help new users
+            understand what happens during the analysis.
             </p>
           </div>
 
@@ -274,25 +395,14 @@ export function LandingPage() {
                     {category.title}
                   </h3>
                   <div className="divide-y divide-slate-200">
-                    {category.questions.map((question) => (
-                      <details key={question} className="group py-3">
-                        <summary className="cursor-pointer list-none rounded-md pr-2 font-medium text-slate-700 marker:hidden focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600">
-                          <span>{question}</span>
-                          <span
-                            aria-hidden="true"
-                            className="float-right text-xl leading-5 text-blue-600 group-open:hidden"
-                          >
-                            +
-                          </span>
-                          <span
-                            aria-hidden="true"
-                            className="float-right hidden text-xl leading-5 text-blue-600 group-open:inline"
-                          >
-                            −
-                          </span>
+                    {category.questions.map((item) => (
+                      <details key={item.question} className="group py-3">
+                        <summary className="cursor-pointer list-none rounded-md pr-2 font-medium text-slate-700">
+                          {item.question}
                         </summary>
+
                         <p className="mt-3 text-sm leading-6 text-slate-500">
-                          A detailed answer will be added in a future update.
+                          {item.answer}
                         </p>
                       </details>
                     ))}

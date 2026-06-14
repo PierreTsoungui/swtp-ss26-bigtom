@@ -12,43 +12,122 @@ function renderApp(path: string) {
 }
 
 describe("LandingPage", () => {
-  it("rendert die Landing Page unter der Root-Route", () => {
+
+  it("zeigt die Projektbeschreibung", () => {
     renderApp("/");
 
     expect(
-      screen.getByRole("heading", { name: "DNA Methylation Analysis Platform" }),
+      screen.getByText(/web-based platform for DNA methylation analysis/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Start Analysis" })).toHaveAttribute(
-      "href",
-      "/upload",
-    );
+
     expect(
-      screen.getByRole("img", {
-        name: "BigTom DNA methylation analysis platform logo",
+      screen.getByText(/without requiring programming or bioinformatics expertise/i),
+    ).toBeInTheDocument();
+  });
+
+  it("renders landing page on root route", () => {
+    renderApp("/");
+
+    expect(
+      screen.getByRole("heading", {
+        name: "DNA Methylation Analysis Platform",
       }),
     ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("link", { name: "Start Analysis" }),
+    ).toHaveAttribute("href", "/upload");
+
+    expect(
+      screen.getByText(/Full methylation analysis/i),
+    ).toBeInTheDocument();
   });
 
-  it("zeigt Workflow, Onboarding und FAQ", () => {
+  it("zeigt Workflow Sektion korrekt", () => {
+  renderApp("/");
+
+  expect(
+    screen.getByRole("heading", {
+      name: "From raw files to interpretable results",
+    }),
+  ).toBeInTheDocument();
+
+  const workflowSteps = [
+    "Select Files",
+    "Initial Filtering",
+    "Normalization",
+    "Optional Batch Correction",
+    "Results",
+  ];
+
+  workflowSteps.forEach((step) => {
+    
+    const headings = screen.getAllByRole("heading", { name: step });
+    
+    expect(headings[0]).toBeInTheDocument();
+  });
+});
+
+
+  it("zeigt Beginner Section", () => {
     renderApp("/");
 
     expect(
-      screen.getByRole("heading", { name: "From raw files to interpretable results" }),
+      screen.getByRole("heading", {
+        name: "New to DNA methylation analysis?",
+      }),
     ).toBeInTheDocument();
+
     expect(
-      screen.getByRole("heading", { name: "New to DNA methylation analysis?" }),
+      screen.getByText(/DNA methylation analysis involves several processing steps/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Frequently asked questions" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Select Files" })).toBeInTheDocument();
-    expect(screen.getByText("What does the PCA plot show?")).toBeInTheDocument();
   });
 
-  it("lässt die bestehende Upload-Route erreichbar", () => {
+  it("zeigt FAQ Kategorien", () => {
+    renderApp("/");
+
+    const categories = [
+      "Upload & Files",
+      "Analysis Process",
+      "Results & Tables",
+      "Visualizations",
+      "Data Privacy & Security",
+    ];
+
+    categories.forEach((cat) => {
+      expect(
+        screen.getByRole("heading", { name: cat }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("zeigt FAQ Fragen", () => {
+    renderApp("/");
+
+    expect(
+      screen.getByText("What file formats are supported for the Sample Sheet?"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("What is normalization and why is it necessary?"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("What is a DMP ?"),
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("What does the PCA plot show?"),
+    ).toBeInTheDocument();
+  });
+
+  it("upload route bleibt erreichbar", () => {
     renderApp("/upload");
 
     const main = screen.getByRole("main");
-    expect(within(main).getByRole("heading", { name: "Upload" })).toBeInTheDocument();
+
+    expect(
+      within(main).getByRole("heading", { name: "Upload" }),
+    ).toBeInTheDocument();
   });
 });
