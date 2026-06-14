@@ -118,6 +118,9 @@ async def run_heatmap_pipeline_task(
 
         # ── Progress-Callback ──────────────────────────────────────────────────
         async def on_progress(data: dict):
+            if not isinstance(data, dict):
+                return
+
             if data.get("type") == "progress":
                 # heatmap.R meldet Schritte 1–8; wir mappen auf 5–95 %
                 step       = int(data.get("step", 1))
@@ -182,8 +185,8 @@ async def run_heatmap_pipeline_task(
             status="heatmap_done",
             phase="heatmap",
             progress_percent=100,
-            current_step="Heatmap erfolgreich generiert!",
-            extra=meta,
+            current_step="Heatmap erfolgreich generiert!"
+            # extra=meta,
         )
 
     except Exception as exc:
@@ -206,6 +209,10 @@ def _parse_too_many_cpgs(stdout: str) -> Optional[int]:
     for line in stdout.splitlines():
         try:
             data = json.loads(line)
+
+            if not isinstance(data, dict):
+                continue
+
             if data.get("status") == "error":
                 msg: str = data.get("message", "")
                 if "Too many rows" in msg:
@@ -230,6 +237,10 @@ def _parse_heatmap_metadata(stdout: str, job_dir: Path) -> dict:
     for line in stdout.splitlines():
         try:
             data = json.loads(line)
+
+            if not isinstance(data, dict):
+                continue
+
             if data.get("status") == "running" and "Beta matrix ready" in data.get("message", ""):
                 # "Beta matrix ready: 14 rows x 48 columns"
                 msg = data["message"]

@@ -9,7 +9,7 @@ import {
     Select,
     Typography,
 } from "@mui/material";
-import { ArrowDropDown } from "@mui/icons-material";
+import {ArrowDropDown, ZoomIn} from "@mui/icons-material";
 import {useEffect, useState} from "react";
 import { useParams } from "react-router-dom";
 
@@ -51,6 +51,9 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         isHeatmapPolling ? (job_id ?? null) : null,
         pollingKey
     );
+    const [heatmapImageURL, setHeatmapImageURL] = useState<string | null>(null);
+
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const {
         data: options,
@@ -64,6 +67,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         generateHeatMap,
     } = useGenerateHeatMap(job_id ?? null);
 
+    console.log("HeatMap Response: ", heatmapResponse);
     console.log("[HeatMap] optionsLoading:", optionsLoading);
     console.log("[HeatMap] options data:", options);
     console.log("[HeatMap] availableColumns:", options?.available_columns);
@@ -79,6 +83,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         if (!primaryGrouping) {
             return;
         }
+        setHeatmapImageURL(null); // Vorherige Heatmap zurücksetzen
         setPollingKey((prev => prev + 1)); // Trigger Job Status Polling
         setIsHeatmapPolling(true);
 
@@ -106,11 +111,20 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
     useEffect(() => {
         if (!jobStatus) return;
-        if (
-            jobStatus.phase === "heatmap" && jobStatus.status !== "running" ||
+        console.log("[HeatMap Polling]", jobStatus.status, jobStatus.phase);
+        const isDone =
             jobStatus.status === "heatmap_done" ||
-            jobStatus.status === "failed"
-        ) {
+            (jobStatus.phase === "heatmap" && jobStatus.status === "completed");
+
+        const isFailed = jobStatus.status === "failed";
+        if (isDone) {
+            setIsHeatmapPolling(false);
+            setHeatmapImageURL(
+                `/api/v1/heatmap/${job_id}`
+            );
+        }
+
+        if (isFailed) {
             setIsHeatmapPolling(false);
         }
     }, [jobStatus?.status, jobStatus?.phase]);
@@ -226,8 +240,13 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
                     </div>
 
                     {/* Progress */}
-                    {isHeatmapPolling && jobStatus && (
-                        <Progressbar jobStatus={jobStatus} />
+                    {(isHeatmapPolling || isGenerating) && (
+                        <div className="mt-4">
+                            {jobStatus
+                                ? <Progressbar jobStatus={jobStatus} />
+                                : <p className="text-slate-500 text-sm">Heatmap wird gestartet...</p>
+                            }
+                        </div>
                     )}
 
                     {/* Error */}
@@ -236,29 +255,68 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
                     )}
 
                     {/* Heatmap Anzeige */}
-                    {heatmapResponse && (
+                    {heatmapImageURL && (
                         <div className="space-y-4">
-
-                            <div className="border rounded-lg p-4 bg-slate-50">
-                                <div className="flex items-center justify-center min-h-100">
-                                    <img
-                                        src={`/api/v1/heatmap/${job_id}`}
-                                        alt="Generierte Heatmap"
-                                        className="max-w-full max-h-96 object-contain"
-                                    />
+                            <div
+                                className="border rounded-lg overflow-hidden bg-slate-50
+                       cursor-pointer hover:opacity-90 transition-opacity relative group"
+                                onClick={() => setIsModalOpen(true)}
+                            >
+                                <img
+                                    src={heatmapImageURL}   // ← korrekte URL aus State
+                                    alt="Heatmap Vorschau"
+                                    className="w-full object-contain max-h-64"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center
+                            bg-black/0 group-hover:bg-black/20 transition-colors">
+                <span className="opacity-0 group-hover:opacity-100
+                                 bg-white rounded-full px-4 py-2 text-sm
+                                 font-medium shadow-lg transition-opacity">
+                    🔍 Vergrößern
+                </span>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end">
-                                <Button
-                                    variant="outlined"
-                                    onClick={() => downloadHeatmap(heatmapResponse.job_id)}
-                                >
-                                    Export as PNG
+                            <div className="flex gap-3 justify-end">
+                                <Button variant="outlined" startIcon={<ZoomIn />}
+                                        onClick={() => setIsModalOpen(true)}>
+                                    Vergrößern
+                                </Button>
+                                <Button variant="outlined"
+                                        onClick={() => downloadHeatmap(job_id ?? "")}>
+                                    ⬇ Als PNG exportieren
                                 </Button>
                             </div>
                         </div>
                     )}
+
+                    {/* Modal */}
+                    {isModalOpen && heatmapImageURL && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center
+                    bg-black/70 backdrop-blur-sm p-4"
+                             onClick={() => setIsModalOpen(false)}>
+                            <div className="relative bg-white rounded-xl shadow-2xl
+                        max-w-[90vw] max-h-[90vh] overflow-auto p-4"
+                                 onClick={(e) => e.stopPropagation()}>
+                                <button onClick={() => setIsModalOpen(false)}
+                                        className="absolute top-2 right-2 z-10 h-8 w-8 rounded-full
+                               bg-slate-100 hover:bg-slate-200 flex items-center
+                               justify-center font-bold text-slate-600">
+                                    ✕
+                                </button>
+                                <img src={heatmapImageURL}
+                                     alt="Heatmap"
+                                     className="max-w-full max-h-[80vh] object-contain" />
+                                <div className="flex justify-end mt-3">
+                                    <Button variant="outlined"
+                                            onClick={() => downloadHeatmap(job_id ?? "")}>
+                                        ⬇ Als PNG exportieren
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             </AccordionDetails>
         </Accordion>

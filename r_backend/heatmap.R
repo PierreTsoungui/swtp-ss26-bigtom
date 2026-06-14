@@ -136,8 +136,8 @@ if (!is.na(pval_max) && has_col_ci(dmp, "pvalue")) {
   pval_col <- as.numeric(get_col_ci(dmp, "pvalue"))
   dmp <- dmp[!is.na(pval_col) & pval_col <= pval_max, , drop = FALSE]
 }
-if (!is.na(adj_pval_max) && has_col_ci(dmp, "adj.P.Val")) {
-  adj_col <- as.numeric(get_col_ci(dmp, "adj.P.Val"))
+if (!is.na(adj_pval_max) && "ADJ_P" %in% colnames(dmp)) {
+  adj_col <- as.numeric(dmp[["ADJ_P"]])
   dmp <- dmp[!is.na(adj_col) & adj_col <= adj_pval_max, , drop = FALSE]
 }
 if (!is.na(delta_beta_min) && has_col_ci(dmp, "deltaBeta")) {
