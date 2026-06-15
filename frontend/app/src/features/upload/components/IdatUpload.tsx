@@ -20,7 +20,7 @@ const IdatUpload: React.FC<IdatUploadProps> = ({ idatFiles, idatErrors, handleId
 
     return (
         <div className="flex flex-col gap-2">
-            <label className="cursor-pointer bg-secondary hover:bg-secondary-hover
+            <label className="cursor-pointer bg-secondary text-secondary-text hover:bg-secondary-hover
                             rounded-full p-4 px-8 text-center">
                 IDAT-Dateien auswählen
                 <input
@@ -31,7 +31,7 @@ const IdatUpload: React.FC<IdatUploadProps> = ({ idatFiles, idatErrors, handleId
                     onChange={handleIdatChange}
                 />
             </label>
-            <label className="cursor-pointer bg-secondary hover:bg-secondary-hover
+            <label className="cursor-pointer bg-secondary text-secondary-text hover:bg-secondary-hover
                             rounded-full p-4 px-8 text-center">
                 IDAT-Ordner auswählen
                 <input

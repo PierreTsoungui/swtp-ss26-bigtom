@@ -21,7 +21,7 @@ type SampleSheetUploadProps = {
 const SampleSheetUpload: React.FC<SampleSheetUploadProps> = ({ sampleSheet, sampleSheetError, onSampleSheetChange }) => {
     return (
         <div className="flex flex-col gap-2">
-          <label className="cursor-pointer bg-secondary hover:bg-secondary-hover rounded-full p-4 px-8 text-center">
+          <label className="cursor-pointer bg-secondary text-secondary-text hover:bg-secondary-hover rounded-full p-4 px-8 text-center">
             Sample Sheet auswählen
             <input
               type="file"

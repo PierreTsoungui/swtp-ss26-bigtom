@@ -14,7 +14,7 @@ const SubmitButton: React.FC<{ canSubmit: boolean; onClick: () => void }> =
                     disabled={!canSubmit}
                     onClick={onClick}
                     className="bg-primary hover:bg-primary-hover disabled:bg-neutral-borderEmphasis
-                           disabled:cursor-not-allowed text-primary-text font-bold
+                           disabled:cursor-not-allowed text-primary-text disabled:text-neutral-textSecondary font-bold
                            py-3 px-10 rounded-full transition-colors"
                 >
                     Analyse starten
