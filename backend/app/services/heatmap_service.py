@@ -165,8 +165,8 @@ async def run_heatmap_pipeline_task(
                         "title": "Too many CpGs for heatmap",
                         "status": 400,
                         "detail": (
-                            f"Maximal {MAX_CPGS} erlaubt. "
-                            f"Gefunden: {too_many if too_many else 'unbekannte Anzahl'}."
+                            f"At most {MAX_CPGS} allowed. "
+                            f"Found: {too_many if too_many else 'unknown count'}."
                         ),
                         "instance": f"/api/v1/heatmap/{job_id}"  # <-- ESSENZIELL FÜR FRONTEND VALIDIERUNG
                     }
