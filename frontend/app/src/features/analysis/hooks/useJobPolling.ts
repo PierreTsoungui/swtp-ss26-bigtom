@@ -201,7 +201,7 @@ function isProblemDetail(value: unknown): value is ProblemDetail {
     typeof value.title === "string" &&
     Number.isInteger(value.status) &&
     typeof value.detail === "string" &&
-    typeof value.instance === "string" &&
+    (value.instance === undefined || typeof value.instance === "string") &&
     (value.errors === undefined || isProblemDetailErrors(value.errors))
   );
 }
