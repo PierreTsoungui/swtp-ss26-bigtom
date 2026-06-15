@@ -1,4 +1,4 @@
-import { Snackbar, type SnackbarOrigin } from "@mui/material";
+import {Alert, Snackbar, type SnackbarOrigin} from "@mui/material";
 import type { ProblemDetail } from "../types/ErrorTypes";
 
 /**
@@ -9,7 +9,7 @@ import type { ProblemDetail } from "../types/ErrorTypes";
  */
 interface ErrorMessageProps extends SnackbarOrigin {
   open: boolean;
-  error: ProblemDetail;
+  error: ProblemDetail | Error | string | null;
 }
 
 /**
@@ -22,13 +22,39 @@ interface ErrorMessageProps extends SnackbarOrigin {
  * @returns Die gerenderte ErrorMessage-Komponente
  */
 function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) {
+    const message = (() => {
+
+        if (!error) {
+            return "Unknown error";
+        }
+
+        if (typeof error === "string") {
+            return error;
+        }
+
+        if (
+            typeof error === "object" && "title" in error &&
+            "detail" in error
+        ) {
+            const e = error as ProblemDetail;
+            return `${e.title}: ${e.detail}`;
+        }
+
+        if (error instanceof Error) {
+            return error.message;
+        }
+
+        return "Unexpected error occurred";
+    })();
+
     return (
         <Snackbar
-        anchorOrigin={{ vertical, horizontal }}
-        open={open}
-        autoHideDuration={10000}
-        message={`${error.title}: ${error.detail}`}
-        />
+            anchorOrigin={{ vertical, horizontal }}
+            open={open}
+            autoHideDuration={10000}
+        >
+            <Alert severity="error">{message}</Alert>
+        </Snackbar>
     );
 }
 

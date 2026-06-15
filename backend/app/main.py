@@ -15,7 +15,8 @@ from app.api.routes import (
     normalization_preview,
     normalize,
     reset,
-    batch
+    batch,
+    heatmap
 )
 
 from app.api.routes.table import router as table_router
@@ -107,6 +108,12 @@ app.include_router(
     batch.router,
     prefix="/api/v1/batch",
     tags=["Batch Correction"]
+)
+
+app.include_router(
+    heatmap.router,
+    prefix="/api/v1/heatmap",
+    tags=["Heatmap"]
 )
 
 @app.get("/")

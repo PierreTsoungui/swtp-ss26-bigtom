@@ -11,9 +11,7 @@ export function useTableData(
   pageSize: number = 75
 ) {
   const [data, setData] = useState<any>(null);
-
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,69 +27,31 @@ export function useTableData(
         params.append("sort_order", sort_order);
       }
 
-      params.append("page",String(page));
-      params.append("page_size",String(pageSize));
+      params.append("page", String(page));
+      params.append("page_size", String(pageSize));
 
-      if (filters?.chromosome) {
-        params.append(
-          "filter_chr",
-          filters.chromosome
-        );
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value && value !== "") {
+            params.append(`filter_${key}`, value);
+          }
+        });
       }
 
-      if (filters?.start) {
-        params.append(
-          "filter_start",
-          filters.start
-        );
-      }
-
-      if (filters?.stop) {
-        params.append(
-          "filter_stop",
-          filters.stop
-        );
-      }
-
-      if (filters?.dmrId) {
-        params.append(
-          "filter_dmr",
-          filters.dmrId
-        );
-      }
-
-      if (filters?.pValue) {
-        params.append(
-          "filter_p_value",
-          filters.pValue
-        );
-      }
-
-      if (filters?.adjPValue) {
-        params.append(
-          "filter_adj_p_value",
-          filters.adjPValue
-        );
-      }
       try {
         const res = await fetch(
-          `/api/v1/table/${jobId}/${table}?${params.toString()}`
+            `/api/v1/table/${jobId}/${table}?${params.toString()}`
         );
 
         if (!res.ok) {
-          throw new Error(
-            "Failed to load table"
-          );
+          throw new Error("Failed to load table");
         }
 
         const json = await res.json();
-
         setData(json);
       } catch (err) {
         setError(
-          err instanceof Error
-            ? err.message
-            : "Unknown error"
+            err instanceof Error ? err.message : "Unknown error"
         );
       } finally {
         setLoading(false);
@@ -101,9 +61,5 @@ export function useTableData(
     fetchData();
   }, [jobId, table, sort_by, sort_order, filters, page, pageSize]);
 
-  return {
-  data,
-  loading,
-  error,
-};
+  return {data, loading, error};
 }
