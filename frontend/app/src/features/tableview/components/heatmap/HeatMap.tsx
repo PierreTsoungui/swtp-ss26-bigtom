@@ -55,6 +55,8 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    const [persistentError, setPersistentError] = useState<any | null>(null);
+
     const {
         data: options,
         isLoading: optionsLoading,
@@ -75,9 +77,6 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
     console.log("backendHeatmapError", backendHeatmapError);
     console.log("jobStatus.error", jobStatus?.error);
 
-
-    const displayedError = error ?? backendHeatmapError;
-
     console.log("HeatMap Response: ", heatmapResponse);
     console.log("[HeatMap] optionsLoading:", optionsLoading);
     console.log("[HeatMap] options data:", options);
@@ -90,11 +89,20 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         (column) => column !== primaryGrouping,
     );
 
+    useEffect(() => {
+        if (jobStatus?.status === "failed" && jobStatus.error) {
+            setPersistentError(jobStatus.error);
+        }
+    }, [jobStatus]);
+
+    const displayedError = error ?? persistentError ?? backendHeatmapError;
+
     const handleGenerate = async () => {
         if (!primaryGrouping) {
             return;
         }
         setHeatmapImageURL(null); // Vorherige Heatmap zurücksetzen
+        setPersistentError(null);
         setPollingKey((prev => prev + 1)); // Trigger Job Status Polling
         setIsHeatmapPolling(true);
 

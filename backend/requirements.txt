@@ -5,4 +5,3 @@ pandas
 openpyxl
 pytest
 httpx
-re
