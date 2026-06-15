@@ -134,9 +134,18 @@ parse_filter_config <- function(json_str) {
 
 read_samplesheet <- function(path) {
   raw    <- readLines(path, warn = FALSE)
-  skip_n <- if (grepl("^\\[Data\\]", raw[1])) 1L else 0L
-  sheet  <- read.csv(path, skip = skip_n, stringsAsFactors = FALSE)
+
+  # [Data]-Sektion finden (Illumina-Format)
+  data_start <- grep("^\\[Data\\]", raw)
+  skip_n     <- if (length(data_start) > 0L) data_start[1L] else 0L
+
+  sheet <- read.csv(path, skip = skip_n, stringsAsFactors = FALSE)
   colnames(sheet) <- trimws(colnames(sheet))
+
+  # Leerzeilen entfernen (verhindert "replacement has X rows, data has Y")
+  sheet <- sheet[rowSums(is.na(sheet) | sheet == "") < ncol(sheet), , drop = FALSE]
+
+  emit_progress(5, sprintf("[SHEET] %d Zeilen, %d Spalten gelesen", nrow(sheet), ncol(sheet)))
   sheet
 }
 
@@ -166,10 +175,36 @@ prepare_targets <- function(sheet, job_dir) {
 
   present <- file.exists(paste0(sheet$Basename, "_Grn.idat")) &
              file.exists(paste0(sheet$Basename, "_Red.idat"))
-  sheet   <- sheet[present, , drop = FALSE]
 
-  if (nrow(sheet) == 0) emit_error("Keine vollständigen IDAT-Paare gefunden.")
-  sheet
+  # ── NEU: Leere / NA-Zeilen entfernen BEVOR gefiltert wird ────────────────
+  # Verhindert Mismatch wenn SampleSheet Leerzeilen oder Header-Artefakte hat
+  valid_rows <- !is.na(sheet$Sentrix_ID) & nzchar(trimws(as.character(sheet$Sentrix_ID)))
+  sheet      <- sheet[valid_rows, , drop = FALSE]
+  present    <- present[valid_rows]
+
+  # Diagnosemeldung
+  emit_progress(8, sprintf(
+    "[TARGETS] Sheet: %d Zeilen | IDAT-Paare gefunden: %d / %d",
+    nrow(sheet), sum(present), length(present)
+  ))
+
+  if (sum(present) == 0) {
+    emit_error(paste0(
+      "Keine vollständigen IDAT-Paare gefunden. ",
+      "Basename-Beispiel: ", sheet$Basename[1]
+    ))
+  }
+
+  missing <- sheet$Basename[!present]
+  if (length(missing) > 0) {
+    emit_progress(8, sprintf(
+      "[TARGETS] Warnung: %d Basename(s) ohne IDAT-Paar: %s",
+      length(missing),
+      paste(head(basename(missing), 5L), collapse = ", ")
+    ))
+  }
+
+  sheet[present, , drop = FALSE]
 }
 
 # ── Filterfunktionen ─────────────────────────────────────────────────────────

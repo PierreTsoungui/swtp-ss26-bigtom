@@ -25,6 +25,7 @@ function getJobIdFromPath(pathname: string): string | null {
 export function AppLayout({ children, resetAction }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const isLandingPage = location.pathname === "/";
   const currentStep = getWorkflowStepForPath(location.pathname);
   const jobId = useMemo(() => getJobIdFromPath(location.pathname), [location.pathname]);
   const currentPhase = location.pathname.startsWith("/datenschutz")
@@ -47,6 +48,7 @@ export function AppLayout({ children, resetAction }: AppLayoutProps) {
       <AppHeader
         currentPhase={currentPhase}
         currentStepId={currentStep?.id}
+        isLandingPage={isLandingPage}
         isAnalysisActive={isAnalysisActive}
         isResetting={resetAction?.isResetting ?? isLoading}
         onReset={handleReset}

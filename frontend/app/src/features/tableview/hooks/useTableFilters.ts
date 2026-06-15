@@ -1,37 +1,90 @@
 import { useState } from "react";
 
-export type TableFilters = {
-  chromosome: string;
+export type DmpFilters = {
+  chr: string;
   start: string;
   stop: string;
-  dmrId: string;
-  pValue: string;
-  adjPValue: string;
+  gene: string;
+  adj_p_value: string;
+  delta_beta: string;
+  group2_avg_min: string;
+  group2_avg_max: string;
+  group1_avg_min: string;
+  group1_avg_max: string;
+  log_fc_min: string;
+  log_fc_max: string;
+  sample_group: string;
 };
 
-const EMPTY_FILTERS: TableFilters = {
-  chromosome: "",
+export type DmrFilters = {
+  chr: string;
+  dmrid: string;
+  start: string;
+  stop: string;
+  p_value: string;
+  mean_diff_min: string;
+  mean_diff_max: string;
+  width_min: string;
+  width_max: string;
+  n_dmps_min: string;
+  n_dmps_max: string;
+};
+
+export type TableFilters = DmpFilters | DmrFilters;
+
+const EMPTY_DMP_FILTERS: DmpFilters = {
+  chr: "",
   start: "",
   stop: "",
-  dmrId: "",
-  pValue: "",
-  adjPValue: "",
+  gene: "",
+  adj_p_value: "",
+  delta_beta: "",
+  group2_avg_min: "",
+  group2_avg_max: "",
+  group1_avg_min: "",
+  group1_avg_max: "",
+  log_fc_min: "",
+  log_fc_max: "",
+  sample_group: "",
 };
+
+const EMPTY_DMR_FILTERS: DmrFilters = {
+  chr: "",
+  dmrid: "",
+  start: "",
+  stop: "",
+  p_value: "",
+  mean_diff_min: "",
+  mean_diff_max: "",
+  width_min: "",
+  width_max: "",
+  n_dmps_min: "",
+  n_dmps_max: "",
+};
+
+type FilterState = {
+  dmp: DmpFilters;
+  dmr: DmrFilters;
+}
 
 export function useTableFilters(onResetPage?: () => void) {
   const [draftFilters, setDraftFilters] =
-    useState<Record<string, TableFilters>>({
-      dmp: { ...EMPTY_FILTERS },
-      dmr: { ...EMPTY_FILTERS },
+    useState<FilterState>({
+      dmp: { ...EMPTY_DMP_FILTERS },
+      dmr: { ...EMPTY_DMR_FILTERS },
     });
 
   const [appliedFilters, setAppliedFilters] =
-    useState<Record<string, TableFilters>>({
-      dmp: { ...EMPTY_FILTERS },
-      dmr: { ...EMPTY_FILTERS },
+    useState<FilterState>({
+      dmp: { ...EMPTY_DMP_FILTERS },
+      dmr: { ...EMPTY_DMR_FILTERS },
     });
 
-  const updateDraftFilter = (table: string, key: keyof TableFilters, value: string) => {
+  const updateDraftFilter = <K extends keyof FilterState>(
+      table: K,
+      key: keyof FilterState[K],
+      value: string
+  ) => {
     setDraftFilters((prev) => ({
       ...prev,
       [table]: {
@@ -41,35 +94,22 @@ export function useTableFilters(onResetPage?: () => void) {
     }));
   };
 
-  const applyFilters = (table: string) => {
+  const applyFilters = <K extends keyof FilterState>(table: K) => {
     setAppliedFilters((prev) => ({
       ...prev,
       [table]: draftFilters[table],
     }));
   };
 
-  const resetFilters = (table: string) => {
-    setDraftFilters((prev) => ({
-      ...prev,
-      [table]: { ...EMPTY_FILTERS },
-    }));
-
-    setAppliedFilters((prev) => ({
-      ...prev,
-      [table]: { ...EMPTY_FILTERS },
-    }));
-
-    // Seite zurücksetzen (optional)
-    if (onResetPage) {
-      onResetPage();
-    }
+  const resetFilters = <K extends keyof FilterState>(table: K) => {
+    const emptyFilters = table === "dmp" ? EMPTY_DMP_FILTERS : EMPTY_DMR_FILTERS;
+    setDraftFilters((prev) => ({ ...prev, [table]: { ...emptyFilters } }));
+    setAppliedFilters((prev) => ({ ...prev, [table]: { ...emptyFilters } }));
+    if (onResetPage) onResetPage();
   };
 
-  const hasFilters = (table: string): boolean => {
-    const filters = appliedFilters[table];
-    return Object.values(filters).some(
-      (value) => value !== "" && value !== null
-    );
+  const hasFilters = <K extends keyof FilterState>(table: K): boolean => {
+    return Object.values(appliedFilters[table]).some((v) => v !== "");
   };
 
   return {

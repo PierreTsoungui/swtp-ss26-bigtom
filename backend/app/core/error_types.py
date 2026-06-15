@@ -24,7 +24,10 @@ class ErrorTypes:
     NORMALIZATION_FAILED = ErrorType("/errors/normalization-failed", 500, "Normalization failed")
     INVALID_FILTER_PARAM = ErrorType("/errors/invalid-filter-param", 400, "Invalid filter parameter")
     INVALID_FILTER_JSON = ErrorType("/errors/invalid-filter-json", 400, "Invalid filter JSON")
-
+    # Table Errors
+    INVALID_SORT_COLUMN = ErrorType("/errors/invalid-sort-column", 400, "Invalid sort column")  
+    INVALID_PARAMETER = ErrorType("/errors/invalid-parameter", 400, "Invalid parameter")
+    INVALID_SORT_ORDER = ErrorType("/errors/invalid-sort-order", 400, "Invalid sort order")
     # ── BATCH CORRECTION ERRORS (400, 404, 409) ───────────────────────
     PLOT_NOT_FOUND = ErrorType("/errors/plot-not-found", 404, "SVD plot not found")
     INVALID_BATCH_VARIABLE = ErrorType("/errors/invalid-batch-variable", 400, "Invalid batch variable")
@@ -33,6 +36,10 @@ class ErrorTypes:
 
     # ── SAMPLE SHEET ERRORS ────────────────────────────────────────────
     SAMPLE_SHEET_NOT_FOUND = ErrorType("/errors/sample-sheet-not-found", 404, "Sample sheet not found")
+    FILE_NOT_FOUND          = ErrorType("/errors/file-not-found", 404, "File not found")
+    HEATMAP_NOT_ALLOWED     = ErrorType("/errors/heatmap-not-allowed", 409, "Heatmap not allowed")
+    INVALID_GROUPING_COLUMN = ErrorType("/errors/invalid-grouping-column", 400, "Invalid grouping column")
+    INVALID_CSV_CONTENT     = ErrorType("/errors/invalid-csv-content", 400, "Invalid CSV content") 
 
 def problem_detail(
     error_type: ErrorType,

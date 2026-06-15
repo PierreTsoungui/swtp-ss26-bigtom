@@ -21,7 +21,7 @@ describe("AppLayout", () => {
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
     expect(screen.getByText("Test child content")).toBeInTheDocument();
-    expect(screen.getByText("© BigTom")).toBeInTheDocument();
+    expect(screen.getByText("© 2026 BigTom")).toBeInTheDocument();
   });
 
   it("zeigt die aktuelle Phase und die Schritte 1 bis 5", () => {
@@ -63,16 +63,30 @@ describe("AppLayout", () => {
   it("rendert die Footer-Links korrekt", () => {
     renderLayout();
 
-    const impressum = screen.getByRole("link", { name: "Impressum" });
+    const impressum = screen.getByRole("link", { name: "Imprint" });
     expect(impressum).toHaveAttribute("href", "https://www.thm.de/site/impressum.html");
     expect(impressum).toHaveAttribute("target", "_blank");
     expect(impressum.getAttribute("rel")).toContain("noopener");
     expect(impressum.getAttribute("rel")).toContain("noreferrer");
 
-    expect(screen.getByRole("link", { name: "Datenschutz" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
       "href",
       "/datenschutz",
     );
+  });
+
+  it("zeigt auf der Landing Page nur die reduzierte Header-Identität", () => {
+    renderLayout("/");
+
+    const header = screen.getByRole("banner");
+    expect(within(header).getByRole("link", { name: /methylanalyzer/i })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(
+      within(header).queryByRole("navigation", { name: /schrittanzeige/i }),
+    ).not.toBeInTheDocument();
+    expect(within(header).queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
   });
 
   it("deaktiviert den Reset-Button, wenn keine Analyse aktiv ist", () => {

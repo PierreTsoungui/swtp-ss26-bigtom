@@ -10,7 +10,8 @@ const TERMINAL_STATES: JobStatusValue[] = [
   "failed",
   "canceled",
   "ready_for_batch",
-  "analysis_done"
+  "analysis_done",
+  "heatmap_done"
 ];
 
 /**
@@ -168,7 +169,8 @@ function isJobStatusValue(value: unknown): value is JobStatusValue {
     value == "analysis_done" ||
     value === "completed" ||
     value === "failed" ||
-    value === "canceled"
+    value === "canceled" ||
+    value === "heatmap_done"
   );
 }
 
@@ -185,6 +187,7 @@ function isJobPhase(value: unknown): value is JobPhase {
     value === "batch_correction" ||
     value == "downstream_analysis" ||
     value === "completed" ||
+    value === "heatmap" ||
     value === "reset"
   );
 }
@@ -198,7 +201,7 @@ function isProblemDetail(value: unknown): value is ProblemDetail {
     typeof value.title === "string" &&
     Number.isInteger(value.status) &&
     typeof value.detail === "string" &&
-    typeof value.instance === "string" &&
+    (value.instance === undefined || typeof value.instance === "string") &&
     (value.errors === undefined || isProblemDetailErrors(value.errors))
   );
 }

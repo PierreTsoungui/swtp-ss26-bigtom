@@ -1,6 +1,12 @@
+"""Initialisiert die FastAPI-Anwendung und ihre Hintergrunddienste."""
+
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.error_types import AppException, app_exception_handler
+from app.services.job_cleanup_service import run_job_cleanup_loop
 
 from app.api.routes import (
     upload,
@@ -9,14 +15,34 @@ from app.api.routes import (
     normalization_preview,
     normalize,
     reset,
-    batch
+    batch,
+    heatmap
 )
 
 from app.api.routes.table import router as table_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startet den Cleanup-Dienst mit der Anwendung und beendet ihn beim Shutdown."""
+    cleanup_task = asyncio.create_task(
+        run_job_cleanup_loop(),
+        name="job-cleanup",
+    )
+    app.state.job_cleanup_task = cleanup_task
+
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
 app = FastAPI(
     title="Methylation Analysis API",
-    version="1.0"
+    version="1.0",
+    lifespan=lifespan,
 )
 
 app.add_exception_handler(AppException, app_exception_handler)
@@ -82,6 +108,12 @@ app.include_router(
     batch.router,
     prefix="/api/v1/batch",
     tags=["Batch Correction"]
+)
+
+app.include_router(
+    heatmap.router,
+    prefix="/api/v1/heatmap",
+    tags=["Heatmap"]
 )
 
 @app.get("/")

@@ -11,7 +11,7 @@ describe("useTableFilters", () => {
       );
 
     expect(
-      result.current.appliedFilters.dmp.chromosome
+      result.current.appliedFilters
     ).toBe("");
   });
 
@@ -61,7 +61,7 @@ describe("useTableFilters", () => {
     });
 
     expect(
-      result.current.appliedFilters.dmp.chromosome
+      result.current.appliedFilters
     ).toBe("");
   });
 });
