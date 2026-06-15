@@ -114,6 +114,7 @@ async def run_heatmap_pipeline_task(
             phase="heatmap",
             progress_percent=0,
             current_step="Starte Heatmap-Generierung...",
+            error=None,
         )
 
         # ── Progress-Callback ──────────────────────────────────────────────────
@@ -132,6 +133,7 @@ async def run_heatmap_pipeline_task(
                     phase="heatmap",
                     progress_percent=pct,
                     current_step=data.get("message", ""),
+                    error=None,
                 )
 
         # ── R-Skript aufrufen ──────────────────────────────────────────────────
@@ -153,29 +155,30 @@ async def run_heatmap_pipeline_task(
 
         # ── Fehlerfall ─────────────────────────────────────────────────────────
         if result.get("returncode") != 0:
-            # Prüfen ob es ein CPG-Limit-Fehler war (kommt von R Step 3)
-            stdout = result.get("stdout", "")
-            too_many = _parse_too_many_cpgs(stdout)
+                    stdout = result.get("stdout", "")
+                    too_many = _parse_too_many_cpgs(stdout)
 
-            if too_many is not None:
-                job_manager.update_job(
-                    job_id,
-                    status="failed",
-                    phase="heatmap",
-                    current_step=(
-                        f"Zu viele CpGs: {too_many} gefunden, "
-                        f"maximal {MAX_CPGS} erlaubt."
-                    ),
-                    extra={"cpg_count": too_many, "max_allowed": MAX_CPGS},
-                )
-            else:
-                job_manager.update_job(
-                    job_id,
-                    status="failed",
-                    phase="heatmap",
-                    current_step="Fehler bei der Heatmap-Generierung.",
-                )
-            return
+                    # Erstelle ein RFC 9457 / RFC 7807 konformes Fehlerobjekt,
+                    # das ausnahmslos alle Bedingungen von `isProblemDetail` im Frontend erfüllt!
+                    error_payload = {
+                        "type": "https://api.bigtom.swtp/errors/heatmap-too-many-cpgs",
+                        "title": "Too many CpGs for heatmap",
+                        "status": 400,
+                        "detail": (
+                            f"Maximal {MAX_CPGS} erlaubt. "
+                            f"Gefunden: {too_many if too_many else 'unbekannte Anzahl'}."
+                        ),
+                        "instance": f"/api/v1/heatmap/{job_id}"  # <-- ESSENZIELL FÜR FRONTEND VALIDIERUNG
+                    }
+
+                    job_manager.update_job(
+                        job_id,
+                        status="failed",
+                        phase="heatmap",
+                        current_step=error_payload["detail"],
+                        error=error_payload  # Wird nun in beiden Zweigen stabil gesetzt
+                    )
+                    return
 
         # ── Erfolg: Metadaten aus R-Stdout parsen ──────────────────────────────
         meta = _parse_heatmap_metadata(result.get("stdout", ""), job_dir)
@@ -206,21 +209,29 @@ def _parse_too_many_cpgs(stdout: str) -> Optional[int]:
     Gibt die Anzahl der gefundenen CpGs zurück, wenn R einen
     „Too many rows"-Fehler ausgegeben hat, sonst None.
     """
+    import re
+
     for line in stdout.splitlines():
         try:
             data = json.loads(line)
-
             if not isinstance(data, dict):
                 continue
 
-            if data.get("status") == "error":
+            # R nutzt 'type', alte Implementierungen vielleicht 'status' -> Fallback einbauen
+            log_type = data.get("type") or data.get("status")
+
+            if log_type in ("failed", "error"):
                 msg: str = data.get("message", "")
                 if "Too many rows" in msg:
-                    # Nachricht: "Too many rows for heatmap: 42 entries. ..."
-                    parts = msg.split()
-                    for i, token in enumerate(parts):
-                        if token.isdigit():
-                            return int(token)
+                    # Robustere Extraktion mittels Regex statt anfälligem .split()
+                    match = re.search(r"(\d+)\s+entries", msg)
+                    if match:
+                        return int(match.group(1))
+
+                    # Fallback-Regex falls das Wort "entries" fehlt
+                    match_any_digit = re.search(r"\d+", msg)
+                    if match_any_digit:
+                        return int(match_any_digit.group())
         except (json.JSONDecodeError, ValueError):
             pass
     return None

@@ -1,4 +1,4 @@
-import { Snackbar, type SnackbarOrigin } from "@mui/material";
+import {Alert, Snackbar, type SnackbarOrigin} from "@mui/material";
 import type { ProblemDetail } from "../types/ErrorTypes";
 
 /**
@@ -49,11 +49,12 @@ function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) 
 
     return (
         <Snackbar
-        anchorOrigin={{ vertical, horizontal }}
-        open={open}
-        autoHideDuration={10000}
-        message={message}
-        />
+            anchorOrigin={{ vertical, horizontal }}
+            open={open}
+            autoHideDuration={10000}
+        >
+            <Alert severity="error">{message}</Alert>
+        </Snackbar>
     );
 }
 

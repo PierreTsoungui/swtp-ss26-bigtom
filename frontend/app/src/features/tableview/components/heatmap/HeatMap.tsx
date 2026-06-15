@@ -67,6 +67,17 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         generateHeatMap,
     } = useGenerateHeatMap(job_id ?? null);
 
+    const backendHeatmapError =
+        jobStatus?.status === "failed"
+            ? jobStatus.error
+            : null;
+
+    console.log("backendHeatmapError", backendHeatmapError);
+    console.log("jobStatus.error", jobStatus?.error);
+
+
+    const displayedError = error ?? backendHeatmapError;
+
     console.log("HeatMap Response: ", heatmapResponse);
     console.log("[HeatMap] optionsLoading:", optionsLoading);
     console.log("[HeatMap] options data:", options);
@@ -116,11 +127,11 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
             jobStatus.status === "heatmap_done" ||
             (jobStatus.phase === "heatmap" && jobStatus.status === "completed");
 
-        const isFailed = jobStatus.status === "failed";
+        const isFailed = jobStatus.phase === "heatmap" && jobStatus.status === "failed";
         if (isDone) {
             setIsHeatmapPolling(false);
             setHeatmapImageURL(
-                `/api/v1/heatmap/${job_id}`
+                `/api/v1/heatmap/${job_id}?t=${Date.now()}`
             );
         }
 
@@ -250,9 +261,10 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
                     )}
 
                     {/* Error */}
-                    {error && (
-                        <ErrorMessage open={true} error={error} vertical="top" horizontal="center" />
+                    {displayedError && (
+                        <ErrorMessage open={true} error={displayedError} vertical="top" horizontal="center" />
                     )}
+
 
                     {/* Heatmap Anzeige */}
                     {heatmapImageURL && (
