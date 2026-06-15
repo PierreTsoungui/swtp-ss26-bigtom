@@ -1,15 +1,28 @@
-from email import header
 import shutil
 from pathlib import Path
 from typing import List, Tuple, Dict
 
 from fastapi import UploadFile
-import os
 import json
+# Änderung:
+# JOB_BASE_DIR wird jetzt aus der zentralen Konfiguration importiert.
+#
+# Warum?
+# Vorher wurde der Job-Ordner direkt in dieser Datei über os.getenv gelesen.
+# Jetzt gibt es mit app.core.config eine zentrale Stelle für die Konfiguration.
+# Dadurch verwenden Upload, Job-Manager und Cleanup-Service denselben Basisordner.
 
-UPLOAD_BASE_DIR = Path(os.getenv("JOB_BASE_DIR", "./jobs"))
+from app.core.config import JOB_BASE_DIR
+# Änderung:
+# UPLOAD_BASE_DIR wird nicht mehr direkt über os.getenv gesetzt,
+# sondern übernimmt den zentral konfigurierten JOB_BASE_DIR.
+#
+# Warum?
+# Der automatische Cleanup-Service löscht später abgelaufene Job-Ordner
+# aus demselben Verzeichnis. Damit Upload und Cleanup garantiert denselben
+# Ordner verwenden, wird die Konfiguration zentralisiert.
 
-#UPLOAD_BASE_DIR = Path("/app/jobs")
+UPLOAD_BASE_DIR = JOB_BASE_DIR
 ALLOWED_IDAT_EXTENSIONS = {".idat"}
 ALLOWED_SHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
