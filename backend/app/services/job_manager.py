@@ -1,80 +1,213 @@
 # app/services/job_manager.py
-
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any
+from enum import Enum
+from typing import Dict, Optional, Any, Set, Tuple
 from app.models.job import JobStatus
-# Die Aufbewahrungsdauer für Jobs wird jetzt aus der zentralen Konfiguration gelesen.
-#
-# Warum?
-# Vorher war die Ablaufzeit direkt mit 24 Stunden im Code fest eingetragen.
-# Das Ticket verlangt aber, dass die maximale Aufbewahrungsdauer konfigurierbar ist.
-# Dadurch verwenden Job-Status und Cleanup-Service dieselbe Retention-Zeit.
-from app.core.config import JOB_RETENTION_HOURS
+from app.core.exceptions import InvalidTransitionError
 import asyncio
+import logging
 
-# In-Memory Storage (für MVP)
+logger = logging.getLogger(__name__)
+
+# ── In-Memory Storage ────────────────────────────────────────────────────────
 jobs: Dict[str, JobStatus] = {}
-
-# ← NEU: laufende Prozesse speichern
 running_processes: Dict[str, asyncio.subprocess.Process] = {}
 
-def create_job(job_id: str, temp_dir: str) -> JobStatus:
+
+# ── Enums ────────────────────────────────────────────────────────────────────
+
+class JobStatusValue(str, Enum):
+    """Betriebszustand eines Jobs innerhalb einer Phase."""
+    RUNNING   = "running"   # R-Skript läuft aktiv
+    WAITING   = "waiting"   # Wartet auf Userinput (IDLE im Zustandsautomaten)
+    COMPLETED = "completed" # Phase erfolgreich abgeschlossen
+    FAILED    = "failed"    # Fehler innerhalb der Phase
+
+
+class JobPhase(str, Enum):
+    """Technischer Pipeline-Schritt."""
+    UPLOADED              = "uploaded"
+    FILTERING             = "filtering"
+    NORMALIZATION_PREVIEW = "normalization_preview"
+    NORMALIZATION         = "normalization"
+    SVD                   = "svd"
+    BATCH                 = "batch"
+    ANALYSIS              = "analysis"
+    RESULTS               = "results"
+    HEATMAP               = "heatmap"
+
+
+# ── Erlaubte Übergänge ───────────────────────────────────────────────────────
+_ALLOWED_TRANSITIONS: Dict[
+    Tuple[JobPhase, JobStatusValue],
+    Set[Tuple[JobPhase, JobStatusValue]]
+] = {
+    # UPLOAD
+    (JobPhase.UPLOADED, JobStatusValue.WAITING): {
+        (JobPhase.UPLOADED,              JobStatusValue.COMPLETED),
+        (JobPhase.UPLOADED,              JobStatusValue.FAILED),
+    },
+    (JobPhase.UPLOADED, JobStatusValue.COMPLETED): {
+        (JobPhase.FILTERING,             JobStatusValue.RUNNING),
+    },
+    # FILTERING
+    (JobPhase.FILTERING, JobStatusValue.RUNNING): {
+        (JobPhase.FILTERING,             JobStatusValue.COMPLETED),
+        (JobPhase.FILTERING,             JobStatusValue.FAILED),
+    },
+    (JobPhase.FILTERING, JobStatusValue.COMPLETED): {
+        (JobPhase.NORMALIZATION_PREVIEW, JobStatusValue.RUNNING),
+    },
+    # NORMALIZATION_PREVIEW
+    (JobPhase.NORMALIZATION_PREVIEW, JobStatusValue.RUNNING): {
+        (JobPhase.NORMALIZATION_PREVIEW, JobStatusValue.COMPLETED),
+        (JobPhase.NORMALIZATION_PREVIEW, JobStatusValue.FAILED),
+    },
+    (JobPhase.NORMALIZATION_PREVIEW, JobStatusValue.COMPLETED): {
+        (JobPhase.NORMALIZATION,         JobStatusValue.WAITING),
+    },
+    # NORMALIZATION
+    (JobPhase.NORMALIZATION, JobStatusValue.WAITING): {
+        (JobPhase.NORMALIZATION,         JobStatusValue.RUNNING),
+    },
+    (JobPhase.NORMALIZATION, JobStatusValue.RUNNING): {
+        (JobPhase.NORMALIZATION,         JobStatusValue.COMPLETED),
+        (JobPhase.NORMALIZATION,         JobStatusValue.FAILED),
+    },
+    (JobPhase.NORMALIZATION, JobStatusValue.COMPLETED): {
+        (JobPhase.SVD,                   JobStatusValue.RUNNING),
+    },
+    # SVD
+    (JobPhase.SVD, JobStatusValue.RUNNING): {
+        (JobPhase.SVD,                   JobStatusValue.COMPLETED),
+        (JobPhase.SVD,                   JobStatusValue.FAILED),
+    },
+    (JobPhase.SVD, JobStatusValue.COMPLETED): {
+        (JobPhase.BATCH,                 JobStatusValue.WAITING),
+    },
+    # BATCH
+    (JobPhase.BATCH, JobStatusValue.WAITING): {
+        (JobPhase.BATCH,                 JobStatusValue.RUNNING),
+        (JobPhase.ANALYSIS,              JobStatusValue.RUNNING),  # User überspringt Batch
+    },
+    (JobPhase.BATCH, JobStatusValue.RUNNING): {
+        (JobPhase.BATCH,                 JobStatusValue.COMPLETED),
+        (JobPhase.BATCH,                 JobStatusValue.FAILED),
+    },
+    (JobPhase.BATCH, JobStatusValue.COMPLETED): {
+        (JobPhase.SVD,                   JobStatusValue.RUNNING),  # Neuer SVD nach Korrektur
+    },
+    # ANALYSIS
+    (JobPhase.ANALYSIS, JobStatusValue.RUNNING): {
+        (JobPhase.ANALYSIS,              JobStatusValue.COMPLETED),
+        (JobPhase.ANALYSIS,              JobStatusValue.FAILED),
+    },
+    (JobPhase.ANALYSIS, JobStatusValue.COMPLETED): {
+        (JobPhase.RESULTS,               JobStatusValue.WAITING),
+    },
+    # RESULTS
+    (JobPhase.RESULTS, JobStatusValue.WAITING): {
+        (JobPhase.RESULTS,               JobStatusValue.COMPLETED),
+        (JobPhase.RESULTS,               JobStatusValue.FAILED),
+        (JobPhase.HEATMAP,               JobStatusValue.RUNNING),  # Guard: TableTab == DMP (FE)
+    },
+    (JobPhase.RESULTS, JobStatusValue.COMPLETED): {
+        (JobPhase.RESULTS,               JobStatusValue.WAITING),
+    },
+    # HEATMAP
+    (JobPhase.HEATMAP, JobStatusValue.RUNNING): {
+        (JobPhase.HEATMAP,               JobStatusValue.COMPLETED),
+        (JobPhase.HEATMAP,               JobStatusValue.FAILED),
+    },
+    (JobPhase.HEATMAP, JobStatusValue.COMPLETED): {
+        (JobPhase.RESULTS,               JobStatusValue.WAITING),
+    },
+}
+
+
+# ── Kern-API ─────────────────────────────────────────────────────────────────
+
+def create_job(job_id: str) -> JobStatus:
+    """Erstellt einen neuen Job im Initialzustand (uploaded, waiting)."""
     job = JobStatus(
         job_id=job_id,
-        status="queued",
-        phase="uploaded",
+        status=JobStatusValue.WAITING.value,
+        phase=JobPhase.UPLOADED.value,
         progress_percent=0,
-        current_step="Files uploaded, waiting for processing...",
-        temp_dir=temp_dir,
-        created_at=datetime.now(),
-        expires_at=datetime.now() + timedelta(hours=JOB_RETENTION_HOURS),
-        preview_plots=None,
+        current_step="Dateien hochgeladen, warte auf Verarbeitung...",
+        error=None,
     )
     jobs[job_id] = job
     return job
 
 
-def update_job(
+def transition_job(
     job_id: str,
-    status: str = None,
-    phase: str = None,
+    new_phase: JobPhase,
+    new_status: JobStatusValue,
+    *,
     progress_percent: int = None,
     current_step: str = None,
-    steps_completed: int = None,
-    filter_stats: Dict = None,
-    normalization_method: str = None,
-    error_message: str = None,
     error: Dict[str, Any] = None,
-    preview_plots: Any = None,
-    batch_history: Dict[str, Any] = None
-) -> Optional[JobStatus]:
-    if job_id not in jobs:
-        return None
+) -> JobStatus:
+    """
+    Führt einen validierten Zustandsübergang durch.
+    Wirft ValueError bei ungültigem Übergang.
+    Alle Phasen- und Statuswechsel laufen ausschließlich über diese Funktion.
+    """
+    job = jobs.get(job_id)
+    if job is None:
+        raise KeyError(f"Job '{job_id}' nicht gefunden.")
 
-    job = jobs[job_id]
-    if status:
-        job.status = status
-    if phase:
-        job.phase = phase
+    current = (JobPhase(job.phase), JobStatusValue(job.status))
+    target  = (new_phase, new_status)
+    allowed = _ALLOWED_TRANSITIONS.get(current, set())
+
+    if target not in allowed:
+        msg = (
+            f"[transition_job] Ungültiger Übergang für Job '{job_id}': "
+            f"({current[0].value}, {current[1].value}) → "
+            f"({new_phase.value}, {new_status.value}). "
+            f"Erlaubt: {[(p.value, s.value) for p, s in allowed]}"
+        )
+        logger.error(msg)
+        raise InvalidTransitionError(job_id=job_id, message=msg)
+
+    logger.info(
+        "[transition_job] Job '%s': (%s, %s) → (%s, %s)",
+        job_id,
+        current[0].value, current[1].value,
+        new_phase.value,  new_status.value,
+    )
+
+    job.phase  = new_phase.value
+    job.status = new_status.value
     if progress_percent is not None:
         job.progress_percent = progress_percent
-    if current_step:
+    if current_step is not None:
         job.current_step = current_step
-    if steps_completed is not None:
-        job.steps_completed = steps_completed
-    if filter_stats:
-        job.filter_stats = filter_stats
-    if normalization_method:
-        job.normalization_method = normalization_method
-    if error_message:
-        job.error_message = error_message
-    if error:
+    if error is not None:
         job.error = error
-    if preview_plots is not None:
-        job.preview_plots = preview_plots
-    if batch_history is not None:
-        job.batch_history = batch_history
 
+    jobs[job_id] = job
+    return job
+
+
+def set_progress(
+    job_id: str,
+    percent: int,
+    message: str,
+) -> Optional[JobStatus]:
+    """
+    Aktualisiert ausschließlich Fortschrittsfelder eines laufenden Jobs.
+    Kein Phasenwechsel — nur für progress-Events aus dem R-Executor.
+    """
+    job = jobs.get(job_id)
+    if job is None:
+        return None
+    job.progress_percent = percent
+    job.current_step     = message
+    job.status           = JobStatusValue.RUNNING.value
     jobs[job_id] = job
     return job
 
@@ -90,47 +223,21 @@ def delete_job(job_id: str) -> bool:
     return False
 
 
-def save_filter_stats(job_id: str, filter_stats: Dict) -> Optional[JobStatus]:
-    job = get_job(job_id)
-    if not job:
-        return None
-    job.filter_stats = filter_stats
-    jobs[job_id] = job
-    return job
-
-
-# ── NEU: Process-Tracking für Cancel/Reset ──────────────────────────────────
+# ── Process-Tracking ─────────────────────────────────────────────────────────
 
 def register_process(job_id: str, process: asyncio.subprocess.Process) -> None:
-    """Speichert den laufenden R-Prozess damit er später gekillt werden kann."""
     running_processes[job_id] = process
 
 
 def unregister_process(job_id: str) -> None:
-    """Entfernt den Prozess nach Abschluss oder Abbruch."""
     running_processes.pop(job_id, None)
 
 
 async def kill_process(job_id: str) -> bool:
-    """Beendet den laufenden R-Prozess falls vorhanden. Gibt True zurück wenn gekillt."""
     process = running_processes.get(job_id)
-    if process and process.returncode is None:  # läuft noch
+    if process and process.returncode is None:
         process.kill()
         await process.wait()
         unregister_process(job_id)
         return True
     return False
-
-
-def reset_job(job_id: str) -> Optional[JobStatus]:
-    """Setzt Job-Status auf canceled und resettet alle Felder."""
-    return update_job(
-        job_id=job_id,
-        status="canceled",
-        phase="reset",
-        progress_percent=0,
-        current_step="Analysis canceled by user.",
-        steps_completed=0,
-        error_message=None,
-        error=None,
-    )

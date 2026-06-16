@@ -4,24 +4,25 @@ from datetime import datetime
 from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, Field, field_validator
 
+
 class JobStatus(BaseModel):
-    job_id: str
-    status: str
-    phase: str
+    """Internes Job-Modell — wird im jobs-Dict gespeichert."""
+    job_id:           str
+    status:           str
+    phase:            str
     progress_percent: int
-    current_step: str
-    steps_total: int = 6
-    steps_completed: int = 0
-    filter_stats: Optional[Dict] = None
-    estimated_seconds_remaining: Optional[int] = None
-    normalization_method: Optional[str] = None
-    temp_dir: Optional[str] = None
-    error_message: Optional[str] = None
-    error: Optional[Dict[str, Any]] = None
-    preview_plots: Optional[Any] = None      # dict von R: {"noob": [...], ...}
-    batch_history: Optional[Dict[str, Any]] = None
-    created_at: datetime
-    expires_at: datetime
+    current_step:     str
+    error:            Optional[Dict[str, Any]] = None
+
+
+class StatusResponse(BaseModel):
+    """UPPC-konforme API-Response — exakt das, was das Frontend bekommt."""
+    job_id:           str
+    status:           str
+    phase:            str
+    progress_percent: int
+    current_step:     str
+    error:            Optional[Dict[str, Any]] = None
 
 class UploadResponse(BaseModel):
     job_id: str
@@ -35,20 +36,6 @@ class NormalizeResponse(BaseModel):
 
 class NormalizeRequest(BaseModel):
     method: str
-
-class StatusResponse(BaseModel):
-    """UPPC-konforme API-Response: Exakt das, was das Frontend bekommt."""
-    job_id: str
-    status: str
-    phase: str
-    progress_percent: int
-    current_step: str
-    steps_total: int
-    steps_completed: int
-    # filter_stats wurde hier ENTFARNT!
-    estimated_seconds_remaining: Optional[int] = None
-    error: Optional[Dict[str, Any]] = None  
-
 
 # -------------------------
 # DET P FILTER

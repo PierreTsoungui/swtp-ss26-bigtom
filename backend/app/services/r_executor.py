@@ -1,49 +1,11 @@
-# PATCH für app/services/r_executor.py
-#
-# Zwei Änderungen:
-#   1. Signatur: neuer optionaler Parameter `extra_env: dict = {}`
-#   2. Neuer mode "heatmap" im CMD-Block
-#   3. docker-exec-Aufruf injiziert extra_env als -e KEY=VALUE Flags
-#
-# ── Geänderte Signatur ────────────────────────────────────────────────────────
-#
-# async def run_r_script(
-#     script: str,
-#     job_id: str,
-#     job_dir: str,
-#     sample_sheet: str,
-#     mode: str = "filtering",
-#     script_args: list = [],
-#     on_progress: Optional[Callable] = None,
-#     extra_env: dict = {},           # <── NEU
-# ) -> Dict[str, Any]:
-#
-# ── Neuer CMD-Block (nach "svd_plot" einfügen) ────────────────────────────────
-#
-#     elif mode == "heatmap":
-#         # script_args: [result_rds_name, sample_sheet_name]
-#         result_rds_name   = script_args[0]
-#         sample_sheet_name = script_args[1]
-#         cmd = [
-#             "docker", "exec",
-#             # Env-Variablen für heatmap.R (GROUP1, GROUP2, MAX_ROWS, OUTPUT, Filter)
-#             *[arg for key, val in extra_env.items() for arg in ("-e", f"{key}={val}")],
-#             R_WORKER_CONTAINER,
-#             "Rscript", script_path,
-#             f"{docker_job_dir}/{result_rds_name}",   # <result.rds>
-#             f"{docker_job_dir}/{sample_sheet_name}", # <sample_sheet.csv>
-#             docker_job_dir,                          # <job_dir>
-#         ]
-#
-# ── Vollständige geänderte Funktion (Drop-in-Ersatz) ─────────────────────────
-
+# app/services/r_executor.py
 import asyncio
 from collections import defaultdict
 import json
 import re
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
-from app.services import job_manager
+from app.services.job_manager import register_process, unregister_process
 
 R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
 USE_MOCK_R = True
@@ -64,15 +26,12 @@ async def run_r_script(
 
     print(f"[R_EXECUTOR] mode={mode}", flush=True)
 
-    # ── ENV-Flag-Helper ────────────────────────────────────────────────────────
     def env_flags(env: dict) -> list:
-        """Wandelt {'KEY': 'val', ...} in ['-e', 'KEY=val', ...] um."""
         flags = []
         for key, val in env.items():
             flags += ["-e", f"{key}={val}"]
         return flags
 
-    # ── CMD-Block ──────────────────────────────────────────────────────────────
     if mode == "normalization_preview":
         docker_sample_sheet = f"{docker_job_dir}/{Path(sample_sheet).name}"
         cmd = [
@@ -114,17 +73,16 @@ async def run_r_script(
         ]
 
     elif mode == "heatmap":
-        # script_args: [result_rds_name, sample_sheet_name]
         result_rds_name   = script_args[0]
         sample_sheet_name = script_args[1]
         cmd = [
             "docker", "exec",
-            *env_flags(extra_env),   # -e HEATMAP_GROUP1=... -e HEATMAP_MAX_ROWS=20 ...
+            *env_flags(extra_env),
             R_WORKER_CONTAINER,
             "Rscript", script_path,
-            f"{docker_job_dir}/{result_rds_name}",    # <result.rds>
-            f"{docker_job_dir}/{sample_sheet_name}",  # <sample_sheet.csv>
-            docker_job_dir,                           # <job_dir>
+            f"{docker_job_dir}/{result_rds_name}",
+            f"{docker_job_dir}/{sample_sheet_name}",
+            docker_job_dir,
         ]
 
     elif mode == "normalization":
@@ -153,14 +111,13 @@ async def run_r_script(
             stderr=asyncio.subprocess.PIPE,
         )
 
-        job_manager.register_process(job_id, process)
+        register_process(job_id, process)
 
         stdout_lines  = []
         stderr_lines  = []
         filter_stats  = {}
         preview_plots = defaultdict(list)
 
-        # ── STDOUT-Leser ───────────────────────────────────────────────────────
         async def read_stdout():
             nonlocal filter_stats, preview_plots
 
@@ -210,7 +167,6 @@ async def run_r_script(
                     except (json.JSONDecodeError, ValueError):
                         pass
 
-        # ── STDERR-Leser ───────────────────────────────────────────────────────
         async def read_stderr():
             while True:
                 line = await process.stderr.readline()
@@ -222,14 +178,13 @@ async def run_r_script(
 
         await asyncio.gather(read_stdout(), read_stderr())
         returncode = await asyncio.wait_for(process.wait(), timeout=600)
-        job_manager.unregister_process(job_id)
+        unregister_process(job_id)
 
         stdout_str = "\n".join(stdout_lines)
         stderr_str = "\n".join(stderr_lines)
 
         print(f"[R_EXECUTOR] returncode: {returncode}", flush=True)
 
-        # filter_stats von Disk laden (nur bei filtering)
         if mode == "filtering" and returncode == 0:
             stats_path = Path(job_dir) / "filter_stats.json"
             if stats_path.exists():
@@ -254,7 +209,7 @@ async def run_r_script(
 
     except asyncio.TimeoutError:
         print("[R_EXECUTOR] Timeout nach 10 Minuten", flush=True)
-        job_manager.unregister_process(job_id)
+        unregister_process(job_id)
         if "process" in locals():
             process.kill()
             await process.wait()
@@ -262,5 +217,5 @@ async def run_r_script(
 
     except Exception as e:
         print(f"[R_EXECUTOR] ERROR: {e}", flush=True)
-        job_manager.unregister_process(job_id)
+        unregister_process(job_id)
         return {"returncode": 1, "stdout": "", "stderr": str(e)}

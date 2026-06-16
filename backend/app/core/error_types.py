@@ -41,6 +41,8 @@ class ErrorTypes:
     INVALID_GROUPING_COLUMN = ErrorType("/errors/invalid-grouping-column", 400, "Invalid grouping column")
     INVALID_CSV_CONTENT     = ErrorType("/errors/invalid-csv-content", 400, "Invalid CSV content") 
 
+    INVALID_STATE_TRANSITION = ErrorType("/errors/invalid-state-transition", 409, "Invalid state transition")
+
 def problem_detail(
     error_type: ErrorType,
     detail: str,
