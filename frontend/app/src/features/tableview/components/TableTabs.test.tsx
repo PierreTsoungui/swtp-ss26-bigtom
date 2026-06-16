@@ -60,4 +60,22 @@ describe("TableTabs", () => {
       "dmr"
     );
   });
+
+  it("shows the help text for the active DMP analysis", () => {
+    render(<TableTabs activeTab="dmp" onChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Hilfe zur DMP-Analyse öffnen" }));
+
+    expect(screen.getByText(/Differentially Methylated Positions/i)).toBeInTheDocument();
+    expect(screen.getByText(/positive Delta Beta indicates higher methylation/i)).toBeInTheDocument();
+  });
+
+  it("shows the help text for the active DMR analysis", () => {
+    render(<TableTabs activeTab="dmr" onChange={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Hilfe zur DMR-Analyse öffnen" }));
+
+    expect(screen.getByText(/Differentially Methylated Regions/i)).toBeInTheDocument();
+    expect(screen.getByText(/genomic coordinates, region size/i)).toBeInTheDocument();
+  });
 });

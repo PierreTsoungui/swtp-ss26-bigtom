@@ -1,10 +1,13 @@
+import HelpButton from "../../analysis/components/HelpButton";
+import { helpTexts } from "../../help/helpTexts";
+
 type Props = {
   activeTab: "dmp" | "dmr";
   onChange: (tab: "dmp" | "dmr") => void;
 };
 export function TableTabs({ activeTab, onChange }: Props) {
   return (
-    <div className="border-b border-gray-200">
+    <div className="flex items-end justify-between gap-4 border-b border-gray-200">
       <div className="flex gap-6" role="tablist">  
         <button
           role="tab"  
@@ -34,6 +37,13 @@ export function TableTabs({ activeTab, onChange }: Props) {
         >
           DMR Analysis
         </button>
+      </div>
+      <div className="pb-2">
+        <HelpButton
+          helpText={activeTab === "dmp" ? helpTexts.dmp : helpTexts.dmr}
+          ariaLabel={`Hilfe zur ${activeTab.toUpperCase()}-Analyse öffnen`}
+          dialogTitle={activeTab === "dmp" ? "DMP Analysis" : "DMR Analysis"}
+        />
       </div>
     </div>
   );

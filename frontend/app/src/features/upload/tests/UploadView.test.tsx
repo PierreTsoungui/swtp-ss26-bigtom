@@ -114,4 +114,15 @@ describe("UploadView", () => {
         expect(screen.getByRole("button", { name: /analyse starten/i })).toBeEnabled();
     });
 
+    it("zeigt die Upload-Hilfe aus der Spezifikation", () => {
+        renderUploadView();
+
+        fireEvent.click(screen.getByRole("button", { name: "Hilfe zum Upload öffnen" }));
+
+        expect(
+            screen.getByText(/For every biological sample, two files are required/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/Missing IDAT pairs, corrupted files/i)).toBeInTheDocument();
+    });
+
 });

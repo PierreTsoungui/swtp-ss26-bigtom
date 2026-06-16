@@ -9,6 +9,8 @@ import {
     Autocomplete,
     Alert,
 } from "@mui/material";
+import HelpButton from "../../analysis/components/HelpButton.tsx";
+import { helpTexts } from "../../help/helpTexts.ts";
 
 interface BatchFormProps {
     parameters: BatchParametersResponse;
@@ -56,6 +58,15 @@ export function BatchForm({
 
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold">Batch Analysis &amp; Correction</h3>
+                <HelpButton
+                    helpText={helpTexts.batchCorrection}
+                    ariaLabel="Hilfe zur Batch-Korrektur öffnen"
+                    dialogTitle="Batch Effects & Batch Correction"
+                />
+            </div>
+
             {/* Batch Variable (Required) - SELECT Dropdown */}
             <div className="space-y-3">
                 <label className="block text-sm font-semibold text-slate-900">
