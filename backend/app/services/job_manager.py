@@ -74,6 +74,9 @@ _ALLOWED_TRANSITIONS: Dict[
         (JobPhase.NORMALIZATION,         JobStatusValue.COMPLETED),
         (JobPhase.NORMALIZATION,         JobStatusValue.FAILED),
     },
+    (JobPhase.NORMALIZATION, JobStatusValue.FAILED): {
+        (JobPhase.NORMALIZATION,         JobStatusValue.RUNNING),  # Retry mit anderer Methode
+    },
     (JobPhase.NORMALIZATION, JobStatusValue.COMPLETED): {
         (JobPhase.SVD,                   JobStatusValue.RUNNING),
     },
@@ -93,6 +96,9 @@ _ALLOWED_TRANSITIONS: Dict[
     (JobPhase.BATCH, JobStatusValue.RUNNING): {
         (JobPhase.BATCH,                 JobStatusValue.COMPLETED),
         (JobPhase.BATCH,                 JobStatusValue.FAILED),
+    },
+    (JobPhase.BATCH, JobStatusValue.FAILED): {
+        (JobPhase.BATCH,                 JobStatusValue.RUNNING),  # Retry mit anderen Einstellungen
     },
     (JobPhase.BATCH, JobStatusValue.COMPLETED): {
         (JobPhase.SVD,                   JobStatusValue.RUNNING),  # Neuer SVD nach Korrektur
@@ -118,6 +124,10 @@ _ALLOWED_TRANSITIONS: Dict[
     (JobPhase.HEATMAP, JobStatusValue.RUNNING): {
         (JobPhase.HEATMAP,               JobStatusValue.COMPLETED),
         (JobPhase.HEATMAP,               JobStatusValue.FAILED),
+    },
+    (JobPhase.HEATMAP, JobStatusValue.FAILED): {
+        (JobPhase.HEATMAP,               JobStatusValue.RUNNING),  # Retry mit anderen Filtern/Gruppierung
+        (JobPhase.RESULTS,               JobStatusValue.WAITING),  # User bricht ab, zurück zur Tabelle
     },
     (JobPhase.HEATMAP, JobStatusValue.COMPLETED): {
         (JobPhase.RESULTS,               JobStatusValue.WAITING),
@@ -152,7 +162,7 @@ def transition_job(
 ) -> JobStatus:
     """
     Führt einen validierten Zustandsübergang durch.
-    Wirft ValueError bei ungültigem Übergang.
+    Wirft InvalidTransitionError bei ungültigem Übergang.
     Alle Phasen- und Statuswechsel laufen ausschließlich über diese Funktion.
     """
     job = jobs.get(job_id)
@@ -186,8 +196,11 @@ def transition_job(
         job.progress_percent = progress_percent
     if current_step is not None:
         job.current_step = current_step
-    if error is not None:
-        job.error = error
+    if new_status == JobStatusValue.FAILED:
+        if error is not None:
+            job.error = error
+    else:
+        job.error = None
 
     jobs[job_id] = job
     return job
