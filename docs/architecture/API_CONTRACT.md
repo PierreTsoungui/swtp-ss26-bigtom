@@ -261,7 +261,7 @@ Returns the current state of the analysis pipeline. This endpoint is polled by t
 | `current_step` | Human-readable description of the current operation (e.g., `"Parsing IDAT files"`). |
 | `error` | Object describing the error cause if a failure occurred; `null` otherwise. |
 
-**Allowed `status` values:** `running` · `waiting` · `success` · `failed`
+**Allowed `status` values:** `running` · `waiting` · `completed` · `failed`
 
 **Allowed `phase` values:** `UPLOAD` · `FILTERING` · `NORMALIZATION_PREVIEW` · `NORMALIZATION` · `SVD` · `BATCH` · `DMP_DMR` · `RESULTS` · `HEATMAP`
 
@@ -499,7 +499,7 @@ Starts the final normalization of the data based on the normalization method sel
 
 #### Success Response (202 Accepted)
 
->  The previous draft used `"status": "normalizing"`, which is not a valid status value. The `status` field reflects the global job state (`running`, `waiting`, `success`, `failed`); the `normalizing` phase is reported separately by the `/status` endpoint. Corrected to `"status": "running"`.
+>  The previous draft used `"status": "normalizing"`, which is not a valid status value. The `status` field reflects the global job state (`running`, `waiting`, `completed`, `failed`); the `normalizing` phase is reported separately by the `/status` endpoint. Corrected to `"status": "running"`.
 
 ```json
 {
