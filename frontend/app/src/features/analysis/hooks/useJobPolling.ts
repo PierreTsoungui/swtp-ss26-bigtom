@@ -1,26 +1,43 @@
 import { useState, useEffect, useRef } from "react";
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
-import type { JobPhase, JobStatus, JobStatusValue} from "../utils/types";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../../shared/utils/JobTypes.ts";
 
-const TERMINAL_STATES: JobStatusValue[] = [
-  "normalization_done",
-  "ready_for_batch",
-  "batch_done",
-  "completed",
-  "failed",
-  "canceled",
-  "ready_for_batch",
-  "analysis_done",
-  "heatmap_done"
-];
+
+/**
+ * Hilfsfunktion, die überprüft, ob sich ein Job in einem terminalen Zustand befindet.
+ * Ein Job gilt als terminal, wenn er entweder fehlgeschlagen ist oder sich in einem der folgenden Phasen befindet und auf eine Benutzeraktion wartet:
+ * - Normalization (Warten auf Normalisierungsvorschau)
+ * - Batch (Warten auf Batch-Parameter)
+ * - Results (Warten auf Ergebnisanzeige)
+ * @param phase
+ * @param status
+ */
+export const isTerminalState = (
+    phase: JobPhase,
+    status: JobStatusValue,
+): boolean => {
+
+  if (status === JobStatusValue.FAILED) {
+    return true;
+  }
+
+  return (
+      (phase === JobPhase.NORMALIZATION && status === JobStatusValue.WAITING) ||
+      (phase === JobPhase.BATCH && status === JobStatusValue.WAITING) ||
+      (phase === JobPhase.RESULTS && status === JobStatusValue.WAITING) ||
+      (phase === JobPhase.HEATMAP && status == JobStatusValue.COMPLETED)
+  );
+};
+// TODO: Prüfen, wie das Pollingverhalten stattfinden soll, wenn Filterstats und NormalizationPreview geladen ist (Next Button)
 
 /**
  * Custom Hook, der den Status eines Jobs überwacht, indem er regelmäßig die API abfragt.
  * @param jobId Die ID des Jobs, dessen Status überwacht werden soll. Wenn `null`, wird kein Polling durchgeführt.
+ * @param resetKey Ein optionaler Schlüssel, der das Polling zurücksetzt, wenn er sich ändert.
+ * @returns Den aktuellen Status des Jobs oder `null`, wenn kein Job überwacht wird.
  */
 export function useJobPolling(jobId: string | null, resetKey? : number): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
-  // const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const failCountRef = useRef<number>(0);
   const MAX_FAILURES = 3;
 
@@ -49,9 +66,7 @@ export function useJobPolling(jobId: string | null, resetKey? : number): JobStat
         failCountRef.current = 0; // Reset failure count on success
         setJobStatus(data);
 
-        const isWaitingForSelection: boolean = data.status === "waiting" && data.phase === "waiting_selection";
-
-        const shouldStop = TERMINAL_STATES.includes(data.status) || isWaitingForSelection;
+        const shouldStop = isTerminalState(data.phase, data.status);
 
         if (!shouldStop && !cancelled) {
           timeoutId = setTimeout(poll, 1500);
@@ -64,7 +79,7 @@ export function useJobPolling(jobId: string | null, resetKey? : number): JobStat
               prev
                   ? {
                     ...prev,
-                    status: "failed",
+                    status:  JobStatusValue.FAILED,
                     error: {
                       type: "http://localhost:3000/analysis/errors#connection-error",
                       title: "Verbindungsfehler",
@@ -106,9 +121,6 @@ function parseJobStatus(value: unknown): JobStatus {
   const phase = value.phase;
   const progress_percent = value.progress_percent;
   const current_step = value.current_step;
-  const steps_total = value.steps_total;
-  const steps_completed = value.steps_completed;
-  const estimated_seconds_remaining = value.estimated_seconds_remaining;
   const error = value.error;
 
   if (typeof job_id !== "string") {
@@ -128,20 +140,6 @@ function parseJobStatus(value: unknown): JobStatus {
   if (typeof current_step !== "string") {
     throw new Error("Invalid job status response: current_step");
   }
-  if (!isNonNegativeInteger(steps_total)) {
-    throw new Error("Invalid job status response: steps_total");
-  }
-  if (!isNonNegativeInteger(steps_completed)) {
-    throw new Error("Invalid job status response: steps_completed");
-  }
-
-  // estimated_seconds_remaining: null oder number, undefined auch erlaubt
-  const parsedEstimated: number | null =
-    estimated_seconds_remaining === undefined || estimated_seconds_remaining === null
-      ? null
-      : isFiniteNumber(estimated_seconds_remaining)
-      ? estimated_seconds_remaining
-      : null;
 
   return {
     job_id,
@@ -149,46 +147,30 @@ function parseJobStatus(value: unknown): JobStatus {
     phase,
     progress_percent,
     current_step,
-    steps_total,
-    steps_completed,
-    estimated_seconds_remaining: parsedEstimated,
     ...(isProblemDetail(error) ? { error } : {}),
   };
 }
 
 function isJobStatusValue(value: unknown): value is JobStatusValue {
   return (
-    value === "queued" ||
-    value === "running" ||
-    value === "waiting" ||
-    value === "filtering" ||
-    value === "filtering_done" ||
-    value === "normalization_done" ||
-    value === "ready_for_batch" ||
-    value === "batch_done" ||
-    value == "analysis_done" ||
-    value === "completed" ||
-    value === "failed" ||
-    value === "canceled" ||
-    value === "heatmap_done"
+      value === "running" ||
+      value === "waiting" ||
+      value === "completed" ||
+      value === "failed"
   );
 }
 
 function isJobPhase(value: unknown): value is JobPhase {
   return (
-    value === "uploaded" ||
-    value === "validating" ||
-    value === "converting" ||
-    value === "filtering" ||
-    value === "filtering_done" ||
-    value === "normalization_preview" ||
-    value === "waiting_selection" ||
-    value === "normalizing" ||
-    value === "batch_correction" ||
-    value == "downstream_analysis" ||
-    value === "completed" ||
-    value === "heatmap" ||
-    value === "reset"
+      value === "upload" ||
+      value === "filtering" ||
+      value === "normalization_preview" ||
+      value === "normalization" ||
+      value === "svd" ||
+      value === "batch" ||
+      value === "analysis" ||
+      value === "results" ||
+      value === "heatmap"
   );
 }
 
@@ -225,6 +207,3 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function isNonNegativeInteger(value: unknown): value is number {
-  return Number.isInteger(value) && typeof value === "number" && value >= 0;
-}

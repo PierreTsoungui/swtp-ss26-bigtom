@@ -4,10 +4,10 @@ import type { NormalizationMethod } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
 import Progressbar from "../../shared/components/Progressbar.tsx";
-import type {JobStatus} from "../analysis/utils/types.ts";
 import PlotModal from "./components/PlotModal.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 
 
 /**
@@ -37,7 +37,7 @@ export function NormalizationPage() {
   useEffect(() => {
       console.log("[NormalizationPage] useEffect - jobStatus:", jobStatus?.status, "job_id:", job_id);
       if (!jobStatus) return;
-      if (jobStatus.status === "ready_for_batch") {
+      if (jobStatus.status === JobStatusValue.WAITING && jobStatus.phase === JobPhase.BATCH) {
         console.log("Navigiere zu /batch/", job_id, "aktueller jobStatus:", jobStatus);
         navigate(`/batch/${job_id}`);
       }
@@ -55,6 +55,7 @@ export function NormalizationPage() {
       });
 
       if (!res.ok) throw new Error(`Fehler: ${res.status}`);
+      // TODO: Prüfen, wie der State abgefangen wird um die Progressbar anzuzeigen, wenn Preview ausgewählt wurde
       setIsNormalising(true);
     } catch (e) {
       console.error(e);

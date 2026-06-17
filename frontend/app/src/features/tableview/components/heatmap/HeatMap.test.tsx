@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HeatMap from './HeatMap';
 import Progressbar from "../../../../shared/components/Progressbar.tsx";
+import {JobPhase, JobStatusValue} from "../../../../shared/utils/JobTypes.ts";
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -161,13 +162,10 @@ describe('HeatMap', () => {
         // Prüfen, ob Ladeindikator (Spinner / Text) existiert
         expect(<Progressbar jobStatus={{
                     job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
-                    status: "running",
-                    phase: "downstream_analysis",
+                    status: JobStatusValue.RUNNING,
+                    phase: JobPhase.HEATMAP,
                     progress_percent: 50,
                     current_step: "Lade Heatmap...",
-                    steps_total: 6,
-                    steps_completed: 0,
-                    estimated_seconds_remaining: null,
         }} />).toBeTruthy();
 
         // Warten bis Laden beendet ist

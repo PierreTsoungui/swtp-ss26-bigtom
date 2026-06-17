@@ -1,13 +1,11 @@
 import { type NavigateFunction, useNavigate, useParams } from "react-router";
-// import { ResultsTable } from "./components/ResultsTable";
 import { useJobPolling } from "./hooks/useJobPolling";
-// import { useResultsTable } from "./hooks/useResultsTable";
-import type { JobStatus } from "./utils/types";
 import Progressbar from "../../shared/components/Progressbar.tsx";
 import { useEffect, useRef } from "react";
 import { FilteringStats } from "./components/FilteringStats";
 import {useFilterStats} from "./hooks/useFilterStats.ts";
 import InfoPanel from "./components/InfoPanel.tsx";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 
 /**
  * Hauptseite für die Analyse eines Jobs.
@@ -23,31 +21,27 @@ export function AnalysisPage() {
     const navigate: NavigateFunction = useNavigate();
     const hasTriggeredFetch = useRef(false);
 
+    // Eigentlich alle nachfolgenden States
+    const shouldGetFilterStats = job_id && !hasTriggeredFetch.current &&
+        ((jobStatus?.phase === JobPhase.FILTERING && jobStatus?.status === JobStatusValue.COMPLETED) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && jobStatus?.status === JobStatusValue.RUNNING));
+
+
     const { filterStats, isLoading: filterStatsLoading } = useFilterStats(
-        job_id && jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current
-            ? job_id
-            : null
+        shouldGetFilterStats ? job_id : null
     );
 
     useEffect(() => {
-        if (jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current) {
+        if (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && !hasTriggeredFetch.current) {
             hasTriggeredFetch.current = true;
         }
     }, [jobStatus?.phase]);
 
 
     const isPreviewReady =
-        jobStatus?.status === "waiting" &&
-        jobStatus?.phase === "waiting_selection";
+        (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && jobStatus?.status === JobStatusValue.COMPLETED) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION && jobStatus?.status === JobStatusValue.WAITING)
 
-    useEffect(() => {
-        if (!jobStatus || !job_id) return;
-        /*
-        if (jobStatus.status === "completed") {
-          navigate(`/results/${job_id}`);
-        }
-        */
-    }, [jobStatus?.status, jobStatus?.phase, job_id, navigate]);
 
     if (!job_id) {
         return (
@@ -86,13 +80,15 @@ export function AnalysisPage() {
 
     // ── Progressbar anzeigen ──────────────────────────────────────
     const shouldShowProgress =
-        jobStatus.status === "queued" ||
-        jobStatus.status === "running" ||
-        (jobStatus.status === "waiting" &&
-            jobStatus.phase === "waiting_selection");
+        (jobStatus?.phase === JobPhase.FILTERING && jobStatus?.status === JobStatusValue.RUNNING) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && (
+                jobStatus?.status === JobStatusValue.RUNNING || jobStatus?.status === JobStatusValue.COMPLETED
+        )) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION && jobStatus?.status === JobStatusValue.WAITING);
+
 
     // ── Fehlerfall OHNE Filterstatistiken ─────────────────────────
-    if (jobStatus.status === "failed" && !filterStats) {
+    if (jobStatus.status === JobStatusValue.FAILED && !filterStats) {
         return (
             <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
                 <section
@@ -131,7 +127,7 @@ export function AnalysisPage() {
                 )}
 
                 {/* Fehlerbanner */}
-                {jobStatus.status === "failed" && filterStats && (
+                {jobStatus.status ===  JobStatusValue.FAILED && filterStats && (
                     <section
                         className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-900"
                         role="alert"

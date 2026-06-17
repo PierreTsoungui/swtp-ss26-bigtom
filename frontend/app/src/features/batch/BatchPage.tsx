@@ -12,6 +12,7 @@ import Progressbar from "../../shared/components/Progressbar";
 
 import type { BatchFormData } from "./utils/types";
 import {useNavigate} from "react-router";
+import {JobPhase, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 
 const BatchPage: React.FC = () => {
   const { job_id } = useParams<{ job_id: string }>();
@@ -42,8 +43,8 @@ const BatchPage: React.FC = () => {
       showProgressBar && job_id ? job_id : null,
       pollingKey
   );
-
-  const batchRunning = isSubmitting && jobStatus?.status === "running";
+  // TODO: Prüfen, wo SVD + RUNNING eingesetzt werden muss
+  const batchRunning = isSubmitting && jobStatus?.status === JobStatusValue.RUNNING;
 
   // Erfolgreich beendet
   useEffect(() => {
@@ -51,25 +52,28 @@ const BatchPage: React.FC = () => {
     console.log("[BATCH STATUS]", jobStatus);
 
     // DMP/DMR läuft
-    if (jobStatus.phase === "downstream_analysis" && jobStatus.status === "running" ) {
+    if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.RUNNING ) {
       setShowProgressBar(true);
       return;
     }
     // DMP/DMR fertig
-    else if (jobStatus.phase === "downstream_analysis" && jobStatus.status === "analysis_done") {
+    else if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.COMPLETED ||
+             jobStatus.phase === JobPhase.RESULTS && jobStatus.status === JobStatusValue.WAITING
+    ) {
       setShowProgressBar(false);
       console.log("[DOWNSTREAM ANALYSIS FINISHED]", jobStatus.status);
       fetchHistory();
       navigate(`/results/${job_id}`);
       return;
     }
-    const batch_finished = jobStatus.status === "waiting" || jobStatus.status === "batch_done"
-    if (batch_finished && showProgressBar) {
+    const batchFinished = jobStatus.phase === JobPhase.BATCH && jobStatus.status === JobStatusValue.WAITING;
+    if (batchFinished && showProgressBar) {
       setShowProgressBar(false);
       fetchHistory();
+      // TODO: Prüfen, ob hier ein return hin muss?
     }
 
-  }, [jobStatus, showProgressBar, fetchHistory, /* navigate ,*/ job_id ]);
+  }, [jobStatus, showProgressBar, fetchHistory, navigate , job_id ]);
 
   if (!job_id) {
     return (

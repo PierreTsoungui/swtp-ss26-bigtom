@@ -1,5 +1,5 @@
 import LinearProgress from '@mui/material/LinearProgress';
-import type { JobStatus } from '../../features/analysis/utils/types.ts';
+import {JobPhase, type JobStatus} from "../utils/JobTypes.ts";
 
 /**
  * Props, die an die Progressbar übergeben werden
@@ -42,7 +42,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
             <div className="mb-4 flex items-center justify-between">
                 <div>
                     <h2 className="text-lg font-semibold text-gray-800">
-                        {jobStatus.phase === "normalization_preview"
+                        {jobStatus.phase === JobPhase.NORMALIZATION_PREVIEW
                             ? "Normalisierungsvorschau wird erstellt"
                             : "Analyse läuft"}
                     </h2>

@@ -15,13 +15,13 @@ import { useParams } from "react-router-dom";
 
 import { useJobPolling } from "../../../analysis/hooks/useJobPolling.ts";
 
-import type { JobStatus } from "../../../analysis/utils/types.ts";
 import {useHeatMapOptions} from "../../hooks/useHeatMapOptions.ts";
 import {useGenerateHeatMap} from "../../hooks/useGenerateHeatMap.ts";
 import Progressbar from "../../../../shared/components/Progressbar.tsx";
 import ErrorMessage from "../../../../shared/error-handling/components/ErrorMessage.tsx";
 import downloadHeatmap from "../../utils/downloadHeatmap.ts";
 import type {HeatmapDmpFilter} from "../../utils/types.ts";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../../../shared/utils/JobTypes.ts";
 
 
 type HeatMapProps = {
@@ -69,10 +69,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         generateHeatMap,
     } = useGenerateHeatMap(job_id ?? null);
 
-    const backendHeatmapError =
-        jobStatus?.status === "failed"
-            ? jobStatus.error
-            : null;
+    const backendHeatmapError = jobStatus?.phase === JobPhase.HEATMAP && jobStatus?.status === JobStatusValue.FAILED;
 
     console.log("backendHeatmapError", backendHeatmapError);
     console.log("jobStatus.error", jobStatus?.error);
@@ -90,7 +87,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
     );
 
     useEffect(() => {
-        if (jobStatus?.status === "failed" && jobStatus.error) {
+        if (jobStatus?.status === JobStatusValue.FAILED && jobStatus.error) {
             setPersistentError(jobStatus.error);
         }
     }, [jobStatus]);
@@ -131,11 +128,13 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
     useEffect(() => {
         if (!jobStatus) return;
         console.log("[HeatMap Polling]", jobStatus.status, jobStatus.phase);
+        // TODO: Prüfen, könnte falsch sein, dass man bei RESULTS + WAITING fertig ist (eig nicht)
         const isDone =
-            jobStatus.status === "heatmap_done" ||
-            (jobStatus.phase === "heatmap" && jobStatus.status === "completed");
+            (jobStatus.status == JobStatusValue.COMPLETED && jobStatus.phase == JobPhase.HEATMAP) ||
+            (jobStatus.status == JobStatusValue.WAITING && jobStatus.phase == JobPhase.RESULTS) ;
 
-        const isFailed = jobStatus.phase === "heatmap" && jobStatus.status === "failed";
+        const isFailed = jobStatus.phase === JobPhase.HEATMAP && jobStatus.status === JobStatusValue.FAILED;
+
         if (isDone) {
             setIsHeatmapPolling(false);
             setHeatmapImageURL(

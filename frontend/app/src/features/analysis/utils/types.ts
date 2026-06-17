@@ -1,5 +1,3 @@
-import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
-
 export interface BaseFilterStats {
   enabled: boolean;
   removed: number;
@@ -41,45 +39,4 @@ export interface FilteringStatsType {
   xy_chromosomes: XyChromosomeStats;
 
   sample_quality: SampleQualityStats;
-}
-
-export type JobStatusValue =
-  | "queued"
-  | "running"
-  | "waiting"
-  | "filtering"
-  | "filtering_done"
-  | "normalization_done"
-  | "ready_for_batch"
-  | "batch_done"
-  | "completed"
-  | "failed"
-  | "analysis_done"
-  | "canceled"
-  | "heatmap_done";
-
-export type JobPhase =
-  | "uploaded"
-  | "validating"
-  | "converting"
-  | "filtering"
-  | "normalization_preview"
-  | "waiting_selection"
-  | "normalizing"
-  | "batch_correction"
-  | "downstream_analysis"
-  | "completed"
-  | "reset"
-  | "heatmap";
-
-export interface JobStatus {
-  job_id: string;
-  status: JobStatusValue;
-  phase: JobPhase;
-  progress_percent: number;
-  current_step: string;
-  steps_total: number;
-  steps_completed: number;
-  estimated_seconds_remaining: number | null;
-  error?: ProblemDetail;
 }
