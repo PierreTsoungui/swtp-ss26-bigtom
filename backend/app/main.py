@@ -18,6 +18,13 @@ from app.api.routes import (
 )
 from app.api.routes.table import router as table_router
 
+import logging
+from app.core.logging_config import setup_logging 
+
+setup_logging() 
+
+logger = logging.getLogger(__name__)  
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startet den Cleanup-Dienst mit der Anwendung und beendet ihn beim Shutdown."""

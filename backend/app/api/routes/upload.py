@@ -1,6 +1,7 @@
 # app/api/routes/upload.py
 import uuid
 import json
+import logging
 from pathlib import Path
 from typing import List
 
@@ -26,6 +27,7 @@ from app.services.file_handler import (
 )
 from app.services.r_executor import run_r_script
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -77,6 +79,7 @@ async def upload_files(
     if filter_settings is not None and filter_settings.strip():
         try:
             parsed_filter = json.loads(filter_settings)["filter_settings"]
+            logger.info(f"Parsed filter settings: {parsed_filter}")
         except json.JSONDecodeError as e:
             raise HTTPException(
                 status_code=ErrorTypes.INVALID_FILTER_JSON.status,

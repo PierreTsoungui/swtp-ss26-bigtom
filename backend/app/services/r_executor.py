@@ -2,10 +2,13 @@
 import asyncio
 from collections import defaultdict
 import json
+import logging
 import re
 from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 from app.services.job_manager import register_process, unregister_process
+
+logger = logging.getLogger(__name__)
 
 R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
 USE_MOCK_R = True
@@ -24,7 +27,7 @@ async def run_r_script(
     script_path    = f"/app/r_backend/{script}"
     docker_job_dir = f"/app/jobs/{job_id}"
 
-    print(f"[R_EXECUTOR] mode={mode}", flush=True)
+    logger.info("Preparing R script execution for job %s in mode: %s", job_id, mode)
 
     def env_flags(env: dict) -> list:
         flags = []
@@ -102,7 +105,7 @@ async def run_r_script(
             *script_args,
         ]
 
-    print(f"[R_EXECUTOR] Starte: {' '.join(cmd)}", flush=True)
+    logger.info("Executing command: %s", " ".join(cmd))
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -128,7 +131,8 @@ async def run_r_script(
 
                 decoded = line.decode("utf-8", errors="replace").strip()
                 stdout_lines.append(decoded)
-                print(f"[R_STDOUT] {decoded}", flush=True)
+                
+                logger.info("R_STDOUT: %s", decoded)
 
                 json_objects = re.findall(r'\{.*?\}', decoded)
                 for obj in json_objects:
@@ -174,7 +178,8 @@ async def run_r_script(
                     break
                 decoded = line.decode("utf-8", errors="replace").strip()
                 stderr_lines.append(decoded)
-                print(f"[R_STDERR] {decoded}", flush=True)
+                
+                logger.warning("R_STDERR: %s", decoded)
 
         await asyncio.gather(read_stdout(), read_stderr())
         returncode = await asyncio.wait_for(process.wait(), timeout=600)
@@ -183,7 +188,7 @@ async def run_r_script(
         stdout_str = "\n".join(stdout_lines)
         stderr_str = "\n".join(stderr_lines)
 
-        print(f"[R_EXECUTOR] returncode: {returncode}", flush=True)
+        logger.info("R subprocess finished with returncode: %d", returncode)
 
         if mode == "filtering" and returncode == 0:
             stats_path = Path(job_dir) / "filter_stats.json"
@@ -191,9 +196,9 @@ async def run_r_script(
                 try:
                     with open(stats_path, "r") as f:
                         filter_stats = json.load(f)
-                    print("[R_EXECUTOR] Filter stats geladen.", flush=True)
-                except Exception as e:
-                    print(f"[R_EXECUTOR] filter_stats.json Fehler: {e}", flush=True)
+                    logger.info("Successfully loaded filter_stats.json")
+                except Exception:
+                    logger.exception("Failed to parse filter_stats.json")
 
         response_data: Dict[str, Any] = {
             "returncode": returncode,
@@ -208,14 +213,14 @@ async def run_r_script(
         return response_data
 
     except asyncio.TimeoutError:
-        print("[R_EXECUTOR] Timeout nach 10 Minuten", flush=True)
+        logger.error("R script execution timed out for job %s after 10 minutes", job_id)
         unregister_process(job_id)
         if "process" in locals():
             process.kill()
             await process.wait()
         return {"returncode": 1, "stdout": "", "stderr": "R script timeout after 10 minutes"}
 
-    except Exception as e:
-        print(f"[R_EXECUTOR] ERROR: {e}", flush=True)
+    except Exception:
+        logger.exception("Unexpected error occurred while running R script for job %s", job_id)
         unregister_process(job_id)
-        return {"returncode": 1, "stdout": "", "stderr": str(e)}
+        return {"returncode": 1, "stdout": "", "stderr": "Internal executor error"}
