@@ -7,16 +7,25 @@ import InsightsIcon from "@mui/icons-material/Insights";
 import ScienceIcon from "@mui/icons-material/Science";
 import TuneIcon from "@mui/icons-material/Tune";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import BookIcon from "@mui/icons-material/Book";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { LandingLogo } from "./LandingLogo";
 
+
+// BIOLOGICAL & TECHNICAL DICTIONARY
+
+interface DictionaryItem {
+  term: string;
+  definition: string;
+}
+
+// COMPONENT INTERFACES
 interface InformationCard {
   title: string;
   description: string;
   icon: ReactNode;
 }
-
 
 interface FaqItem {
   question: string;
@@ -28,6 +37,65 @@ interface FaqCategory {
   questions: FaqItem[];
 }
 
+const biologyDictionary: DictionaryItem[] = [
+  {
+    term: "DNA Methylation",
+    definition: "A biochemical process where methyl groups are added to the DNA molecule, altering gene expression without changing the underlying DNA sequence.",
+  },
+  {
+    term: "CpG Site",
+    definition: "Regions of DNA where a cytosine nucleotide is followed by a guanine nucleotide. These sites are the primary targets for DNA methylation in mammals.",
+  },
+  {
+    term: "DMP (Differentially Methylated Position)",
+    definition: "A single specific CpG site that demonstrates a statistically significant difference in methylation levels between compared sample groups.",
+  },
+  {
+    term: "DMR (Differentially Methylated Region)",
+    definition: "A genomic region containing multiple adjacent CpG sites that collectively show consistent and statistically significant methylation differences.",
+  },
+  {
+    term: "Delta-Beta (Δβ)",
+    definition: "The mathematical difference between the average methylation levels (Beta-values) of two groups, indicating the effect size of the methylation change.",
+  },
+  {
+    term: "detP (Detection p-value)",
+    definition: "A quality metric evaluating whether a probe signal is distinguishable from background noise. Probes with high detP values are unreliable and filtered out.",
+  },
+  {
+    term: "BeadCount",
+    definition: "The number of physical beads on the Illumina array targeting a specific CpG site. Probes with too few beads are removed due to low statistical precision.",
+  },
+  {
+    term: "SNP (Single Nucleotide Polymorphism)",
+    definition: "Common genetic variations. Probes overlapping known SNPs are filtered to prevent genetic mutations from being mistaken for epigenetic methylation changes.",
+  },
+  {
+    term: "NonCpG",
+    definition: "Probes designed to measure methylation outside of standard CpG contexts (e.g., CHH or CHG). These are often removed to isolate canonical CpG methylation behavior.",
+  },
+  {
+    term: "MultiHit",
+    definition: "Probes that accidentally bind to multiple different locations in the genome, creating ambiguous signals that must be filtered out for accuracy.",
+  },
+  {
+    term: "XY (Sex Chromosome Probes)",
+    definition: "Probes located on the X and Y sex chromosomes. They are frequently filtered to prevent gender-based biological differences from biasing the global analysis.",
+  },
+  {
+    term: "SampleQuality",
+    definition: "An aggregate technical threshold assessing the overall signal intensity and integrity of a sample. Substandard samples are discarded entirely.",
+  },
+  {
+    term: "Batch Effect",
+    definition: "Unwanted technical variation introduced when samples are processed in different groups, on different days, or by different lab technicians.",
+  },
+  {
+    term: "SVD (Singular Value Decomposition)",
+    definition: "A mathematical matrix factorization method used to identify and visualize the primary components driving technical or biological variance in a dataset.",
+  },
+];
+
 const workflowSteps: InformationCard[] = [
   {
     title: "Select Files",
@@ -38,25 +106,25 @@ const workflowSteps: InformationCard[] = [
   {
     title: "Initial Filtering",
     description:
-      "Check whether uploaded files are complete and valid. Missing or invalid IDAT pairs are detected before the analysis starts.",
+      "Filter out low-quality probes and samples based on biological and technical criteria (detP, BeadCount, SNP, NonCpG, MultiHit, XY, and SampleQuality) to ensure reliable downstream analysis. Missing or invalid IDAT pairs are flagged before the analysis begins.",
     icon: <FactCheckIcon fontSize="large" />,
   },
   {
     title: "Normalization",
     description:
-      "Reduce technical differences between samples to make measurements more comparable and improve the reliability of the analysis. Compare available normalization methods using density and PCA plots, then select one method or continue without normalization.",
+      "Reduce technical variation between samples to improve measurement comparability and analysis reliability. Compare available normalization methods using density plots and PCA plots. Then select one method, or continue without normalization.",
     icon: <InsightsIcon fontSize="large" />,
   },
   {
     title: "Optional Batch Correction",
     description:
-      "Inspect potential batch effects and apply correction if necessary to improve comparability between samples.",
+      "Visualize potential batch effects using SVD plots and apply correction iteratively via limma::removeBatchEffect if needed to improve comparability between samples.",
     icon: <TuneIcon fontSize="large" />,
   },
   {
     title: "Results",
     description:
-      "Explore statistically significant methylation differences, apply filters, sort results and generate visualizations such as heatmaps.",
+      "Explore statistically significant differences in differentially methylated positions (DMPs) and regions (DMRs). Apply filters, sort results, export data as CSV, and generate visualizations such as heatmaps.",
     icon: <AnalyticsIcon fontSize="large" />,
   },
 ];
@@ -84,14 +152,15 @@ const beginnerTopics: InformationCard[] = [
     icon: <BiotechIcon />,
   },
 ];
+
 const faqCategories: FaqCategory[] = [
   {
     title: "Upload & Files",
     questions: [
       {
-        question: "What file formats are supported for the Sample Sheet?",
+        question: "Which columns are required in the Sample Sheet?",
         answer:
-          "The Sample Sheet can be uploaded as a CSV (.csv) or Excel (.xlsx) file.",
+          "The Sample Sheet must contain mandatory columns to map your data correctly, specifically Sentrix_ID and Sentrix_Position (or Basename).",
       },
       {
         question: "How many IDAT files do I need to upload?",
@@ -108,16 +177,6 @@ const faqCategories: FaqCategory[] = [
         answer:
           "Illumina methylation arrays generate measurements in two color channels (Red and Green). Both files are required to correctly process the data.",
       },
-      {
-        question: "What columns must the Sample Sheet contain?",
-        answer:
-          "The Sample Sheet must contain the information required to identify samples and assign them to experimental groups. Required columns may vary depending on the analysis configuration.",
-      },
-      {
-        question: "Can I upload an Excel file instead of a CSV?",
-        answer:
-          "Yes. Both CSV and Excel files are supported for Sample Sheet uploads.",
-      },
     ],
   },
   {
@@ -131,7 +190,7 @@ const faqCategories: FaqCategory[] = [
       {
         question: "What does the filtering step do and which probes are removed?",
         answer:
-          "Filtering removes unreliable probes that may produce inaccurate measurements. This improves the quality and reliability of downstream analyses.",
+          "Filtering automatically removes unreliable data using 7 specific technical and biological criteria: detP, BeadCount, SNP, NonCpG, MultiHit, XY, and SampleQuality to ensure statistical integrity.",
       },
       {
         question: "What is normalization and why is it necessary?",
@@ -144,7 +203,7 @@ const faqCategories: FaqCategory[] = [
           "The platform provides density plots and PCA plots to compare methods. In general, choose the method that improves consistency between samples while preserving biological differences.",
       },
       {
-        question: "What is a Batch Effect and how do I know if my data is affected?",
+        question: "What is a batch effect and how do I know if my data is affected?",
         answer:
           "Batch effects are unwanted technical differences caused by processing samples under different conditions. PCA and SVD visualizations can help identify such effects.",
       },
@@ -156,7 +215,7 @@ const faqCategories: FaqCategory[] = [
       {
         question: "Can I cancel a running analysis?",
         answer:
-          "If supported by the current deployment, running analyses can be cancelled before completion.",
+          "Yes. You can actively reset or cancel a running job at any time via the interface, which triggers the system termination endpoint (POST /api/v1/reset/{job_id}).",
       },
     ],
   },
@@ -164,12 +223,12 @@ const faqCategories: FaqCategory[] = [
     title: "Results & Tables",
     questions: [
       {
-        question: "What is a DMP ?",
+        question: "What is a DMP?",
         answer:
-          "A DMP(Differentially Methylated Position) is a single CpG site that shows a statistically significant methylation difference between comparison groups.",
+          "A DMP (Differentially Methylated Position) is a single CpG site that shows a statistically significant methylation difference between comparison groups.",
       },
       {
-        question: "What is a DMR ?",
+        question: "What is a DMR?",
         answer:
           "A DMR (Differentially Methylated Region) is a genomic region containing multiple nearby CpG sites that collectively show significant methylation differences.",
       },
@@ -211,7 +270,7 @@ const faqCategories: FaqCategory[] = [
       {
         question: "What does the SVD plot show and how do I interpret it?",
         answer:
-          "The SVD plot helps identify factors that explain variation in the dataset and can reveal potential batch effects.",
+          "The SVD plot visualizes components of technical or biological variation. The platform generates these plots both before and after batch correction, allowing you to directly evaluate and compare the effectiveness of the correction.",
       },
       {
         question: "What is a density plot?",
@@ -221,7 +280,7 @@ const faqCategories: FaqCategory[] = [
       {
         question: "How do I create a heatmap for a specific genomic region?",
         answer:
-          "Select a genomic region from the results table and generate a heatmap to visualize methylation patterns across samples.",
+          "Heatmaps are generated from the DMP results and are structured based on the grouping variables defined in your Sample Sheet columns.",
       },
     ],
   },
@@ -231,22 +290,22 @@ const faqCategories: FaqCategory[] = [
       {
         question: "Is my data stored on the server?",
         answer:
-          "Uploaded data is stored only for analysis purposes and handled according to the deployment configuration.",
+          "Uploaded data is temporarily stored in an encrypted cache directory strictly for analysis purposes. No permanent records are kept on our cloud hosts.",
       },
       {
         question: "How long is my session data kept?",
         answer:
-          "Retention time depends on the server configuration and project policies.",
+          "Session data is automatically purged from the system 24 hours after your last activity or immediately upon manual job reset.",
       },
       {
         question: "Is my data transfer encrypted?",
         answer:
-          "When deployed with HTTPS, all communication between browser and server is encrypted.",
+          "Yes, the application enforces End-to-End Encryption (E2EE) via TLS 1.3/HTTPS, protecting data packages in transit between your browser and the server.",
       },
       {
         question: "Who has access to my uploaded data?",
         answer:
-          "Access is restricted to authorized users and system administrators responsible for operating the platform.",
+          "Access is programmatic and restricted solely to the execution node running your analysis. No user-to-user data access is architecturally possible.",
       },
     ],
   },
@@ -266,18 +325,16 @@ export function LandingPage() {
               </h1>
               <p className="mt-6 max-w-4xl text-base leading-8 text-neutral-textSecondary lg:text-lg">
                 MethylAnalyzer is a web-based platform for DNA methylation analysis.
-                It helps researchers process raw methylation data from Illumina IDAT files
-                without requiring programming or bioinformatics expertise.
-
+                It enables researchers to analyze and interpret raw DNA methylation data from Illumina IDAT files,
+                minimizing the need for extensive programming or bioinformatics expertise.
+                <br /><br />
                 The application guides users through data upload, quality control,
                 normalization, optional batch effect correction, and statistical analysis.
-                Results are presented in interactive tables and visualizations, making it
-                easy to identify biologically relevant methylation differences between
-                sample groups.
-
-                Whether you are new to methylation analysis or an experienced researcher,
-                MethylAnalyzer provides a transparent and user-friendly workflow from raw
-                data to interpretable results.
+                Results are presented in interactive tables and visualizations, enabling the
+                identification of biologically relevant methylation differences across sample groups.
+                <br /><br />
+                Designed for both newcomers and experienced researchers, MethylAnalyzer
+                provides a transparent and user-friendly workflow from raw data to interpretable results.
               </p>
             </div>
 
@@ -297,6 +354,7 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* SECTION: WORKFLOW STEPS */}
       <section id="workflow" aria-labelledby="workflow-title" className="px-6 py-16">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
@@ -332,6 +390,7 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* SECTION: GETTING STARTED */}
       <section
         aria-labelledby="beginner-title"
         className="border-y border-neutral-borderDefault bg-neutral-card px-6 py-16"
@@ -366,6 +425,7 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* SECTION: HELP & FAQ ACCORDION */}
       <section id="help" aria-labelledby="help-title" className="px-6 py-16">
         <div className="mx-auto max-w-5xl">
           <div className="text-center">
@@ -410,6 +470,38 @@ export function LandingPage() {
                 </section>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION: NEW BIOLOGICAL GLOSSARY */}
+      <section id="glossary" aria-labelledby="glossary-title" className="border-t border-slate-200 bg-white px-6 py-16">
+        <div className="mx-auto max-w-5xl">
+          <div className="text-center">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
+              Knowledge Base
+            </p>
+            <h2 id="glossary-title" className="mt-2 text-3xl font-bold text-slate-950">
+              Biological & Technical Glossary
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-600">
+              Quickly look up specific scientific terms, parameters, and algorithms used throughout the pipeline steps.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            {biologyDictionary.map((item) => (
+              <div
+                key={item.term}
+                className="rounded-xl border border-slate-100 bg-slate-50 p-5 transition hover:shadow-md"
+              >
+                <div className="flex items-center gap-2">
+                  <BookIcon className="text-emerald-600 h-5 w-5" fontSize="small" />
+                  <h4 className="font-bold text-slate-950">{item.term}</h4>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{item.definition}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
