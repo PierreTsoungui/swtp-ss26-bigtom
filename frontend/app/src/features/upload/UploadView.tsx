@@ -9,6 +9,8 @@ import { useNavigate } from "react-router";
 import { getFileIdentity } from "./utils/fileIdentity";
 import FilterPanel from "./components/FilterPanel.tsx";
 import {DEFAULT_FILTER_SETTINGS, type FilterSettings} from "./utils/types.ts";
+import HelpButton from "../analysis/components/HelpButton.tsx";
+import { helpTexts } from "../help/helpTexts.ts";
 
 /**
  * Komponente für den Upload von IDAT-Dateien und einem Sample Sheet.
@@ -100,7 +102,14 @@ function UploadView() : JSX.Element {
 
   return (
     <div className="container mx-auto">
-      <h1 className="text-4xl font-bold text-center m-10">Upload</h1>
+      <div className="m-10 flex items-center justify-center gap-3">
+        <h1 className="text-4xl font-bold text-center">Upload</h1>
+        <HelpButton
+          helpText={helpTexts.upload}
+          ariaLabel="Hilfe zum Upload öffnen"
+          dialogTitle="Upload Raw Data & Sample Information"
+        />
+      </div>
       <div className="flex flex-row bg-slate-200 justify-center gap-10 p-10">
 
         {/* IDAT Upload */}

@@ -8,6 +8,8 @@ import PlotModal from "./components/PlotModal.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
+import HelpButton from "../analysis/components/HelpButton.tsx";
+import {helpTexts} from "../help/helpTexts.ts";
 
 
 /**
@@ -85,9 +87,16 @@ export function NormalizationPage() {
         />
       )}
 
-      <h1 className="mb-2 text-2xl font-semibold text-slate-900">
-        Normalisierungsmethode auswählen
-      </h1>
+      <div className="mb-2 flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Normalisierungsmethode auswählen
+        </h1>
+        <HelpButton
+          helpText={helpTexts.normalization}
+          ariaLabel="Hilfe zur Normalisierung öffnen"
+          dialogTitle="Normalization"
+        />
+      </div>
       <p className="mb-8 text-slate-500">
         Klicken Sie auf einen Plot für eine vergrößerte Ansicht
       </p>
