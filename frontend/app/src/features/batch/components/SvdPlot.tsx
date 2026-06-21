@@ -1,5 +1,6 @@
 import React from 'react';
 import type { BatchRound } from '../utils/types';
+import { colors } from '../../../shared/theme/colors';
 
 interface SvdPlotProps {
   rounds: BatchRound[];
@@ -20,14 +21,14 @@ export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
             style={{ 
               // flex: '0 1 400px' verhindert das unendliche Aufblähen bei wenigen Elementen
               flex: '0 1 400px', 
-              border: '1px solid #ddd', 
+              border: `1px solid ${colors.neutral.borderDefault}`,
               padding: '15px', 
               borderRadius: '8px',
-              backgroundColor: round.type === 'initial' ? '#f9f9f9' : '#f0fff4'
+              backgroundColor: round.type === 'initial' ? colors.neutral.background : colors.success.badgeBackground
             }}
           >
             {/* Plot Title */}
-            <h4 style={{ margin: '0 0 10px 0', color: '#333' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: colors.neutral.textPrimary }}>
               {round.type === 'initial' ? 'Before Correction' : 'After Correction'} (Round {round.round})
             </h4>
 
@@ -45,7 +46,7 @@ export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
             />
 
             {/* Plot Info */}
-            <div style={{ fontSize: '0.9em', color: '#666', borderTop: '1px solid #ddd', paddingTop: '10px' }}>
+            <div style={{ fontSize: '0.9em', color: colors.neutral.textSecondary, borderTop: `1px solid ${colors.neutral.borderDefault}`, paddingTop: '10px' }}>
               <div style={{ marginBottom: '8px' }}>
                 <strong>Timestamp:</strong> {new Date(round.timestamp).toLocaleString('en-US')}
               </div>

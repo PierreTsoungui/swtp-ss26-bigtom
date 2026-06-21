@@ -6,11 +6,11 @@ export function DatenschutzPage() {
           <div className="mx-auto max-w-4xl px-6 py-4">
               <BackButton />
           </div>
-          <article className="mx-auto max-w-4xl px-6 py-10 text-slate-800">
-              <h1 className="mb-8 text-3xl font-bold text-slate-950">Datenschutzerklärung</h1>
+          <article className="mx-auto max-w-4xl px-6 py-10 text-neutral-textPrimary">
+              <h1 className="mb-8 text-3xl font-bold text-neutral-textPrimary">Datenschutzerklärung</h1>
 
               <section className="mb-6">
-                  <h2 className="mb-2 text-xl font-semibold text-slate-900">Verantwortliche Stelle</h2>
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Verantwortliche Stelle</h2>
                   <p>
                       Verantwortliche Stelle ist die Technische Hochschule Mittelhessen (THM).
                       Zuständig ist der betreuende Fachbereich im Rahmen des BigTom-Projekts.
@@ -18,7 +18,7 @@ export function DatenschutzPage() {
               </section>
 
               <section className="mb-6">
-                  <h2 className="mb-2 text-xl font-semibold text-slate-900">
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">
                       Welche Daten werden verarbeitet?
                   </h2>
                   <p>
@@ -30,7 +30,7 @@ export function DatenschutzPage() {
               </section>
 
               <section className="mb-6">
-                  <h2 className="mb-2 text-xl font-semibold text-slate-900">
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">
                       Wie lange werden die Daten gespeichert?
                   </h2>
                   <p>
@@ -42,7 +42,7 @@ export function DatenschutzPage() {
               </section>
 
               <section className="mb-6">
-                  <h2 className="mb-2 text-xl font-semibold text-slate-900">
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">
                       Werden Daten weitergegeben?
                   </h2>
                   <p>
@@ -52,7 +52,7 @@ export function DatenschutzPage() {
               </section>
 
               <section className="mb-6">
-                  <h2 className="mb-2 text-xl font-semibold text-slate-900">Zugriff</h2>
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Zugriff</h2>
                   <p>
                       Die Anwendung ist ausschließlich im internen Netz der THM erreichbar. Ein
                       öffentlicher Zugriff ist nicht vorgesehen.
@@ -60,7 +60,7 @@ export function DatenschutzPage() {
               </section>
 
               <section>
-                  <h2 className="mb-2 text-xl font-semibold text-slate-900">Rechtsgrundlage</h2>
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Rechtsgrundlage</h2>
                   <p>
                       Die Verarbeitung erfolgt auf Basis von Art. 6 Abs. 1 lit. e DSGVO sowie Art.
                       9 Abs. 2 lit. j DSGVO.

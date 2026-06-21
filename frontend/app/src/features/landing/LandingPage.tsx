@@ -253,18 +253,18 @@ const faqCategories: FaqCategory[] = [
 ];
 export function LandingPage() {
   return (
-    <div className="bg-slate-50 text-slate-800">
-      <section className="border-b border-slate-200 bg-white px-6 py-16 lg:py-20">
+    <div className="bg-neutral-background text-neutral-textPrimary">
+      <section className="border-b border-neutral-borderDefault bg-neutral-card px-6 py-16 lg:py-20">
         <div className="mx-auto max-w-7xl">
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
             <div>
-              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-blue-700">
+              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-primary">
                 Full methylation analysis
               </p>
-              <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-slate-950 lg:text-6xl">
+              <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-neutral-textPrimary lg:text-6xl">
                 DNA Methylation Analysis Platform
               </h1>
-              <p className="mt-6 max-w-4xl text-base leading-8 text-slate-600 lg:text-lg">
+              <p className="mt-6 max-w-4xl text-base leading-8 text-neutral-textSecondary lg:text-lg">
                 MethylAnalyzer is a web-based platform for DNA methylation analysis.
                 It helps researchers process raw methylation data from Illumina IDAT files
                 without requiring programming or bioinformatics expertise.
@@ -289,7 +289,7 @@ export function LandingPage() {
           <div className="mt-12 flex justify-center">
             <Link
               to="/upload"
-              className="inline-flex min-w-60 items-center justify-center rounded-full bg-blue-600 px-10 py-4 text-lg font-bold text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600"
+              className="inline-flex min-w-60 items-center justify-center rounded-full bg-primary px-10 py-4 text-lg font-bold text-primary-text shadow-lg shadow-primary/20 transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
             >
               Start Analysis
             </Link>
@@ -300,13 +300,13 @@ export function LandingPage() {
       <section id="workflow" aria-labelledby="workflow-title" className="px-6 py-16">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
               Analysis workflow
             </p>
-            <h2 id="workflow-title" className="mt-2 text-3xl font-bold text-slate-950">
+            <h2 id="workflow-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
               From raw files to interpretable results
             </h2>
-            <p className="mt-4 leading-7 text-slate-600">
+            <p className="mt-4 leading-7 text-neutral-textSecondary">
               Follow the five analysis stages while retaining control over normalization and batch
               correction decisions.
             </p>
@@ -316,16 +316,16 @@ export function LandingPage() {
             {workflowSteps.map((step, index) => (
               <li
                 key={step.title}
-                className="relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+                className="relative rounded-2xl border border-neutral-borderDefault bg-neutral-card p-6 shadow-sm"
               >
-                <span className="absolute right-5 top-5 text-sm font-bold text-slate-300">
+                <span className="absolute right-5 top-5 text-sm font-bold text-neutral-borderEmphasis">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-info-badgeBackground text-info-hover">
                   {step.icon}
                 </div>
-                <h3 className="text-lg font-semibold text-slate-950">{step.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-slate-600">{step.description}</p>
+                <h3 className="text-lg font-semibold text-neutral-textPrimary">{step.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-neutral-textSecondary">{step.description}</p>
               </li>
             ))}
           </ol>
@@ -334,17 +334,17 @@ export function LandingPage() {
 
       <section
         aria-labelledby="beginner-title"
-        className="border-y border-slate-200 bg-white px-6 py-16"
+        className="border-y border-neutral-borderDefault bg-neutral-card px-6 py-16"
       >
         <div className="mx-auto max-w-7xl">
           <div className="max-w-4xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-cyan-700">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary-hover">
               Getting started
             </p>
-            <h2 id="beginner-title" className="mt-2 text-3xl font-bold text-slate-950">
+            <h2 id="beginner-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
               New to DNA methylation analysis?
             </h2>
-            <p className="mt-4 leading-7 text-slate-600">
+            <p className="mt-4 leading-7 text-neutral-textSecondary">
             DNA methylation analysis involves several processing steps before reliable
             biological conclusions can be drawn. The concepts below provide a simple
             introduction to the most important parts of the workflow and help new users
@@ -354,12 +354,12 @@ export function LandingPage() {
 
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {beginnerTopics.map((topic) => (
-              <article key={topic.title} className="rounded-xl bg-slate-100 p-5">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-white text-cyan-700 shadow-sm">
+              <article key={topic.title} className="rounded-xl bg-neutral-surface p-5">
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-card text-tertiary-hover shadow-sm">
                   {topic.icon}
                 </div>
-                <h3 className="font-semibold text-slate-950">{topic.title}</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{topic.description}</p>
+                <h3 className="font-semibold text-neutral-textPrimary">{topic.title}</h3>
+                <p className="mt-2 text-sm leading-6 text-neutral-textSecondary">{topic.description}</p>
               </article>
             ))}
           </div>
@@ -369,13 +369,13 @@ export function LandingPage() {
       <section id="help" aria-labelledby="help-title" className="px-6 py-16">
         <div className="mx-auto max-w-5xl">
           <div className="text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
               Help & FAQ
             </p>
-            <h2 id="help-title" className="mt-2 text-3xl font-bold text-slate-950">
+            <h2 id="help-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
               Frequently asked questions
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-600">
+            <p className="mx-auto mt-4 max-w-2xl leading-7 text-neutral-textSecondary">
               Browse common questions by topic. Detailed guidance will be expanded as the
               application documentation evolves.
             </p>
@@ -389,15 +389,15 @@ export function LandingPage() {
                 <section
                   key={category.title}
                   aria-labelledby={categoryId}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                  className="rounded-2xl border border-neutral-borderDefault bg-neutral-card p-5 shadow-sm"
                 >
-                  <h3 id={categoryId} className="mb-3 text-lg font-semibold text-slate-950">
+                  <h3 id={categoryId} className="mb-3 text-lg font-semibold text-neutral-textPrimary">
                     {category.title}
                   </h3>
                   <div className="divide-y divide-slate-200">
                     {category.questions.map((item) => (
                       <details key={item.question} className="group py-3">
-                        <summary className="cursor-pointer list-none rounded-md pr-2 font-medium text-slate-700">
+                        <summary className="cursor-pointer list-none rounded-md pr-2 font-medium text-neutral-textSecondary">
                           {item.question}
                         </summary>
 

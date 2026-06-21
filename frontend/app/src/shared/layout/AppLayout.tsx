@@ -44,7 +44,7 @@ export function AppLayout({ children, resetAction }: AppLayoutProps) {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-neutral-background">
       <AppHeader
         currentPhase={currentPhase}
         currentStepId={currentStep?.id}

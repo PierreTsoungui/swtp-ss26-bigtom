@@ -84,12 +84,12 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-neutral-textSecondary bg-neutral-card border border-neutral-borderEmphasis rounded-md hover:bg-neutral-background transition-colors"
         >
           {showFilters ? <ArrowDropDownIcon /> : <ArrowRightIcon />}
           Filter
           {activeFilterCount > 0 && (
-            <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+            <span className="px-1.5 py-0.5 text-xs bg-info-badgeBackground text-info-badgeText rounded-full">
               {activeFilterCount}
             </span>
           )}
@@ -98,7 +98,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
         {activeFilterCount > 0 && (
           <button
             onClick={onReset}
-            className="text-sm text-slate-500 hover:text-slate-700"
+            className="text-sm text-neutral-textSecondary hover:text-neutral-textPrimary"
           >
             Alle zurücksetzen
           </button>
@@ -107,7 +107,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
 
       {/* Filter Panel */}
       {showFilters && (
-          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="p-4 bg-neutral-background rounded-lg border border-neutral-borderDefault">
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
               {filterDefs.map((filterDef) => (
                   <div key={filterDef.key}>
@@ -115,7 +115,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
                         <select
                             value={(filters as any)[filterDef.key] || ""}
                             onChange={(e) => handleChange(filterDef.key, e.target.value)}
-                            className="w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-neutral-borderEmphasis p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                           <option value="">{filterDef.label}</option>
                           {filterDef.options?.map((opt) => (
@@ -133,7 +133,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
                             step={(filterDef as any).step}
                             min={(filterDef as any).min}
                             max={(filterDef as any).max}
-                            className="w-full border border-slate-300 p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-neutral-borderEmphasis p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                     )}
                   </div>
@@ -145,16 +145,16 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
               <button
                   onClick={onApply}
                   disabled={!hasFilters}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-primary text-primary-text rounded-md text-sm font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                Anwenden
+                Apply
               </button>
 
               <button
                   onClick={onReset}
-                  className="px-4 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+                  className="px-4 py-2 border border-neutral-borderEmphasis rounded-md text-sm font-medium text-neutral-textSecondary hover:bg-neutral-surface transition-colors"
               >
-                Zurücksetzen
+                Reset
               </button>
             </div>
           </div>

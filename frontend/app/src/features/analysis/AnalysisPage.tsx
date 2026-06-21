@@ -45,7 +45,7 @@ export function AnalysisPage() {
 
     if (!job_id) {
         return (
-            <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+            <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">
                 <InfoPanel
                     title="Analyse nicht verfügbar"
                     message="Für diese Analyse wurde keine Job-ID übergeben."
@@ -68,7 +68,7 @@ export function AnalysisPage() {
     if (filterStatsLoading) {
         return (
             <>
-                <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+                <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">
                     <InfoPanel
                         title="Filterstatistik vorbereiten"
                         message="Die Filterung ist noch in Bearbeitung. Bitte warten...">
@@ -90,9 +90,9 @@ export function AnalysisPage() {
     // ── Fehlerfall OHNE Filterstatistiken ─────────────────────────
     if (jobStatus.status === JobStatusValue.FAILED && !filterStats) {
         return (
-            <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+            <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">
                 <section
-                    className="w-full max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 text-red-900 shadow-sm"
+                    className="w-full max-w-2xl rounded-lg border border-danger bg-danger-badgeBackground p-6 text-danger-badgeText shadow-sm"
                     role="alert"
                 >
                     <h1 className="text-2xl font-semibold">
@@ -111,7 +111,7 @@ export function AnalysisPage() {
 
     // ── Hauptansicht ──────────────────────────────────────────────
     return (
-        <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
+        <main className="flex min-h-screen justify-center bg-neutral-background px-6 py-10">
             <div className="w-full max-w-4xl space-y-6">
 
                 {/* Progressbar */}
@@ -129,7 +129,7 @@ export function AnalysisPage() {
                 {/* Fehlerbanner */}
                 {jobStatus.status ===  JobStatusValue.FAILED && filterStats && (
                     <section
-                        className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-900"
+                        className="rounded-lg border border-danger bg-danger-badgeBackground p-4 text-danger-badgeText"
                         role="alert"
                     >
                         <p className="font-semibold">
@@ -147,7 +147,7 @@ export function AnalysisPage() {
                 {/* Hinweis wenn Vorschau bereit */}
                 {isPreviewReady && (
                     <section
-                        className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900"
+                        className="rounded-lg border border-info bg-info-badgeBackground p-4 text-info-badgeText"
                         aria-live="polite"
                     >
                         <p className="font-semibold">

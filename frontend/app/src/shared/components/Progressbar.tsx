@@ -27,7 +27,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
     // const { cancelJob, isLoading: isLoadingJobAbort, error: cancelError } = useJobCancel(jobStatus.job_id, handleCancelSuccess);
 
     return (
-        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-neutral-borderDefault bg-neutral-card p-5 shadow-sm">
             {/* Error PopUp Snackbar */}
             {/*cancelError && (
                 <ErrorMessage
@@ -41,17 +41,17 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
             {/* Header */}
             <div className="mb-4 flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-800">
+                    <h2 className="text-lg font-semibold text-neutral-textPrimary">
                         {jobStatus.phase === JobPhase.NORMALIZATION_PREVIEW
-                            ? "Normalisierungsvorschau wird erstellt"
-                            : "Analyse läuft"}
+                            ? "Creating normalization preview..."
+                            : "Analyzing"}
                     </h2>
-                    {/*<p className="text-sm text-gray-500">
+                    {/*<p className="text-sm text-neutral-textSecondary">
                         `Schritte ${jobStatus.steps_completed} von ${jobStatus.steps_total}`
                     </p>*/}
                 </div>
 
-                <div className="min-w-17.5 text-right text-sm font-medium text-gray-700">
+                <div className="min-w-17.5 text-right text-sm font-medium text-neutral-textSecondary">
                     {jobStatus.progress_percent}%
                 </div>
             </div>
@@ -67,21 +67,21 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
 
             {/* Cancel Status*/}
             {/*isLoadingJobAbort && (
-                <p className="text-sm text-gray-500 mb-3">Job wird abgebrochen...</p>
+                <p className="text-sm text-neutral-textSecondary mb-3">Job wird abgebrochen...</p>
             )*/}
 
             {/* Infos */}
-            <div className="space-y-3 text-sm text-gray-700">
+            <div className="space-y-3 text-sm text-neutral-textSecondary">
                 <div className="flex flex-col gap-1">
-                    <span className="font-medium text-gray-500">
-                        Aktueller Schritt
+                    <span className="font-medium text-neutral-textSecondary">
+                        Current step
                     </span>
                     <span>{jobStatus.current_step}</span>
                 </div>
 
                 {/*jobStatus.estimated_seconds_remaining !== null && (
                     <div className="flex flex-col gap-1">
-                        <span className="font-medium text-gray-500">
+                        <span className="font-medium text-neutral-textSecondary">
                             Verbleibende Zeit
                         </span>
                         <span>
@@ -103,7 +103,7 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
                     <button
                     onClick={onNext}
                     disabled={nextDisabled}
-                    className="inline-flex min-w-24 items-center justify-center rounded-full bg-blue-500 px-6 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:bg-gray-300"
+                    className="inline-flex min-w-24 items-center justify-center rounded-full bg-primary px-6 py-3 font-bold text-primary-text transition-colors hover:bg-primary-hover disabled:bg-neutral-borderEmphasis"
                     >
                     Next
                     </button>

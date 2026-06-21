@@ -12,7 +12,7 @@ function BackButton() {
     let navigate = useNavigate();
     return (
         <button
-            className="flex items-center gap-1 text-gray-600 hover:text-gray-800 transition-colors"
+            className="flex items-center gap-1 text-neutral-textSecondary hover:text-neutral-textPrimary transition-colors"
             onClick={() => navigate(-1)}
         >
                 <ArrowBackIcon /> Back

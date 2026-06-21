@@ -17,15 +17,15 @@ export function StepIndicator({ currentStepId }: StepIndicatorProps) {
                 aria-current={isCurrent ? "step" : undefined}
                 className={`flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold ${
                   isCurrent
-                    ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-slate-300 bg-white text-slate-700"
+                    ? "border-primary bg-primary text-primary-text"
+                    : "border-neutral-borderEmphasis bg-neutral-card text-neutral-textSecondary"
                 }`}
               >
                 {step.id}
               </span>
               <span
                 className={`hidden whitespace-nowrap sm:inline ${
-                  isCurrent ? "font-semibold text-blue-700" : "text-slate-600"
+                  isCurrent ? "font-semibold text-primary" : "text-neutral-textSecondary"
                 }`}
               >
                 {step.label}

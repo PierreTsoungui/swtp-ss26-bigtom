@@ -7,7 +7,7 @@
 function LoadingScreen({ message, isError = false }: { message: string; isError?: boolean }) {
     return (
         <main className="flex min-h-screen items-center justify-center">
-            <p className={isError ? "text-red-500" : "text-slate-500"}>{message}</p>
+            <p className={isError ? "text-danger" : "text-neutral-textSecondary"}>{message}</p>
         </main>
     );
 }

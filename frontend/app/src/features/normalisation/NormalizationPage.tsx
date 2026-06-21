@@ -77,7 +77,7 @@ export function NormalizationPage() {
   const isDisabled : boolean = !selected || isSubmitting || isNormalising;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10">
+    <main className="min-h-screen bg-neutral-background px-6 py-10">
       {/* MODAL für Plot-Vorschau */}
       {previewImage && (
         <PlotModal
@@ -88,17 +88,17 @@ export function NormalizationPage() {
       )}
 
       <div className="mb-2 flex items-center gap-2">
-        <h1 className="text-2xl font-semibold text-slate-900">
-          Normalisierungsmethode auswählen
+        <h1 className="text-2xl font-semibold text-neutral-textPrimary">
+            Choose a normalization method
         </h1>
         <HelpButton
           helpText={helpTexts.normalization}
-          ariaLabel="Hilfe zur Normalisierung öffnen"
+          ariaLabel="Open Help with normalization"
           dialogTitle="Normalization"
         />
       </div>
-      <p className="mb-8 text-slate-500">
-        Klicken Sie auf einen Plot für eine vergrößerte Ansicht
+      <p className="mb-8 text-neutral-textSecondary">
+          Click a plot for an enlarged view.
       </p>
 
       {/* METHOD CARDS (5 methods) */}
@@ -126,15 +126,15 @@ export function NormalizationPage() {
           onClick={handleConfirm}
           disabled={isDisabled}
           className={`
-            rounded-full px-10 py-3 font-bold text-white
+            rounded-full px-10 py-3 font-bold text-primary-text
             transition-colors
             ${isDisabled
-              ? "cursor-not-allowed bg-slate-300"
-              : "bg-blue-600 hover:bg-blue-700"
+              ? "cursor-not-allowed bg-neutral-borderEmphasis"
+              : "bg-primary hover:bg-primary-hover"
             }
           `}
         >
-          {isSubmitting ? "Wird gestartet..." : `Methode bestätigen`}
+          {isSubmitting ? "Starting..." : `Confirm method`}
         </button>
       </div>
     </main>
