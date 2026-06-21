@@ -20,8 +20,9 @@ describe("LandingPage", () => {
       screen.getByText(/web-based platform for DNA methylation analysis/i),
     ).toBeInTheDocument();
 
+    // Mis à jour conformément aux corrections linguistiques du ticket #3949
     expect(
-      screen.getByText(/without requiring programming or bioinformatics expertise/i),
+      screen.getByText(/minimizing the need for extensive programming or bioinformatics expertise/i),
     ).toBeInTheDocument();
   });
 
@@ -44,30 +45,27 @@ describe("LandingPage", () => {
   });
 
   it("zeigt Workflow Sektion korrekt", () => {
-  renderApp("/");
+    renderApp("/");
 
-  expect(
-    screen.getByRole("heading", {
-      name: "From raw files to interpretable results",
-    }),
-  ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "From raw files to interpretable results",
+      }),
+    ).toBeInTheDocument();
 
-  const workflowSteps = [
-    "Select Files",
-    "Initial Filtering",
-    "Normalization",
-    "Optional Batch Correction",
-    "Results",
-  ];
+    const workflowSteps = [
+      "Select Files",
+      "Initial Filtering",
+      "Normalization",
+      "Optional Batch Correction",
+      "Results",
+    ];
 
-  workflowSteps.forEach((step) => {
-    
-    const headings = screen.getAllByRole("heading", { name: step });
-    
-    expect(headings[0]).toBeInTheDocument();
+    workflowSteps.forEach((step) => {
+      const headings = screen.getAllByRole("heading", { name: step });
+      expect(headings[0]).toBeInTheDocument();
+    });
   });
-});
-
 
   it("zeigt Beginner Section", () => {
     renderApp("/");
@@ -105,20 +103,38 @@ describe("LandingPage", () => {
     renderApp("/");
 
     expect(
-      screen.getByText("What file formats are supported for the Sample Sheet?"),
+      screen.getByText("What is a Sample Sheet and what information does it contain?"),
     ).toBeInTheDocument();
 
     expect(
       screen.getByText("What is normalization and why is it necessary?"),
     ).toBeInTheDocument();
 
+    // Espace fautif supprimé conformément à la correction typographique
     expect(
-      screen.getByText("What is a DMP ?"),
+      screen.getByText("What is a DMP?"),
     ).toBeInTheDocument();
 
     expect(
       screen.getByText("What does the PCA plot show?"),
     ).toBeInTheDocument();
+  });
+
+      //EXTENSION : SURVEILLANCE DU GLOSSAIRE
+
+  it("zeigt das biologische Glossar korrekt", () => {
+    renderApp("/");
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Biological & Technical Glossary",
+      }),
+    ).toBeInTheDocument();
+
+    // Vérification que les termes du dictionnaire interne s'affichent
+    expect(screen.getByText("detP (Detection p-value)")).toBeInTheDocument();
+    expect(screen.getByText("CpG Site")).toBeInTheDocument();
+    expect(screen.getByText("Batch Effect")).toBeInTheDocument();
   });
 
   it("upload route bleibt erreichbar", () => {
