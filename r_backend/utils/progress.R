@@ -42,20 +42,3 @@ emit_done <- function(...) {
   cat(jsonlite::toJSON(msg, auto_unbox = TRUE), "\n")
   flush.console()
 }
-
-#' Sendet ein Plot-Meta-Event an stdout (für Preview/Plot-Pipeline)
-#' @param method character - Name der Methode (z.B. "raw", "noob")
-#' @param plot_kind character - Art des Plots ("density","pca","svd")
-#' @param file character - Dateiname des generierten Plots
-emit_plot <- function(method, plot_kind, file) {
-  cat(jsonlite::toJSON(
-    list(
-      type = "plot",
-      method = as.character(method),
-      plot_kind = as.character(plot_kind),
-      file = as.character(file)
-    ),
-    auto_unbox = TRUE
-  ), "\n")
-  flush.console()
-}

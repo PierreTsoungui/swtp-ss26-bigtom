@@ -259,32 +259,51 @@ dmr_table <- if (is.list(dmr_raw) && !is.data.frame(dmr_raw)) {
   dmr_raw
 }
 
-if (is.null(dmr_table) || nrow(dmr_table) == 0) {
-  emit_error(sprintf("Filtering constraint violation: No significant DMR regions remaining after threshold filter (adjPvalDmr <= %g). Try relaxing the p-value parameters.", adj_pval))
-}
+# No DMR regions passing the threshold is a valid scientific outcome, NOT an
+# execution error. Build a well-formed EMPTY result and complete gracefully, so
+# the frontend shows "no significant results" from the empty table. A genuine
+# parsing failure (non-empty input but unusable output) is still an error below.
+no_significant_dmrs <- is.null(dmr_table) || nrow(dmr_table) == 0
 
-# ── Ausgabe formatieren ──────────────────────────────────────────────────────
-emit_progress(90, "Formatting and extracting genomic region metrics tables")
+if (no_significant_dmrs) {
+  emit_progress(90, sprintf(
+    "Analysis complete: no DMR regions pass the threshold (adjPvalDmr <= %g).", adj_pval))
+  dmr_out <- data.frame(
+    ID       = character(0),
+    N_DMPs   = numeric(0),
+    CHR      = character(0),
+    START    = numeric(0),
+    STOP     = numeric(0),
+    WIDTH    = numeric(0),
+    P_VALUE  = numeric(0),
+    MEANDIFF = numeric(0),
+    stringsAsFactors = FALSE
+  )
+} else {
+  # ── Ausgabe formatieren ────────────────────────────────────────────────────
+  emit_progress(90, "Formatting and extracting genomic region metrics tables")
 
-get_col <- function(df, candidates, fallback = NA_real_) {
-  col <- intersect(candidates, colnames(df))[1]
-  if (is.na(col)) fallback else df[[col]]
-}
+  get_col <- function(df, candidates, fallback = NA_real_) {
+    col <- intersect(candidates, colnames(df))[1]
+    if (is.na(col)) fallback else df[[col]]
+  }
 
-dmr_out <- data.frame(
-  ID       = paste0("DMR_", seq_len(nrow(dmr_table))),
-  N_DMPs   = get_col(dmr_table, c("L", "nCpGs", "nprobes")),
-  CHR      = get_col(dmr_table, c("seqnames", "chr")),
-  START    = get_col(dmr_table, c("start")),
-  STOP     = get_col(dmr_table, c("end")),
-  WIDTH    = get_col(dmr_table, c("width")),
-  P_VALUE  = get_col(dmr_table, c("p.valueArea", "p.value")),
-  MEANDIFF = get_col(dmr_table, c("value", "meanDiff")),
-  stringsAsFactors = FALSE
-)
+  dmr_out <- data.frame(
+    ID       = paste0("DMR_", seq_len(nrow(dmr_table))),
+    N_DMPs   = get_col(dmr_table, c("L", "nCpGs", "nprobes")),
+    CHR      = get_col(dmr_table, c("seqnames", "chr")),
+    START    = get_col(dmr_table, c("start")),
+    STOP     = get_col(dmr_table, c("end")),
+    WIDTH    = get_col(dmr_table, c("width")),
+    P_VALUE  = get_col(dmr_table, c("p.valueArea", "p.value")),
+    MEANDIFF = get_col(dmr_table, c("value", "meanDiff")),
+    stringsAsFactors = FALSE
+  )
 
-if (nrow(dmr_out) == 0) {
-  emit_error("DMR parsing failure: Formatted output data frame contains 0 records.")
+  # With a non-empty input, an empty formatted frame indicates a real parsing bug.
+  if (nrow(dmr_out) == 0) {
+    emit_error("DMR parsing failure: Formatted output data frame contains 0 records.")
+  }
 }
 
 # ── Ergebnisse speichern ─────────────────────────────────────────────────────
@@ -298,9 +317,10 @@ saveRDS(dmr_out, output_rds)
 
 # Finale Erfolgsmeldung an das Backend abgeben
 emit_done(
-  output_csv = output_csv,
-  output_rds = output_rds,
-  total_dmrs = nrow(dmr_out)
+  output_csv     = output_csv,
+  output_rds     = output_rds,
+  total_dmrs     = nrow(dmr_out),
+  no_significant = no_significant_dmrs
 )
 
 quit(save = "no", status = 0)

@@ -1,8 +1,8 @@
 # app/api/routes/batch.py
-from fastapi import APIRouter, BackgroundTasks, status
+from fastapi import APIRouter, Request, status
 from fastapi.responses import FileResponse
 
-from app.core.error_types import BatchException, ErrorTypes
+from app.core.error_types import BatchException, ErrorTypes, problem_detail
 from app.models.batch import (
     BatchHistoryResponse, BatchRunResponse,
     BatchSkipResponse, BatchSettingsPayload,
@@ -10,6 +10,7 @@ from app.models.batch import (
 )
 from app.services import batch_service, job_manager
 from app.services.job_manager import transition_job, JobPhase, JobStatusValue
+from app.services.pipeline_task import start_job_pipeline
 
 router = APIRouter()
 
@@ -36,15 +37,14 @@ def get_svd_plot(job_id: str, round_id: int):
 
 
 @router.post("/{job_id}", status_code=status.HTTP_202_ACCEPTED, response_model=BatchRunResponse)
-def run_batch_correction(
+async def run_batch_correction(
     job_id: str,
     payload: BatchSettingsPayload,
-    background_tasks: BackgroundTasks,
+    request: Request,
 ):
     job_dir  = batch_service.get_job_dir_or_404(job_id)
     settings = payload.batch_correction
 
-    # Batch-Variable gegen SampleSheet validieren
     available_cols = batch_service.get_available_columns_from_samplesheet(job_dir)
     if settings.batch_variable not in available_cols:
         raise BatchException(
@@ -54,7 +54,6 @@ def run_batch_correction(
             available=available_cols,
         )
 
-    # Parallelstart verhindern
     current_job = job_manager.get_job(job_id)
     if current_job and current_job.status == JobStatusValue.RUNNING.value:
         raise BatchException(
@@ -62,7 +61,6 @@ def run_batch_correction(
             detail="Eine Pipeline läuft bereits für diesen Job.",
         )
 
-    # Batch-Variable darf nicht gleichzeitig Kovariate sein
     if settings.batch_variable in settings.covariates:
         raise BatchException(
             ErrorTypes.COVARIATE_EQUALS_BATCH,
@@ -71,11 +69,25 @@ def run_batch_correction(
             provided_covariates=settings.covariates,
         )
 
-    # Nächste Runden-Nummer
-    history_data = batch_service.load_history(job_dir, job_id)
-    next_round   = history_data.get("current_round", 1) + 1
+    # Removing the analysis phenotype as a "batch effect" would erase the very
+    # group difference DMP/DMR test for, producing empty downstream results.
+    if settings.batch_variable == batch_service.PHENOTYPE_COLUMN:
+        raise BatchException(
+            ErrorTypes.INVALID_BATCH_VARIABLE,
+            detail=(
+                f"'{batch_service.PHENOTYPE_COLUMN}' ist die Vergleichsgruppe der "
+                "Downstream-Analyse (DMP/DMR) und darf nicht als Batch-Variable entfernt "
+                "werden — das würde genau das biologische Signal löschen, das die Analyse "
+                "sucht. Wähle eine technische Variable (z. B. Sentrix_ID/Sentrix_Position) "
+                f"als Batch-Variable und '{batch_service.PHENOTYPE_COLUMN}' höchstens als "
+                "zu schützende Kovariate."
+            ),
+            provided=settings.batch_variable,
+        )
 
-    # Batch-Phase starten
+    history_data = batch_service.load_history(job_dir, job_id)
+    next_round   = batch_service.next_correction_round(history_data)
+
     try:
         transition_job(
             job_id,
@@ -84,50 +96,54 @@ def run_batch_correction(
             progress_percent=0,
             current_step="Starte Batch-Korrektur...",
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=409,
-            detail=problem_detail(
-                error_type=ErrorTypes.INVALID_JOB_STATE,
-                detail=str(e),
-                instance=request.url.path,
-                job_id=job_id,
-                current_phase=job.phase,
-                current_status=job.status,
-            ),
+    except Exception as e:
+        raise BatchException(
+            ErrorTypes.INVALID_STATE_TRANSITION,
+            detail=str(e),
         )
 
-    background_tasks.add_task(
-        batch_service.run_batch_pipeline_task,
+    settings_dict = settings.model_dump()
+
+    start_job_pipeline(
         job_id,
-        settings.model_dump(),
-        next_round,
-        job_dir,
+        lambda cancel_event: batch_service.run_batch_pipeline_task(
+            job_id, settings_dict, next_round, job_dir, cancel_event
+        ),
     )
 
     return {"job_id": job_id, "status": JobStatusValue.RUNNING.value, "round": next_round}
 
 
 @router.post("/{job_id}/skip", status_code=status.HTTP_202_ACCEPTED, response_model=BatchSkipResponse)
-def skip_batch_correction(job_id: str, background_tasks: BackgroundTasks):
+async def skip_batch_correction(job_id: str):
     job_dir = batch_service.get_job_dir_or_404(job_id)
 
-    current_job = job_manager.get_job(job_id)
+    # "Proceed to analysis" entry point. If a batch correction has already run
+    # (corrected_data.rds exists), analyse the corrected data; otherwise fall
+    # back to the uncorrected normalized data.
+    has_correction = (job_dir / "corrected_data.rds").exists()
+    step = (
+        "Starte Downstream-Analyse mit batch-korrigierten Daten..."
+        if has_correction
+        else "Batch-Korrektur übersprungen. Starte Downstream-Analyse..."
+    )
 
-    # Direkt zu Analysis springen (Batch überspringen)
     transition_job(
         job_id,
         new_phase=JobPhase.ANALYSIS,
         new_status=JobStatusValue.RUNNING,
         progress_percent=0,
-        current_step="Batch-Korrektur übersprungen. Starte Downstream-Analyse...",
+        current_step=step,
     )
 
-    background_tasks.add_task(
-        batch_service.run_downstream_analysis_workflow,
+    start_job_pipeline(
         job_id,
-        str(job_dir),
-        extract_from_normalized=True,
+        lambda cancel_event: batch_service.run_downstream_analysis_task(
+            job_id,
+            str(job_dir),
+            cancel_event,
+            extract_from_normalized=not has_correction,
+        ),
     )
 
     return {"job_id": job_id, "status": JobStatusValue.RUNNING.value}

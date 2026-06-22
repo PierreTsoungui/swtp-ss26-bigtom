@@ -1,5 +1,5 @@
 # app/api/routes/heatmap.py
-from fastapi import APIRouter, BackgroundTasks, status
+from fastapi import APIRouter, status
 from fastapi.responses import FileResponse
 
 from app.core.error_types import AppException, ErrorTypes
@@ -12,9 +12,9 @@ from app.services import heatmap_service, job_manager
 from app.services.job_manager import transition_job, JobPhase, JobStatusValue
 from app.services.batch_service import find_sample_sheet_name
 from app.services.heatmap_service import get_grouping_options_from_samplesheet
+from app.services.pipeline_task import start_job_pipeline
 
 router = APIRouter()
-
 HEATMAP_FILENAME = "heatmap.png"
 
 
@@ -26,11 +26,9 @@ def get_heatmap_options(job_id: str):
 
 
 @router.post("/{job_id}", response_model=HeatmapRunResponse, status_code=status.HTTP_202_ACCEPTED)
-def run_heatmap(job_id: str, payload: HeatmapRequest, background_tasks: BackgroundTasks):
-    # Job-Verzeichnis
+async def run_heatmap(job_id: str, payload: HeatmapRequest):
     job_dir = heatmap_service.get_job_dir_or_404(job_id)
 
-    # Parallelstart verhindern
     current_job = job_manager.get_job(job_id)
     if current_job and current_job.status == JobStatusValue.RUNNING.value:
         raise AppException(
@@ -38,9 +36,7 @@ def run_heatmap(job_id: str, payload: HeatmapRequest, background_tasks: Backgrou
             detail="Eine Pipeline läuft bereits für diesen Job.",
         )
 
-    # Grouping-Spalten validieren
     available_cols = get_grouping_options_from_samplesheet(job_dir)
-
     if payload.grouping.primary not in available_cols:
         raise AppException(
             ErrorTypes.INVALID_GROUPING_COLUMN,
@@ -63,11 +59,9 @@ def run_heatmap(job_id: str, payload: HeatmapRequest, background_tasks: Backgrou
             detail="Primäre und sekundäre Gruppierungsspalte dürfen nicht identisch sein.",
         )
 
-    # DMP-RDS und SampleSheet lokalisieren
     dmp_rds    = heatmap_service._find_dmp_rds(job_dir)
     sheet_name = find_sample_sheet_name(str(job_dir))
 
-    # Heatmap-Phase starten
     transition_job(
         job_id,
         new_phase=JobPhase.HEATMAP,
@@ -76,14 +70,12 @@ def run_heatmap(job_id: str, payload: HeatmapRequest, background_tasks: Backgrou
         current_step="Heatmap-Generierung gestartet...",
     )
 
-    background_tasks.add_task(
-        heatmap_service.run_heatmap_pipeline_task,
+    start_job_pipeline(
         job_id,
-        job_dir,
-        dmp_rds,
-        sheet_name,
-        payload.grouping,
-        payload.dmp_filter,
+        lambda cancel_event: heatmap_service.run_heatmap_pipeline_task(
+            job_id, job_dir, dmp_rds, sheet_name,
+            payload.grouping, payload.dmp_filter, cancel_event,
+        ),
     )
 
     return {

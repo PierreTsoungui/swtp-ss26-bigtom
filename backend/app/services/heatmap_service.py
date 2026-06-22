@@ -1,17 +1,21 @@
 # app/services/heatmap_service.py
-
+import asyncio
 import csv
 import json
-import os
+import logging
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Optional
 
 from app.core.error_types import AppException, ErrorTypes
 from app.models.heatmap import DmpFilterPayload, GroupingPayload
-from app.services.r_executor import run_r_script
+from app.services import job_manager
+from app.services.r_executor import run_r_script, HeatmapCommand
 from app.services.batch_service import find_sample_sheet_name
 from app.services.job_manager import transition_job, set_progress, get_job, JobPhase, JobStatusValue
+
+logger = logging.getLogger(__name__)
 
 JOBS_DIR         = Path("jobs").resolve()
 MAX_CPGS         = 500
@@ -86,105 +90,115 @@ def _build_r_env(
 # ── Async pipeline task ───────────────────────────────────────────────────────
 
 async def run_heatmap_pipeline_task(
-    job_id:     str,
-    job_dir:    Path,
-    dmp_rds:    Path,
-    sheet_name: str,
-    grouping:   GroupingPayload,
-    dmp_filter: Optional[DmpFilterPayload],
-):
+    job_id:      str,
+    job_dir:     Path,
+    dmp_rds:     Path,
+    sheet_name:  str,
+    grouping:    GroupingPayload,
+    dmp_filter:  Optional[DmpFilterPayload],
+    cancel_event: asyncio.Event,
+) -> None:
     """
     Führt heatmap.R im Docker-Container aus und aktualisiert den Job-Status
-    live per on_progress-Callback. Wird als BackgroundTask gestartet.
+    live per on_progress-Callback.
+
+    Wird ausschließlich über start_job_pipeline() gestartet, das:
+      - cancel_event erzeugt und registriert
+      - den asyncio.Task registriert (für deterministisches /reset-Warten)
+      - unregister_cancel_event + unregister_job_task im finally übernimmt
+
+    Deshalb: kein eigenes Event erzeugen, kein manuelles unregister hier.
     transition_job zu HEATMAP+RUNNING erfolgt bereits in der Route.
     """
-    try:
-        # Initialen Fortschritt setzen (Phase bereits durch Route auf HEATMAP+RUNNING gesetzt)
-        set_progress(job_id, percent=0, message="Starte Heatmap-Generierung...")
+    set_progress(job_id, percent=0, message="Starte Heatmap-Generierung...")
 
-        # ── Progress-Callback ──────────────────────────────────────────────────
-        async def on_progress(data: dict):
-            if not isinstance(data, dict):
-                return
-            if data.get("type") == "progress":
-                step  = int(data.get("step", 1))
-                total = int(data.get("total_steps", 8))
-                pct   = 5 + int((step / total) * 90)
-                set_progress(job_id, percent=pct, message=data.get("message", ""))
+    # ── Progress-Callback ──────────────────────────────────────────────────
+    async def on_progress(data: dict):
+        if not isinstance(data, dict):
+            return
+        if data.get("type") == "progress":
+            step  = int(data.get("step", 1))
+            total = int(data.get("total_steps", 8))
+            pct   = 5 + int((step / total) * 90)
+            set_progress(job_id, percent=pct, message=data.get("message", ""))
 
-        # ── R-Skript aufrufen ──────────────────────────────────────────────────
-        r_env = _build_r_env(grouping, dmp_filter)
+    # ── R-Skript aufrufen ──────────────────────────────────────────────────
+    r_env = _build_r_env(grouping, dmp_filter)
 
-        result = await run_r_script(
+    result = await run_r_script(
+        command=HeatmapCommand(
             script="heatmap.R",
             job_id=job_id,
             job_dir=str(job_dir),
             sample_sheet=sheet_name,
-            mode="heatmap",
-            script_args=[
-                str(dmp_rds.name),
-                sheet_name,
-            ],
-            on_progress=on_progress,
+            result_rds_name=str(dmp_rds.name),
+            sample_sheet_name=sheet_name,
             extra_env=r_env,
-        )
+        ),
+        cancel_event=cancel_event,
+        on_progress=on_progress,
+    )
 
-        # ── Fehlerfall ─────────────────────────────────────────────────────────
-        if result.get("returncode") != 0:
-            stdout    = result.get("stdout", "")
-            too_many  = _parse_too_many_cpgs(stdout)
+    # ── Cancellation ───────────────────────────────────────────────────────
+    if result.is_cancelled:
+        logger.info("Heatmap-Generierung abgebrochen: job_id=%s", job_id)
+        return
 
-            error_payload = {
-                "type":     "https://api.bigtom.swtp/errors/heatmap-too-many-cpgs",
-                "title":    "Too many CpGs for heatmap",
-                "status":   400,
-                "detail":   (
-                    f"At most {MAX_CPGS} allowed. "
-                    f"Found: {too_many if too_many else 'unknown count'}."
-                ),
-                "instance": f"/api/v1/heatmap/{job_id}",
-            }
-
-            transition_job(
-                job_id,
-                new_phase=JobPhase.HEATMAP,
-                new_status=JobStatusValue.FAILED,
-                current_step=error_payload["detail"],
-                error=error_payload,
-            )
-            return
-
-        # ── Erfolg ─────────────────────────────────────────────────────────────
-        transition_job(
-            job_id,
-            new_phase=JobPhase.HEATMAP,
-            new_status=JobStatusValue.COMPLETED,
-            progress_percent=100,
-            current_step="Heatmap erfolgreich generiert.",
-        )
-        transition_job(
-            job_id,
-            new_phase=JobPhase.RESULTS,
-            new_status=JobStatusValue.WAITING,
-            current_step="Heatmap abgeschlossen. Zurück zur Ergebnisansicht.",
-        )
-
-    except Exception as exc:
-        print(f"[HEATMAP PIPELINE ERROR] {exc}", flush=True)
+    # ── Timeout ────────────────────────────────────────────────────────────
+    if result.is_timeout:
+        logger.error("Heatmap-Generierung Timeout: job_id=%s", job_id)
         transition_job(
             job_id,
             new_phase=JobPhase.HEATMAP,
             new_status=JobStatusValue.FAILED,
-            current_step=f"Kritischer Fehler: {exc}",
-            error={"detail": str(exc)},
+            current_step="Fehler: heatmap.R hat das Zeitlimit überschritten.",
+            error={"detail": "Heatmap generation timeout."},
         )
+        return
+
+    # ── Fehlerfall ─────────────────────────────────────────────────────────
+    if not result.is_success:
+        too_many = _parse_too_many_cpgs(result.stdout)
+
+        error_payload = {
+            "type":     "https://api.bigtom.swtp/errors/heatmap-too-many-cpgs",
+            "title":    "Too many CpGs for heatmap",
+            "status":   400,
+            "detail":   (
+                f"At most {MAX_CPGS} allowed. "
+                f"Found: {too_many if too_many else 'unknown count'}."
+            ),
+            "instance": f"/api/v1/heatmap/{job_id}",
+        }
+
+        transition_job(
+            job_id,
+            new_phase=JobPhase.HEATMAP,
+            new_status=JobStatusValue.FAILED,
+            current_step=error_payload["detail"],
+            error=error_payload,
+        )
+        return
+
+    # ── Erfolg ─────────────────────────────────────────────────────────────
+    transition_job(
+        job_id,
+        new_phase=JobPhase.HEATMAP,
+        new_status=JobStatusValue.COMPLETED,
+        progress_percent=100,
+        current_step="Heatmap erfolgreich generiert.",
+    )
+    transition_job(
+        job_id,
+        new_phase=JobPhase.RESULTS,
+        new_status=JobStatusValue.WAITING,
+        current_step="Heatmap abgeschlossen. Zurück zur Ergebnisansicht.",
+    )
 
 
 # ── Helper: R-Output parsen ───────────────────────────────────────────────────
 
 def _parse_too_many_cpgs(stdout: str) -> Optional[int]:
-    import re
-
     for line in stdout.splitlines():
         try:
             data = json.loads(line)

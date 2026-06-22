@@ -232,8 +232,17 @@ dmp <- data.frame(
 dmp <- dmp[!is.na(dmp$GROUP1_AVG) & !is.na(dmp$GROUP2_AVG), ]
 dmp_filtered <- dmp[!is.na(dmp$ADJ_P) & dmp$ADJ_P <= adjPVal, ]
 
-if (nrow(dmp_filtered) == 0) {
-  emit_error(sprintf("Filtering constraint violation: No significant DMPs remaining after threshold filter (adjPVal <= %g). Minimum observed p-value was: %g", adjPVal, min(dmp$ADJ_P, na.rm = TRUE)))
+# An empty result after the threshold filter is a valid scientific outcome
+# (nothing is significant at this adjPVal), NOT an execution error. Continue and
+# write an empty, well-formed result set so the pipeline completes gracefully —
+# the empty table (total_rows = 0) is how the frontend shows "no significant
+# results". dmp_filtered already has the correct columns with zero rows.
+no_significant_dmps <- nrow(dmp_filtered) == 0
+if (no_significant_dmps) {
+  min_p <- if (any(!is.na(dmp$ADJ_P))) min(dmp$ADJ_P, na.rm = TRUE) else NA_real_
+  emit_progress(95, sprintf(
+    "Analysis complete: no DMPs pass adjPVal <= %g (minimum observed adjusted p-value: %g).",
+    adjPVal, min_p))
 }
 
 # ── DMR-Linking über genomische Position ─────────────────────────────────────
@@ -271,9 +280,10 @@ saveRDS(dmp_filtered,   output_rds)
 
 # Finale Erfolgsmeldung an das Backend abgeben
 emit_done(
-  output_csv = output_csv,
-  output_rds = output_rds,
-  total_dmps = nrow(dmp_filtered)
+  output_csv     = output_csv,
+  output_rds     = output_rds,
+  total_dmps     = nrow(dmp_filtered),
+  no_significant = no_significant_dmps
 )
 
 quit(save = "no", status = 0)
