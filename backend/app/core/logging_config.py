@@ -7,7 +7,7 @@ def setup_logging():
     date_format = "%Y-%m-%d %H:%M:%S"
 
     # Dynamisches Log-Level aus .env / Umgebungsvariable (Default: INFO für Production)
-    env_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    env_level = os.getenv("LOG_LEVEL", "DEBUG").upper()
     log_level = getattr(logging, env_level, logging.INFO)
 
     logging.basicConfig(
