@@ -22,6 +22,7 @@ import ErrorMessage from "../../../../shared/error-handling/components/ErrorMess
 import downloadHeatmap from "../../utils/downloadHeatmap.ts";
 import type {HeatmapDmpFilter} from "../../utils/types.ts";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../../../shared/utils/JobTypes.ts";
+import type {ProblemDetail} from "../../../../shared/error-handling/types/ErrorTypes.ts";
 
 
 type HeatMapProps = {
@@ -55,7 +56,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const [persistentError, setPersistentError] = useState<any | null>(null);
+    const [persistentError, setPersistentError] = useState<ProblemDetail | Error | string | null>(null);
 
     const {
         data: options,
@@ -69,7 +70,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         generateHeatMap,
     } = useGenerateHeatMap(job_id ?? null);
 
-    const backendHeatmapError = jobStatus?.phase === JobPhase.HEATMAP && jobStatus?.status === JobStatusValue.FAILED;
+    const backendHeatmapError = (jobStatus?.phase === JobPhase.HEATMAP && jobStatus?.status === JobStatusValue.FAILED) ? jobStatus.error : null;
 
     console.log("backendHeatmapError", backendHeatmapError);
     console.log("jobStatus.error", jobStatus?.error);
@@ -92,7 +93,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         }
     }, [jobStatus]);
 
-    const displayedError = error ?? persistentError ?? backendHeatmapError;
+    const displayedError = error ?? persistentError ?? backendHeatmapError ?? null;
 
     const handleGenerate = async () => {
         if (!primaryGrouping) {
@@ -269,7 +270,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
                     {/* Error */}
                     {displayedError && (
-                        <ErrorMessage open={true} error={displayedError} vertical="top" horizontal="center" />
+                        <ErrorMessage open={true} error={displayedError} vertical="top" horizontal="center" onClose={() => setPersistentError(null)}/>
                     )}
 
 
