@@ -9,7 +9,7 @@ import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 import HelpButton from "../analysis/components/HelpButton.tsx";
-import {helpTexts} from "../help/helpTexts.ts";
+import {helpTexts} from "../../shared/utils/help/helpTexts.ts";
 
 
 /**

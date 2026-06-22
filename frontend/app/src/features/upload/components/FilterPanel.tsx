@@ -20,7 +20,7 @@ import XYChromosomesFilter from "./XYChromosomesFilter.tsx";
 import {SampleQuality} from "./SampleQuality.tsx";
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import HelpButton from "../../analysis/components/HelpButton.tsx";
-import { helpTexts } from "../../help/helpTexts.ts";
+import { helpTexts } from "../../../shared/utils/help/helpTexts.ts";
 
 type FilterPanelProps = {
     filterSettings: FilterSettings;

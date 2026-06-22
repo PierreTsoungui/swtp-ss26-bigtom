@@ -1,5 +1,5 @@
 import HelpButton from "../../analysis/components/HelpButton";
-import { helpTexts } from "../../help/helpTexts";
+import { helpTexts } from "../../../shared/utils/help/helpTexts";
 
 type Props = {
   activeTab: "dmp" | "dmr";

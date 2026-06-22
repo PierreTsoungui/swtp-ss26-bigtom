@@ -10,7 +10,7 @@ import {
     Alert,
 } from "@mui/material";
 import HelpButton from "../../analysis/components/HelpButton.tsx";
-import { helpTexts } from "../../help/helpTexts.ts";
+import { helpTexts } from "../../../shared/utils/help/helpTexts.ts";
 import { colors } from "../../../shared/theme/colors";
 
 interface BatchFormProps {
@@ -128,13 +128,6 @@ export function BatchForm({
             </div>
 
             {/* Info Box */}
-            {/*<Box className="rounded-lg border-2 border-warning bg-warning-badgeBackground p-4">
-                <p className="text-sm text-warning-badgeText">
-                    <Alert severity="info">Die Covariates
-                        dürfen nicht identisch mit der Batch Variable sein, um biologische
-                        Signale zu erhalten.</Alert>
-                </p>
-            </Box>*/}
             <Alert
                 severity="info"
                 variant="outlined"

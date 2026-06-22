@@ -1,6 +1,6 @@
 import {TableContainer} from "./components/TableContainer.tsx";
 import HelpButton from "../analysis/components/HelpButton.tsx";
-import { helpTexts } from "../help/helpTexts.ts";
+import { helpTexts } from "../../shared/utils/help/helpTexts.ts";
 
 export function ResultsPage() {
   return (

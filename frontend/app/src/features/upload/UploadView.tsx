@@ -10,7 +10,7 @@ import { getFileIdentity } from "./utils/fileIdentity";
 import FilterPanel from "./components/FilterPanel.tsx";
 import {DEFAULT_FILTER_SETTINGS, type FilterSettings} from "./utils/types.ts";
 import HelpButton from "../analysis/components/HelpButton.tsx";
-import { helpTexts } from "../help/helpTexts.ts";
+import { helpTexts } from "../../shared/utils/help/helpTexts.ts";
 
 /**
  * Komponente für den Upload von IDAT-Dateien und einem Sample Sheet.
