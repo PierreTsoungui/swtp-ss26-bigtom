@@ -141,13 +141,16 @@ function parseJobStatus(value: unknown): JobStatus {
     throw new Error("Invalid job status response: current_step");
   }
 
+  const hasDetail = isRecord(error) && typeof error.detail === "string";
+  console.log("[DETAIL - BOOLEAN]", hasDetail);
+
   return {
     job_id,
     status,
     phase,
     progress_percent,
     current_step,
-    ...(isProblemDetail(error) ? { error } : {}),
+    error: isProblemDetail(error) ? error : hasDetail ? { detail: error.detail } as ProblemDetail : undefined,
   };
 }
 
@@ -179,7 +182,6 @@ function isProblemDetail(value: unknown): value is ProblemDetail {
   if (!isRecord(value)) return false;
 
   return (
-    typeof value.type === "string" &&
     typeof value.title === "string" &&
     Number.isInteger(value.status) &&
     typeof value.detail === "string" &&
