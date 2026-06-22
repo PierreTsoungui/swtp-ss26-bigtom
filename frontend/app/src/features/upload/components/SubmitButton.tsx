@@ -17,7 +17,7 @@ const SubmitButton: React.FC<{ canSubmit: boolean; onClick: () => void }> =
                            disabled:cursor-not-allowed text-primary-text disabled:text-neutral-textSecondary font-bold
                            py-3 px-10 rounded-full transition-colors"
                 >
-                    Analyse starten
+                    Start Analysis
                 </button>
             </div>
         );

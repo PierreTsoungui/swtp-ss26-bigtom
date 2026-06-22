@@ -1,8 +1,23 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-
+/**
+ * Props für den HelpButton.
+ */
 interface HelpButtonProps {
+    /**
+     * Der Text, der im Dialog angezeigt wird.
+     */
     helpText: string;
+
+    /**
+     * Optionales ARIA-Label für den Button.
+     * @default "Hilfe öffnen"
+     */
     ariaLabel?: string;
+
+    /**
+     * Optionaler Titel für den Dialog.
+     * @default "Hilfe"
+     */
     dialogTitle?: string;
 }
 

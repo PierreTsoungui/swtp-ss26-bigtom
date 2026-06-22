@@ -1,14 +1,10 @@
-import type { FilteringStatsType } from "../utils/types";
+import type {FilteringStatsType, FilterStep} from "../utils/types";
 
+/**
+ * Prop-Typen für die FilteringStats-Komponente
+ */
 interface FilteringStatsProps {
   stats: FilteringStatsType | null | undefined;
-}
-
-interface FilterStep {
-  name: string;
-  cutoff?: number;
-  removed: number;
-  after: number;
 }
 
 const numberFormatter = new Intl.NumberFormat("de-DE");
@@ -23,6 +19,10 @@ function formatPercentage(removed: number, total: number): string {
   return `${percentage.replace(".", ",")}%`;
 }
 
+/**
+ * Zeigt die Filterstatistik der Datenbereinigung an.
+ * Enthält Übersicht über entfernte und verbleibende Sonden sowie einzelne Filterstufen.
+ */
 export function FilteringStats({ stats }: FilteringStatsProps) {
   if (!stats) {
     return (
@@ -39,13 +39,13 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
     );
   }
 
-  // Alle Filter in ein typsicheres Array umwandeln (nur aktivierte anzeigen)
   const filterSteps: FilterStep[] = [];
 
   if (stats.det_p?.enabled) {
     filterSteps.push({
       name: "Detection P-Value",
-      cutoff: stats.det_p.cutoff,
+      label: "Cutoff",
+      labelValue: stats.det_p.cutoff,
       removed: stats.det_p.removed,
       after: stats.det_p.after,
     });
@@ -54,6 +54,8 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
   if (stats.bead_count?.enabled) {
     filterSteps.push({
       name: "Bead Count",
+      label: "Bead Cutoff",
+      labelValue: stats.bead_count.bead_cutoff,
       removed: stats.bead_count.removed,
       after: stats.bead_count.after,
     });
@@ -70,6 +72,8 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
   if (stats.snp?.enabled) {
     filterSteps.push({
       name: "SNP",
+      label: "SNP Cutoff",
+      labelValue: stats.snp.maf_cutoff,
       removed: stats.snp.removed,
       after: stats.snp.after,
     });
@@ -161,17 +165,17 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
                   </tr>
                   </thead>
                   <tbody>
-                  {filterSteps.map((step) => (
+                  {filterSteps.map((step : FilterStep) => (
                       <tr
                           key={step.name}
                           className="border-b border-neutral-surface last:border-b-0 hover:bg-neutral-background"
                       >
                         <th scope="row" className="px-4 py-3 font-medium text-neutral-textPrimary">
                           {step.name}
-                          {step.cutoff !== undefined && (
-                              <span className="ml-2 text-xs font-normal text-neutral-textSecondary">
-                          (Cutoff: {step.cutoff})
-                        </span>
+                          {step.labelValue !== undefined && step.labelValue !== null && (
+                            <span className="ml-2 text-xs font-normal text-neutral-textSecondary">
+                              ({step.label}: {step.labelValue})
+                            </span>
                           )}
                         </th>
                         <td className="px-4 py-3 text-right tabular-nums text-neutral-textSecondary hidden sm:table-cell">
