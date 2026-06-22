@@ -6,6 +6,8 @@ import { FilteringStats } from "./components/FilteringStats";
 import {useFilterStats} from "./hooks/useFilterStats.ts";
 import InfoPanel from "./components/InfoPanel.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
+import CheckIcon from "@mui/icons-material/Check";
+import {Alert, AlertTitle} from "@mui/material";
 
 /**
  * Hauptseite für die Analyse eines Jobs.
@@ -91,20 +93,17 @@ export function AnalysisPage() {
     if (jobStatus.status === JobStatusValue.FAILED && !filterStats) {
         return (
             <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">
-                <section
-                    className="w-full max-w-2xl rounded-lg border border-danger bg-danger-badgeBackground p-6 text-danger-badgeText shadow-sm"
-                    role="alert"
-                >
-                    <h1 className="text-2xl font-semibold">
-                        Analyse fehlgeschlagen
-                    </h1>
+                <div className="w-full max-w-2xl">
+                    <Alert severity="error">
+                        <AlertTitle>
+                            Analysis failed
+                        </AlertTitle>
 
-                    <p className="mt-3">
                         {jobStatus.error?.detail ||
                             jobStatus.current_step ||
-                            "Ein unbekannter Fehler ist aufgetreten."}
-                    </p>
-                </section>
+                            "An unknown error occurred."}
+                    </Alert>
+                </div>
             </main>
         );
     }
@@ -127,50 +126,44 @@ export function AnalysisPage() {
                 )}
 
                 {/* Fehlerbanner */}
-                {jobStatus.status ===  JobStatusValue.FAILED && filterStats && (
-                    <section
-                        className="rounded-lg border border-danger bg-danger-badgeBackground p-4 text-danger-badgeText"
-                        role="alert"
+                {jobStatus.status === JobStatusValue.FAILED && filterStats && (
+                    <Alert
+                        severity="error"
+                        sx={{
+                            borderRadius: 2,
+                            border: "1px solid",
+                        }}
                     >
-                        <p className="font-semibold">
-                            Normalisierungsvorschau fehlgeschlagen
-                        </p>
+                        <AlertTitle>
+                            Normalization preview failed
+                        </AlertTitle>
 
-                        <p className="text-sm mt-1">
-                            {jobStatus.error?.detail ??
-                                jobStatus.current_step ??
-                                "Die Vorschau konnte nicht berechnet werden."}
-                        </p>
-                    </section>
+                        {jobStatus.error?.detail ??
+                            jobStatus.current_step ??
+                            "The preview could not be calculated."}
+                    </Alert>
                 )}
 
                 {/* Hinweis wenn Vorschau bereit */}
                 {isPreviewReady && (
-                    <section
-                        className="rounded-lg border border-info bg-info-badgeBackground p-4 text-info-badgeText"
-                        aria-live="polite"
+                    <Alert
+                        severity="success"
+                        icon={<CheckIcon fontSize="inherit" />}
+                        className="rounded-lg border border-success bg-success-badgeBackground text-success-badgeText"
                     >
-                        <p className="font-semibold">
-                            Normalisierungsvorschau erfolgreich berechnet
-                        </p>
-
-                        <p className="text-sm mt-1">
-                            Die Vorschau ist bereit. Über den Weiter-Button kann nun zur
-                            Auswahl der Normalisierungsmethode gewechselt werden.
-                        </p>
-                    </section>
+                        <AlertTitle className="font-semibold">
+                            Normalization preview successfully calculated
+                        </AlertTitle>
+                        <span className="text-sm mt-1 block">
+                          The preview is ready. You can now switch to the normalization method selection using the Next button.
+                        </span>
+                    </Alert>
                 )}
 
-                {filterStats ? (
+
+                {filterStats && (
                     <div data-testid="filtering-stats">
                         <FilteringStats stats={filterStats} />
-                    </div>
-                ) : (
-                    <div className="flex justify-center pt-10">
-                        <InfoPanel
-                            title="Analyse"
-                            message="Keine Filterstatistiken für diesen Job verfügbar."
-                        />
                     </div>
                 )}
             </div>
