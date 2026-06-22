@@ -1,20 +1,28 @@
 # app/api/routes/reset.py
-from fastapi import APIRouter, HTTPException, Request
-from app.services.job_manager import get_job, kill_process, delete_job
-from app.core.error_types import ErrorTypes, problem_detail
+from __future__ import annotations
 
+import logging
+
+from fastapi import APIRouter, HTTPException, Request
+
+from app.core.error_types import ErrorTypes, problem_detail
+from app.services import reset_service
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/reset/{job_id}")
 async def reset_job(request: Request, job_id: str):
-    """
-    Bricht einen laufenden Job ab und löscht ihn.
-    Das Frontend navigiert danach zur Upload-Page und erstellt einen neuen Job.
-    """
-    job = get_job(job_id)
+    """Cancel a running job (if any) and delete it.
 
-    if not job:
+    The endpoint is thin on purpose — all teardown logic lives in
+    reset_service so it stays testable in isolation and reusable from other
+    triggers (e.g. shutdown hooks).
+    """
+    outcome = await reset_service.reset_job(job_id)
+
+    if not outcome.found:
         raise HTTPException(
             status_code=404,
             detail=problem_detail(
@@ -25,7 +33,8 @@ async def reset_job(request: Request, job_id: str):
             ),
         )
 
-    await kill_process(job_id)
-    delete_job(job_id)
-
-    return {"reset": True}
+    return {
+        "reset": True,
+        "was_running": outcome.was_running,
+        "already_in_progress": outcome.already_in_progress,
+    }
