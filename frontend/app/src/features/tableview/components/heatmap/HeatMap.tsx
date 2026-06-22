@@ -72,6 +72,8 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
     const backendHeatmapError = (jobStatus?.phase === JobPhase.HEATMAP && jobStatus?.status === JobStatusValue.FAILED) ? jobStatus.error : null;
 
+    const [showError, setShowError] = useState(false);
+
     console.log("backendHeatmapError", backendHeatmapError);
     console.log("jobStatus.error", jobStatus?.error);
 
@@ -93,6 +95,12 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         }
     }, [jobStatus]);
 
+    useEffect(() => {
+        if (error || persistentError || backendHeatmapError) {
+            setShowError(true);
+        }
+    }, [error, persistentError, backendHeatmapError]);
+
     const displayedError = error ?? persistentError ?? backendHeatmapError ?? null;
 
     const handleGenerate = async () => {
@@ -101,6 +109,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         }
         setHeatmapImageURL(null); // Vorherige Heatmap zurücksetzen
         setPersistentError(null);
+        setShowError(false);
         setPollingKey((prev => prev + 1)); // Trigger Job Status Polling
         setIsHeatmapPolling(true);
 
@@ -270,7 +279,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
                     {/* Error */}
                     {displayedError && (
-                        <ErrorMessage open={true} error={displayedError} vertical="top" horizontal="center" onClose={() => setPersistentError(null)}/>
+                        <ErrorMessage open={showError} error={displayedError} vertical="top" horizontal="center" onClose={() => setShowError(false)}/>
                     )}
 
 
