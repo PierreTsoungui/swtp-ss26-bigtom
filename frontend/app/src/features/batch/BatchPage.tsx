@@ -126,10 +126,6 @@ const BatchPage: React.FC = () => {
       >
         <h2>Step 3: Batch Effect Correction</h2>
 
-        <p style={{ color: colors.neutral.textSecondary }}>
-          Job ID: {job_id}
-        </p>
-
         {isGlobalError && (
             <div
                 style={{
