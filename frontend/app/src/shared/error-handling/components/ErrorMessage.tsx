@@ -53,16 +53,33 @@ function ErrorMessage({ open, vertical, horizontal, error, onClose }: ErrorMessa
             anchorOrigin={{ vertical, horizontal }}
             open={open}
             autoHideDuration={10000}
-            onClose={onClose}
+            onClose={(_event, reason) => {
+                if (reason === 'clickaway') {
+                    return;
+                }
+                onClose();
+            }}
             sx={{
                 width: '100%',
                 maxWidth: '600px',
                 p: 2,
-                fontSize: '1rem',
                 alignItems: 'center',
             }}
         >
-            <Alert severity="error">{message}</Alert>
+            <Alert
+                severity="error"
+                onClose={onClose}
+                sx={{
+                    fontSize: '1.25rem',
+                    width: '100%',
+                    alignItems: 'center',
+                    '& .MuiAlert-icon, & .MuiAlert-action': {
+                        fontSize: '1.5rem',
+                    }
+                }}
+            >
+                {message}
+            </Alert>
         </Snackbar>
     );
 }

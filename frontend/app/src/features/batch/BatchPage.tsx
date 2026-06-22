@@ -124,7 +124,7 @@ const BatchPage: React.FC = () => {
             padding: "20px",
           }}
       >
-        <h2>Step 3: Batch Effect Correction</h2>
+        <h2 className="text-2xl font-bold mb-4">Batch Effect Correction</h2>
 
         {isGlobalError && (
             <div
@@ -141,23 +141,6 @@ const BatchPage: React.FC = () => {
             </div>
         )}
 
-        {/* Progressbar */}
-
-        {showProgressBar && jobStatus && (
-            <div
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
-                  margin: "20px 0",
-                }}
-            >
-              <Progressbar
-                  jobStatus={jobStatus}
-              />
-            </div>
-        )}
-
         {/* SVD Plot */}
 
         {history && (
@@ -171,10 +154,26 @@ const BatchPage: React.FC = () => {
         {parameters && (
             <BatchForm
                 parameters={parameters}
-                isLoading={batchRunning}
+                isLoading={batchRunning || showProgressBar}
                 onSubmit={handleSubmit}
                 onSkip={handleSkip}
             />
+        )}
+
+        {/* Progressbar */}
+        {showProgressBar && jobStatus && (
+            <div
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                  margin: "20px 0",
+                }}
+            >
+              <Progressbar
+                  jobStatus={jobStatus}
+              />
+            </div>
         )}
       </div>
   );
