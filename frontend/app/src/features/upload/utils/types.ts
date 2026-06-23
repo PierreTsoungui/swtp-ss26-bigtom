@@ -138,7 +138,7 @@ export type SampleQualityFilterType = {
      * - **Minimum:** `0.01`
      * - **Maximum:** `0.05`
      *
-     * @defaultValue 0.01
+     * @defaultValue 0.05
      */
     detection_p_cutoff: number;
 
@@ -148,7 +148,7 @@ export type SampleQualityFilterType = {
      * Überschreitet ein Sample diesen Anteil, wird es als
      * qualitativ unzureichend markiert.
      *
-     * - **Minimum:** `0.05` (0.1%)
+     * - **Minimum:** `0.05` (0.5%)
      * - **Maximum:** `0.2`  (20%)
      *
      * @defaultValue 0.1
@@ -240,8 +240,8 @@ export const DEFAULT_FILTER_SETTINGS: FilterSettings = {
         xy_chromosomes: { enabled: false },
         sample_quality: {
             enabled: true,
-            detection_p_cutoff: 0.1,
-            sample_failure_rate: 0.01,
+            detection_p_cutoff: 0.05,
+            sample_failure_rate: 0.1,
             remove_failed_samples: true,
             enable_pca_outlier_detection: true
         }

@@ -42,11 +42,13 @@ function formatCellValue(value: any, type: string): string {
 export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {}  }: Props) {
   if (!data || !data.columns || !data.data) {
     return (
-      <div className="text-center py-12 bg-slate-50 rounded-md border border-slate-200">
-        <p className="text-slate-500">Keine Daten vorhanden.</p>
+      <div className="text-center py-12 bg-neutral-background rounded-md border border-neutral-borderDefault">
+        <p className="text-neutral-textSecondary">Keine Daten vorhanden.</p>
       </div>
     );
   }
+
+  
 
   return (
     <div className={"space-y-4"}>

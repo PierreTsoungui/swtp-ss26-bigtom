@@ -9,9 +9,11 @@ import { useBatchCorrection } from "./hooks/useBatchCorrection";
 import { useJobPolling } from "../analysis/hooks/useJobPolling";
 
 import Progressbar from "../../shared/components/Progressbar";
+import { colors } from "../../shared/theme/colors";
 
 import type { BatchFormData } from "./utils/types";
 import {useNavigate} from "react-router";
+import {JobPhase, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 
 const BatchPage: React.FC = () => {
   const { job_id } = useParams<{ job_id: string }>();
@@ -42,8 +44,8 @@ const BatchPage: React.FC = () => {
       showProgressBar && job_id ? job_id : null,
       pollingKey
   );
-
-  const batchRunning = isSubmitting && jobStatus?.status === "running";
+  // TODO: Prüfen, wo SVD + RUNNING eingesetzt werden muss
+  const batchRunning = isSubmitting && jobStatus?.status === JobStatusValue.RUNNING;
 
   // Erfolgreich beendet
   useEffect(() => {
@@ -51,25 +53,28 @@ const BatchPage: React.FC = () => {
     console.log("[BATCH STATUS]", jobStatus);
 
     // DMP/DMR läuft
-    if (jobStatus.phase === "downstream_analysis" && jobStatus.status === "running" ) {
+    if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.RUNNING ) {
       setShowProgressBar(true);
       return;
     }
     // DMP/DMR fertig
-    else if (jobStatus.phase === "downstream_analysis" && jobStatus.status === "analysis_done") {
+    else if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.COMPLETED ||
+             jobStatus.phase === JobPhase.RESULTS && jobStatus.status === JobStatusValue.WAITING
+    ) {
       setShowProgressBar(false);
       console.log("[DOWNSTREAM ANALYSIS FINISHED]", jobStatus.status);
       fetchHistory();
       navigate(`/results/${job_id}`);
       return;
     }
-    const batch_finished = jobStatus.status === "waiting" || jobStatus.status === "batch_done"
-    if (batch_finished && showProgressBar) {
+    const batchFinished = jobStatus.phase === JobPhase.BATCH && jobStatus.status === JobStatusValue.WAITING;
+    if (batchFinished && showProgressBar) {
       setShowProgressBar(false);
       fetchHistory();
+      // TODO: Prüfen, ob hier ein return hin muss?
     }
 
-  }, [jobStatus, showProgressBar, fetchHistory, /* navigate ,*/ job_id ]);
+  }, [jobStatus, showProgressBar, fetchHistory, navigate , job_id ]);
 
   if (!job_id) {
     return (
@@ -119,41 +124,20 @@ const BatchPage: React.FC = () => {
             padding: "20px",
           }}
       >
-        <h2>Step 3: Batch Effect Correction</h2>
-
-        <p style={{ color: "#666" }}>
-          Job ID: {job_id}
-        </p>
+        <h2 className="text-2xl font-bold mb-4">Batch Effect Correction</h2>
 
         {isGlobalError && (
             <div
                 style={{
                   padding: "15px",
-                  backgroundColor: "#f8d7da",
-                  color: "#721c24",
+                  backgroundColor: colors.danger.badgeBackground,
+                  color: colors.danger.badgeText,
                   borderRadius: "4px",
                   marginBottom: "20px",
                 }}
             >
               <strong>System Error:</strong>{" "}
               {error.message}
-            </div>
-        )}
-
-        {/* Progressbar */}
-
-        {showProgressBar && jobStatus && (
-            <div
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
-                  margin: "20px 0",
-                }}
-            >
-              <Progressbar
-                  jobStatus={jobStatus}
-              />
             </div>
         )}
 
@@ -170,10 +154,26 @@ const BatchPage: React.FC = () => {
         {parameters && (
             <BatchForm
                 parameters={parameters}
-                isLoading={batchRunning}
+                isLoading={batchRunning || showProgressBar}
                 onSubmit={handleSubmit}
                 onSkip={handleSkip}
             />
+        )}
+
+        {/* Progressbar */}
+        {showProgressBar && jobStatus && (
+            <div
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                  margin: "20px 0",
+                }}
+            >
+              <Progressbar
+                  jobStatus={jobStatus}
+              />
+            </div>
         )}
       </div>
   );

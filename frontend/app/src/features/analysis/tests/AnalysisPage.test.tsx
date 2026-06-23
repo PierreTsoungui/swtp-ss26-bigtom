@@ -1,10 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AnalysisPage } from "../AnalysisPage";
-import { useJobPolling } from "../hooks/useJobPolling";
-import { useFilterStats } from "../hooks/useFilterStats";
-import type { JobStatus } from "../utils/types";
+import {fireEvent, render, screen} from "@testing-library/react";
+import {MemoryRouter} from "react-router";
+import {beforeEach, describe, expect, it, vi} from "vitest";
+import {AnalysisPage} from "../AnalysisPage";
+import {useJobPolling} from "../hooks/useJobPolling";
+import {useFilterStats} from "../hooks/useFilterStats";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../../shared/utils/JobTypes.ts";
 
 const { mockNavigate } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -59,13 +59,10 @@ const mockedUseFilterStats = vi.mocked(useFilterStats); // <-- Typensicheres Moc
 function buildJobStatus(overrides: Partial<JobStatus> = {}): JobStatus {
   return {
     job_id: "test-job-123",
-    status: "running",
-    phase: "normalization_preview",
+    status: JobStatusValue.RUNNING,
+    phase: JobPhase.NORMALIZATION_PREVIEW,
     progress_percent: 45,
     current_step: "Normalisierungsvorschau wird erstellt...",
-    steps_total: 6,
-    steps_completed: 5,
-    estimated_seconds_remaining: 20,
     ...overrides,
   };
 }
@@ -109,8 +106,8 @@ describe("AnalysisPage", () => {
   it("aktiviert den Next-Button wenn die Preview bereit ist", () => {
     mockedUseJobPolling.mockReturnValue(
         buildJobStatus({
-          status: "waiting",
-          phase: "waiting_selection",
+          status: JobStatusValue.COMPLETED,
+          phase: JobPhase.NORMALIZATION_PREVIEW,
           progress_percent: 100,
         }),
     );
@@ -123,8 +120,8 @@ describe("AnalysisPage", () => {
   it("navigiert zur Normalization Page wenn Next geklickt wird", () => {
     mockedUseJobPolling.mockReturnValue(
         buildJobStatus({
-          status: "waiting",
-          phase: "waiting_selection",
+          status: JobStatusValue.WAITING,
+          phase: JobPhase.NORMALIZATION,
           progress_percent: 100,
         }),
     );

@@ -1,17 +1,52 @@
-import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
-
+/**
+ * Interface, das die Statistiken der verschiedenen Filterungsschritte
+ * während der Analyse beschreibt.
+ *
+ * @remarks
+ * Die 3 Felder bilden die Basisstatistiken für jeden Filterungsschritt ab,
+ * die in allen Schritten gleich sind. Sie können erweitert werden, um
+ * spezifische Informationen für jeden Schritt zu speichern (z.B. die
+ * verwendeten Cutoff-Werte).
+ */
 export interface BaseFilterStats {
+  /** Gibt an, ob der Filterungsschritt aktiviert war. */
   enabled: boolean;
+
+  /** Die Anzahl der Datensätze, die in diesem Schritt entfernt wurden. */
   removed: number;
+
+  /** Die Anzahl der Datensätze, die nach diesem Schritt noch übrig sind. */
   after: number;
 }
-export interface BeadCountStats extends BaseFilterStats {}
+
+/**
+ * Statistiken für den Bead-Count-Filterungsschritt.
+ *
+ * @remarks
+ * Dieser Schritt filtert Sonden (Probes) heraus, die in zu vielen Proben
+ * nicht die minimale Anzahl an physischen Kügelchen (Beads) erreicht haben.
+ *
+ * @see {@link BaseFilterStats} für die gemeinsamen Basis-Statistikfelder.
+ */
+export interface BeadCountStats extends BaseFilterStats {
+  /**
+   * Der maximale Prozentsatz erlaubter fehlerhafter Proben pro Sonde.
+   *
+   * @remarks
+   * Wert zwischen 0 und 1 (z. B. `0.05` für 5%). Eine Sonde fliegt aus der
+   * Analyse, wenn sie bei mehr als diesem Anteil aller Proben zu wenige Beads besitzt.
+   */
+  bead_cutoff: number;
+}
+
 export interface DetPStats extends BaseFilterStats {
   cutoff: number;
 }
 export interface MultiHitStats extends BaseFilterStats {}
 export interface NonCpgStats extends BaseFilterStats {}
-export interface SnpStats extends BaseFilterStats {}
+export interface SnpStats extends BaseFilterStats {
+  maf_cutoff: number
+}
 export interface XyChromosomeStats extends BaseFilterStats {}
 
 export interface SampleQualityStats {
@@ -43,43 +78,14 @@ export interface FilteringStatsType {
   sample_quality: SampleQualityStats;
 }
 
-export type JobStatusValue =
-  | "queued"
-  | "running"
-  | "waiting"
-  | "filtering"
-  | "filtering_done"
-  | "normalization_done"
-  | "ready_for_batch"
-  | "batch_done"
-  | "completed"
-  | "failed"
-  | "analysis_done"
-  | "canceled"
-  | "heatmap_done";
-
-export type JobPhase =
-  | "uploaded"
-  | "validating"
-  | "converting"
-  | "filtering"
-  | "normalization_preview"
-  | "waiting_selection"
-  | "normalizing"
-  | "batch_correction"
-  | "downstream_analysis"
-  | "completed"
-  | "reset"
-  | "heatmap";
-
-export interface JobStatus {
-  job_id: string;
-  status: JobStatusValue;
-  phase: JobPhase;
-  progress_percent: number;
-  current_step: string;
-  steps_total: number;
-  steps_completed: number;
-  estimated_seconds_remaining: number | null;
-  error?: ProblemDetail;
+/**
+ * Interface, das die Informationen zu einem einzelnen Filterungsschritt beschreibt,
+ * die in der {@link FilteringStats}-Komponente angezeigt werden.
+ */
+export interface FilterStep {
+  name: string;
+  label?: string;
+  labelValue?: number;
+  removed: number;
+  after: number;
 }

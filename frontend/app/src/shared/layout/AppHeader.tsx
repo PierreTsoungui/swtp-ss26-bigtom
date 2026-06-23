@@ -20,7 +20,7 @@ export function AppHeader({
   onReset,
 }: AppHeaderProps) {
   return (
-    <header className="border-b border-slate-200 bg-white px-6 py-4">
+    <header className="border-b border-neutral-borderDefault bg-neutral-card px-6 py-4">
       <div
         className={`mx-auto max-w-7xl ${
           isLandingPage
@@ -28,7 +28,7 @@ export function AppHeader({
             : "grid gap-4 lg:grid-cols-[1fr_3fr_1fr] lg:items-center"
         }`}
       >
-        <Link to="/" className="inline-flex items-center gap-2 text-2xl font-bold text-slate-900">
+        <Link to="/" className="inline-flex items-center gap-2 text-2xl font-bold text-neutral-textPrimary">
           <AnalyticsIcon fontSize="large" />
           <span>MethylAnalyzer</span>
         </Link>
@@ -36,7 +36,7 @@ export function AppHeader({
         {!isLandingPage && (
           <>
             <div className="space-y-2 text-center">
-              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-sm font-semibold uppercase tracking-wide text-neutral-textSecondary">
                 {currentPhase}
               </p>
               <StepIndicator currentStepId={currentStepId} />
@@ -47,7 +47,7 @@ export function AppHeader({
                 type="button"
                 onClick={onReset}
                 disabled={!isAnalysisActive || isResetting}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-slate-300 disabled:hover:text-slate-700"
+                className="rounded-md border border-neutral-borderEmphasis px-4 py-2 text-sm font-semibold text-neutral-textSecondary transition-colors hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-neutral-borderEmphasis disabled:hover:text-neutral-textSecondary"
               >
                 {isResetting ? "Reset läuft..." : "Reset"}
               </button>

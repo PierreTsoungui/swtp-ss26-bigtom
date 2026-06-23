@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, {useEffect, useState} from "react";
 import type { BatchFormData, BatchParametersResponse } from "../utils/types";
 import {
     FormControl,
@@ -9,14 +9,37 @@ import {
     Autocomplete,
     Alert,
 } from "@mui/material";
+import HelpButton from "../../analysis/components/HelpButton.tsx";
+import { helpTexts } from "../../../shared/utils/help/helpTexts.ts";
+import { colors } from "../../../shared/theme/colors";
 
+/**
+ * Props für die {@link BatchForm} Komponente.
+ */
 interface BatchFormProps {
+    /** Die vom Server oder der API bereitgestellten Parameter und verfügbaren Spalten. */
     parameters: BatchParametersResponse;
+    /** Callback-Funktion, die beim erfolgreichen Absenden des Formulars aufgerufen wird. */
     onSubmit: (data: BatchFormData) => void;
+    /** Zeigt an, ob die Batch-Korrektur aktuell verarbeitet wird (deaktiviert Interaktionen). */
     isLoading?: boolean;
+    /** Optionaler Callback, um den Batch-Korrektur-Schritt zu überspringen. */
     onSkip?: () => void;
+
+    // isSkipping?: boolean;
 }
 
+/**
+ * Ein Formular zur Konfiguration und Durchführung einer Batch-Effekt-Korrektur.
+ *
+ * Erlaubt die Auswahl einer primären Batch-Variable (technischer Faktor) sowie optionaler
+ * Covariates (biologische Gruppen), die während der Korrektur geschützt werden sollen.
+ * Stellt sicher, dass die Batch-Variable nicht gleichzeitig als Covariate ausgewählt wird.
+ *
+ * @component
+ * @param props - Die Props der Komponente gemäß {@link BatchFormProps}.
+ * @returns Das gerenderte Batch-Korrektur-Formular als React-Element.
+ */
 export function BatchForm({
                               parameters,
                               onSubmit,
@@ -26,9 +49,18 @@ export function BatchForm({
     const [batchVariable, setBatchVariable] = useState<string>("");
     const [covariates, setCovariates] = useState<string[]>([]);
 
+    // 2. Lokaler State, um den aktiven Button zu tracken
+    const [clickedButton, setClickedButton] = useState<"batch" | "skip" | null>(null);
+
+    // 3. Reset, sobald das Laden beendet ist
+    useEffect(() => {
+        if (!isLoading) {
+            setClickedButton(null);
+        }
+    }, [isLoading]);
+
     const handleBatchVariableChange = (value: string) => {
         setBatchVariable(value);
-        // Entferne batch_variable aus covariates wenn sie ausgewählt ist
         setCovariates(covariates.filter((c) => c !== value));
     };
 
@@ -36,17 +68,18 @@ export function BatchForm({
         _event: React.SyntheticEvent,
         newValue: string[]
     ) => {
-        // Verhindere, dass die Batch Variable in Covariates aufgenommen wird
         const filtered = newValue.filter((c) => c !== batchVariable);
         setCovariates(filtered);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!batchVariable) {
             alert("Bitte wählen Sie eine Batch Variable aus");
             return;
         }
+
+        setClickedButton("batch"); // 4. Setze Klick auf "batch"
         onSubmit({ batch_variable: batchVariable, covariates });
     };
 
@@ -56,19 +89,26 @@ export function BatchForm({
 
     return (
         <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Batch Variable (Required) - SELECT Dropdown */}
+            <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold">Batch Analysis &amp; Correction</h3>
+                <HelpButton
+                    helpText={helpTexts.batchCorrection}
+                    ariaLabel="Hilfe zur Batch-Korrektur öffnen"
+                    dialogTitle="Batch Effects & Batch Correction"
+                />
+            </div>
+
+            {/* Batch Variable */}
             <div className="space-y-3">
-                <label className="block text-sm font-semibold text-slate-900">
-                    Batch Variable <span className="text-red-500">*</span>
+                <label className="block text-sm font-semibold text-neutral-textPrimary">
+                    Batch Variable <span className="text-danger">*</span>
                 </label>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-neutral-textSecondary">
                     Technischer Faktor der korrigiert werden soll
                 </p>
 
                 <FormControl fullWidth disabled={isLoading}>
-                    <InputLabel id="batch-variable-label">
-                        Bitte auswählen...
-                    </InputLabel>
+                    <InputLabel id="batch-variable-label">Bitte auswählen...</InputLabel>
                     <Select
                         labelId="batch-variable-label"
                         id="batch-variable-select"
@@ -85,14 +125,13 @@ export function BatchForm({
                 </FormControl>
             </div>
 
-            {/* Covariates (Optional Multi-Select) - AUTOCOMPLETE */}
+            {/* Covariates */}
             <div className="space-y-3">
-                <label className="block text-sm font-semibold text-slate-900">
+                <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Covariates (Optional)
                 </label>
-                <p className="text-xs text-slate-500">
-                    Biologische Gruppen die NICHT verändert werden dürfen. Mehrfachauswahl
-                    möglich.
+                <p className="text-xs text-neutral-textSecondary">
+                    Biologische Gruppen die NICHT verändert werden dürfen. Mehrfachauswahl möglich.
                 </p>
 
                 <Autocomplete
@@ -107,31 +146,22 @@ export function BatchForm({
                     renderInput={(params) => (
                         <TextField
                             {...params}
-                            placeholder={
-                                covariates.length === 0 ? "Covariates auswählen..." : ""
-                            }
+                            placeholder={covariates.length === 0 ? "Covariates auswählen..." : ""}
                         />
                     )}
                 />
             </div>
 
             {/* Info Box */}
-            {/*<Box className="rounded-lg border-2 border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm text-amber-900">
-                    <Alert severity="info">Die Covariates
-                        dürfen nicht identisch mit der Batch Variable sein, um biologische
-                        Signale zu erhalten.</Alert>
-                </p>
-            </Box>*/}
             <Alert
                 severity="info"
                 variant="outlined"
                 className="rounded-lg"
                 sx={{
-                    bgcolor: 'amber.50',
-                    borderColor: 'amber.200',
-                    '& .MuiAlert-message': { color: 'amber.900' },
-                    '& .MuiAlert-icon': { color: 'amber.600' } // Adjust icon color to match
+                    bgcolor: colors.info.badgeBackground,
+                    borderColor: colors.info.DEFAULT,
+                    '& .MuiAlert-message': { color: colors.info.badgeText },
+                    '& .MuiAlert-icon': { color: colors.info.DEFAULT }
                 }}
             >
                 Die Covariates dürfen nicht identisch mit der Batch Variable sein, um biologische Signale zu erhalten.
@@ -144,31 +174,30 @@ export function BatchForm({
                     disabled={!batchVariable || isLoading}
                     className={`flex-1 px-6 py-3 rounded-lg font-semibold transition ${
                         batchVariable && !isLoading
-                            ? "bg-blue-600 text-white hover:bg-blue-700"
-                            : "bg-slate-300 text-slate-500 cursor-not-allowed"
+                            ? "bg-primary text-primary-text hover:bg-primary-hover"
+                            : "bg-neutral-borderEmphasis text-neutral-textSecondary cursor-not-allowed"
                     }`}
                 >
-                    {isLoading ? "Batch ongoing..." : "Start Batch"}
+                    {/* 5. Text ändert sich nur, wenn HIER geklickt wurde */}
+                    {isLoading && clickedButton === "batch" ? "Batch ongoing..." : "Start Batch"}
                 </button>
 
                 {onSkip && (
                     <button
                         type="button"
-                        onClick={onSkip}
+                        onClick={() => {
+                            setClickedButton("skip"); // 6. Setze Klick auf "skip"
+                            onSkip();
+                        }}
                         disabled={isLoading}
-                        className="
-                            flex-1 px-6 py-3
-                            rounded-lg font-semibold
-                            border-2 border-slate-300
-                            text-slate-700
-                            bg-white
-                            transition-colors duration-200 ease-in-out
-                            hover:bg-slate-100 hover:border-slate-400
-                            active:bg-slate-200
-                            disabled:opacity-50 disabled:cursor-not-allowed
-                            disabled:hover:bg-white disabled:hover:border-slate-300"
+                        className={`flex-1 px-6 py-3 rounded-lg font-semibold border-2 border-neutral-borderEmphasis transition-colors duration-200 ease-in-out ${
+                            isLoading
+                                ? 'bg-neutral-card text-neutral-textDisabled cursor-not-allowed opacity-50'
+                                : 'text-neutral-textSecondary bg-neutral-card hover:bg-neutral-surface hover:border-neutral-textDisabled active:bg-neutral-borderDefault'
+                        }`}
                     >
-                        {isLoading ? "Läuft..." : "Skip"}
+                        {/* 7. Text ändert sich nur, wenn HIER geklickt wurde */}
+                        {isLoading && clickedButton === "skip" ? "Skipping..." : "Skip"}
                     </button>
                 )}
             </div>

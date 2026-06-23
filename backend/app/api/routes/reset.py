@@ -1,50 +1,40 @@
-from fastapi import APIRouter, HTTPException
-from app.services import job_manager
+# app/api/routes/reset.py
+from __future__ import annotations
 
+import logging
+
+from fastapi import APIRouter, HTTPException, Request
+
+from app.core.error_types import ErrorTypes, problem_detail
+from app.services import reset_service
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/reset/{job_id}")
-async def reset_job(job_id: str):
+async def reset_job(request: Request, job_id: str):
+    """Cancel a running job (if any) and delete it.
+
+    The endpoint is thin on purpose — all teardown logic lives in
+    reset_service so it stays testable in isolation and reusable from other
+    triggers (e.g. shutdown hooks).
     """
-    Bricht eine laufende Analyse ab und setzt den Job-Status auf 'canceled'.
-    Die Session (Dateien, job_id) bleibt erhalten.
-    """
-    # 1. Job existiert?
-    job = job_manager.get_job(job_id)
-    if not job:
+    outcome = await reset_service.reset_job(job_id)
+
+    if not outcome.found:
         raise HTTPException(
             status_code=404,
-            detail={
-                "type": "https://bigtom.app/errors/job-not-found",
-                "title": "Job not found",
-                "status": 404,
-                "detail": f"No job found for job_id '{job_id}'.",
-                "instance": f"/reset/{job_id}"
-            }
+            detail=problem_detail(
+                error_type=ErrorTypes.JOB_NOT_FOUND,
+                detail=f"Kein Job mit der ID '{job_id}' gefunden",
+                instance=request.url.path,
+                job_id=job_id,
+            ),
         )
-
-    # 2. Ist der Job überhaupt abbrechbar?
-    NON_CANCELABLE = {"completed", "canceled", "failed"}
-    if job.status in NON_CANCELABLE:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "type": "https://bigtom.app/errors/invalid-state",
-                "title": "Job cannot be canceled",
-                "status": 409,
-                "detail": f"Job is already in state '{job.status}' and cannot be canceled.",
-                "instance": f"/reset/{job_id}"
-            }
-        )
-
-    # 3. Laufenden R-Prozess killen (falls vorhanden)
-    await job_manager.kill_process(job_id)
-
-    # 4. Job-Status zurücksetzen
-    job_manager.reset_job(job_id)
 
     return {
         "reset": True,
-        "status": "canceled"
+        "was_running": outcome.was_running,
+        "already_in_progress": outcome.already_in_progress,
     }

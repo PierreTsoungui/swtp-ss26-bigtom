@@ -13,6 +13,10 @@ class ErrorTypes:
     # Status Errors (404, 410)
     JOB_NOT_FOUND = ErrorType("/errors/job-not-found", 404, "Job not found")
     SESSION_EXPIRED = ErrorType("/errors/session-expired", 410, "Session expired")
+
+    # Upload Errors (400, 500)
+    INVALID_UPLOAD = ErrorType("/errors/invalid-upload", 400, "Invalid upload")
+    SAVE_FAILED    = ErrorType("/errors/save-failed", 500, "Save failed")
     
     # Filter Errors (409, 404)
     FILTERING_NOT_FINISHED = ErrorType("/errors/filtering-not-finished", 409, "Filtering not finished")
@@ -40,6 +44,8 @@ class ErrorTypes:
     HEATMAP_NOT_ALLOWED     = ErrorType("/errors/heatmap-not-allowed", 409, "Heatmap not allowed")
     INVALID_GROUPING_COLUMN = ErrorType("/errors/invalid-grouping-column", 400, "Invalid grouping column")
     INVALID_CSV_CONTENT     = ErrorType("/errors/invalid-csv-content", 400, "Invalid CSV content") 
+
+    INVALID_STATE_TRANSITION = ErrorType("/errors/invalid-state-transition", 409, "Invalid state transition")
 
 def problem_detail(
     error_type: ErrorType,

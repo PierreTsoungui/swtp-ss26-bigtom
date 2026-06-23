@@ -1,13 +1,13 @@
 import { type NavigateFunction, useNavigate, useParams } from "react-router";
-// import { ResultsTable } from "./components/ResultsTable";
 import { useJobPolling } from "./hooks/useJobPolling";
-// import { useResultsTable } from "./hooks/useResultsTable";
-import type { JobStatus } from "./utils/types";
 import Progressbar from "../../shared/components/Progressbar.tsx";
 import { useEffect, useRef } from "react";
 import { FilteringStats } from "./components/FilteringStats";
 import {useFilterStats} from "./hooks/useFilterStats.ts";
 import InfoPanel from "./components/InfoPanel.tsx";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
+import CheckIcon from "@mui/icons-material/Check";
+import {Alert, AlertTitle} from "@mui/material";
 
 /**
  * Hauptseite für die Analyse eines Jobs.
@@ -23,35 +23,31 @@ export function AnalysisPage() {
     const navigate: NavigateFunction = useNavigate();
     const hasTriggeredFetch = useRef(false);
 
+    // Eigentlich alle nachfolgenden States
+    const shouldGetFilterStats = job_id && !hasTriggeredFetch.current &&
+        ((jobStatus?.phase === JobPhase.FILTERING && jobStatus?.status === JobStatusValue.COMPLETED) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && jobStatus?.status === JobStatusValue.RUNNING));
+
+
     const { filterStats, isLoading: filterStatsLoading } = useFilterStats(
-        job_id && jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current
-            ? job_id
-            : null
+        shouldGetFilterStats ? job_id : null
     );
 
     useEffect(() => {
-        if (jobStatus?.phase === "normalization_preview" && !hasTriggeredFetch.current) {
+        if (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && !hasTriggeredFetch.current) {
             hasTriggeredFetch.current = true;
         }
     }, [jobStatus?.phase]);
 
 
     const isPreviewReady =
-        jobStatus?.status === "waiting" &&
-        jobStatus?.phase === "waiting_selection";
+        (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && jobStatus?.status === JobStatusValue.COMPLETED) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION && jobStatus?.status === JobStatusValue.WAITING)
 
-    useEffect(() => {
-        if (!jobStatus || !job_id) return;
-        /*
-        if (jobStatus.status === "completed") {
-          navigate(`/results/${job_id}`);
-        }
-        */
-    }, [jobStatus?.status, jobStatus?.phase, job_id, navigate]);
 
     if (!job_id) {
         return (
-            <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+            <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">
                 <InfoPanel
                     title="Analyse nicht verfügbar"
                     message="Für diese Analyse wurde keine Job-ID übergeben."
@@ -74,7 +70,7 @@ export function AnalysisPage() {
     if (filterStatsLoading) {
         return (
             <>
-                <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+                <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">
                     <InfoPanel
                         title="Filterstatistik vorbereiten"
                         message="Die Filterung ist noch in Bearbeitung. Bitte warten...">
@@ -86,36 +82,35 @@ export function AnalysisPage() {
 
     // ── Progressbar anzeigen ──────────────────────────────────────
     const shouldShowProgress =
-        jobStatus.status === "queued" ||
-        jobStatus.status === "running" ||
-        (jobStatus.status === "waiting" &&
-            jobStatus.phase === "waiting_selection");
+        (jobStatus?.phase === JobPhase.FILTERING && jobStatus?.status === JobStatusValue.RUNNING) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && (
+                jobStatus?.status === JobStatusValue.RUNNING || jobStatus?.status === JobStatusValue.COMPLETED
+        )) ||
+        (jobStatus?.phase === JobPhase.NORMALIZATION && jobStatus?.status === JobStatusValue.WAITING);
+
 
     // ── Fehlerfall OHNE Filterstatistiken ─────────────────────────
-    if (jobStatus.status === "failed" && !filterStats) {
+    if (jobStatus.status === JobStatusValue.FAILED && !filterStats) {
         return (
-            <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-                <section
-                    className="w-full max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 text-red-900 shadow-sm"
-                    role="alert"
-                >
-                    <h1 className="text-2xl font-semibold">
-                        Analyse fehlgeschlagen
-                    </h1>
+            <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">
+                <div className="w-full max-w-2xl">
+                    <Alert severity="error">
+                        <AlertTitle>
+                            Analysis failed
+                        </AlertTitle>
 
-                    <p className="mt-3">
                         {jobStatus.error?.detail ||
                             jobStatus.current_step ||
-                            "Ein unbekannter Fehler ist aufgetreten."}
-                    </p>
-                </section>
+                            "An unknown error occurred."}
+                    </Alert>
+                </div>
             </main>
         );
     }
 
     // ── Hauptansicht ──────────────────────────────────────────────
     return (
-        <main className="flex min-h-screen justify-center bg-slate-50 px-6 py-10">
+        <main className="flex min-h-screen justify-center bg-neutral-background px-6 py-10">
             <div className="w-full max-w-4xl space-y-6">
 
                 {/* Progressbar */}
@@ -131,50 +126,44 @@ export function AnalysisPage() {
                 )}
 
                 {/* Fehlerbanner */}
-                {jobStatus.status === "failed" && filterStats && (
-                    <section
-                        className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-900"
-                        role="alert"
+                {jobStatus.status === JobStatusValue.FAILED && filterStats && (
+                    <Alert
+                        severity="error"
+                        sx={{
+                            borderRadius: 2,
+                            border: "1px solid",
+                        }}
                     >
-                        <p className="font-semibold">
-                            Normalisierungsvorschau fehlgeschlagen
-                        </p>
+                        <AlertTitle>
+                            Normalization preview failed
+                        </AlertTitle>
 
-                        <p className="text-sm mt-1">
-                            {jobStatus.error?.detail ??
-                                jobStatus.current_step ??
-                                "Die Vorschau konnte nicht berechnet werden."}
-                        </p>
-                    </section>
+                        {jobStatus.error?.detail ??
+                            jobStatus.current_step ??
+                            "The preview could not be calculated."}
+                    </Alert>
                 )}
 
                 {/* Hinweis wenn Vorschau bereit */}
                 {isPreviewReady && (
-                    <section
-                        className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900"
-                        aria-live="polite"
+                    <Alert
+                        severity="success"
+                        icon={<CheckIcon fontSize="inherit" />}
+                        className="rounded-lg border border-success bg-success-badgeBackground text-success-badgeText"
                     >
-                        <p className="font-semibold">
-                            Normalisierungsvorschau erfolgreich berechnet
-                        </p>
-
-                        <p className="text-sm mt-1">
-                            Die Vorschau ist bereit. Über den Weiter-Button kann nun zur
-                            Auswahl der Normalisierungsmethode gewechselt werden.
-                        </p>
-                    </section>
+                        <AlertTitle className="font-semibold">
+                            Normalization preview successfully calculated
+                        </AlertTitle>
+                        <span className="text-sm mt-1 block">
+                          The preview is ready. You can now switch to the normalization method selection using the Next button.
+                        </span>
+                    </Alert>
                 )}
 
-                {filterStats ? (
+
+                {filterStats && (
                     <div data-testid="filtering-stats">
                         <FilteringStats stats={filterStats} />
-                    </div>
-                ) : (
-                    <div className="flex justify-center pt-10">
-                        <InfoPanel
-                            title="Analyse"
-                            message="Keine Filterstatistiken für diesen Job verfügbar."
-                        />
                     </div>
                 )}
             </div>

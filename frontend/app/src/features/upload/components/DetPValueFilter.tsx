@@ -2,6 +2,7 @@ import {Accordion, AccordionDetails, AccordionSummary, Switch, TextField, Typogr
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type {DetPFilterType} from "../utils/types.ts";
 import {clampValue, FILTER_CONSTRAINTS, validateFilterValue} from "../utils/filterValidation.ts";
+import React from "react";
 
 type DetPValueFilterProps = {
     value: DetPFilterType;

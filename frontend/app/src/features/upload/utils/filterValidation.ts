@@ -27,7 +27,7 @@ export const FILTER_CONSTRAINTS = {
             min: 0.0,
             max: 0.5,
             step: 0.01,
-            label: "MAF Cutoff",
+            label: "Minor Allele Frequency (MAF) Cutoff",
             description: "Area: 0.0 - 0.5",
         },
     },

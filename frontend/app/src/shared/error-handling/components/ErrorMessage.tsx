@@ -10,6 +10,7 @@ import type { ProblemDetail } from "../types/ErrorTypes";
 interface ErrorMessageProps extends SnackbarOrigin {
   open: boolean;
   error: ProblemDetail | Error | string | null;
+  onClose: () => void;
 }
 
 /**
@@ -21,7 +22,7 @@ interface ErrorMessageProps extends SnackbarOrigin {
  * @property horizontal - Die horizontale Position der Snackbar (left, center oder right).
  * @returns Die gerenderte ErrorMessage-Komponente
  */
-function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) {
+function ErrorMessage({ open, vertical, horizontal, error, onClose }: ErrorMessageProps) {
     const message = (() => {
 
         if (!error) {
@@ -52,8 +53,33 @@ function ErrorMessage({ open, vertical, horizontal, error }: ErrorMessageProps) 
             anchorOrigin={{ vertical, horizontal }}
             open={open}
             autoHideDuration={10000}
+            onClose={(_event, reason) => {
+                if (reason === 'clickaway') {
+                    return;
+                }
+                onClose();
+            }}
+            sx={{
+                width: '100%',
+                maxWidth: '600px',
+                p: 2,
+                alignItems: 'center',
+            }}
         >
-            <Alert severity="error">{message}</Alert>
+            <Alert
+                severity="error"
+                onClose={onClose}
+                sx={{
+                    fontSize: '1.25rem',
+                    width: '100%',
+                    alignItems: 'center',
+                    '& .MuiAlert-icon, & .MuiAlert-action': {
+                        fontSize: '1.5rem',
+                    }
+                }}
+            >
+                {message}
+            </Alert>
         </Snackbar>
     );
 }

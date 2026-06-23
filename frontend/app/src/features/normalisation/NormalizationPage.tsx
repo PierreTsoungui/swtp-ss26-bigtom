@@ -4,10 +4,12 @@ import type { NormalizationMethod } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
 import Progressbar from "../../shared/components/Progressbar.tsx";
-import type {JobStatus} from "../analysis/utils/types.ts";
 import PlotModal from "./components/PlotModal.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
+import HelpButton from "../analysis/components/HelpButton.tsx";
+import {helpTexts} from "../../shared/utils/help/helpTexts.ts";
 
 
 /**
@@ -37,7 +39,7 @@ export function NormalizationPage() {
   useEffect(() => {
       console.log("[NormalizationPage] useEffect - jobStatus:", jobStatus?.status, "job_id:", job_id);
       if (!jobStatus) return;
-      if (jobStatus.status === "ready_for_batch") {
+      if (jobStatus.status === JobStatusValue.WAITING && jobStatus.phase === JobPhase.BATCH) {
         console.log("Navigiere zu /batch/", job_id, "aktueller jobStatus:", jobStatus);
         navigate(`/batch/${job_id}`);
       }
@@ -55,6 +57,7 @@ export function NormalizationPage() {
       });
 
       if (!res.ok) throw new Error(`Fehler: ${res.status}`);
+      // TODO: Prüfen, wie der State abgefangen wird um die Progressbar anzuzeigen, wenn Preview ausgewählt wurde
       setIsNormalising(true);
     } catch (e) {
       console.error(e);
@@ -74,7 +77,7 @@ export function NormalizationPage() {
   const isDisabled : boolean = !selected || isSubmitting || isNormalising;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10">
+    <main className="min-h-screen bg-neutral-background px-6 py-10">
       {/* MODAL für Plot-Vorschau */}
       {previewImage && (
         <PlotModal
@@ -84,11 +87,18 @@ export function NormalizationPage() {
         />
       )}
 
-      <h1 className="mb-2 text-2xl font-semibold text-slate-900">
-        Normalisierungsmethode auswählen
-      </h1>
-      <p className="mb-8 text-slate-500">
-        Klicken Sie auf einen Plot für eine vergrößerte Ansicht
+      <div className="mb-2 flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-neutral-textPrimary">
+            Choose a normalization method
+        </h1>
+        <HelpButton
+          helpText={helpTexts.normalization}
+          ariaLabel="Open Help with normalization"
+          dialogTitle="Normalization"
+        />
+      </div>
+      <p className="mb-8 text-neutral-textSecondary">
+          Click a plot for an enlarged view.
       </p>
 
       {/* METHOD CARDS (5 methods) */}
@@ -116,15 +126,15 @@ export function NormalizationPage() {
           onClick={handleConfirm}
           disabled={isDisabled}
           className={`
-            rounded-full px-10 py-3 font-bold text-white
+            rounded-full px-10 py-3 font-bold text-primary-text
             transition-colors
             ${isDisabled
-              ? "cursor-not-allowed bg-slate-300"
-              : "bg-blue-600 hover:bg-blue-700"
+              ? "cursor-not-allowed bg-neutral-borderEmphasis"
+              : "bg-primary hover:bg-primary-hover"
             }
           `}
         >
-          {isSubmitting ? "Wird gestartet..." : `Methode bestätigen`}
+          {isSubmitting ? "Starting..." : `Confirm method`}
         </button>
       </div>
     </main>

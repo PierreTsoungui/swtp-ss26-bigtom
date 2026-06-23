@@ -1,14 +1,10 @@
-import type { FilteringStatsType } from "../utils/types";
+import type {FilteringStatsType, FilterStep} from "../utils/types";
 
+/**
+ * Prop-Typen für die FilteringStats-Komponente
+ */
 interface FilteringStatsProps {
   stats: FilteringStatsType | null | undefined;
-}
-
-interface FilterStep {
-  name: string;
-  cutoff?: number;
-  removed: number;
-  after: number;
 }
 
 const numberFormatter = new Intl.NumberFormat("de-DE");
@@ -23,11 +19,15 @@ function formatPercentage(removed: number, total: number): string {
   return `${percentage.replace(".", ",")}%`;
 }
 
+/**
+ * Zeigt die Filterstatistik der Datenbereinigung an.
+ * Enthält Übersicht über entfernte und verbleibende Sonden sowie einzelne Filterstufen.
+ */
 export function FilteringStats({ stats }: FilteringStatsProps) {
   if (!stats) {
     return (
         <section
-            className="w-full max-w-4xl rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-900"
+            className="w-full max-w-4xl rounded-lg border border-warning bg-warning-badgeBackground p-6 text-warning-badgeText"
             role="status"
             aria-live="polite"
         >
@@ -39,13 +39,13 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
     );
   }
 
-  // Alle Filter in ein typsicheres Array umwandeln (nur aktivierte anzeigen)
   const filterSteps: FilterStep[] = [];
 
   if (stats.det_p?.enabled) {
     filterSteps.push({
       name: "Detection P-Value",
-      cutoff: stats.det_p.cutoff,
+      label: "Cutoff",
+      labelValue: stats.det_p.cutoff,
       removed: stats.det_p.removed,
       after: stats.det_p.after,
     });
@@ -54,6 +54,8 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
   if (stats.bead_count?.enabled) {
     filterSteps.push({
       name: "Bead Count",
+      label: "Bead Cutoff",
+      labelValue: stats.bead_count.bead_cutoff,
       removed: stats.bead_count.removed,
       after: stats.bead_count.after,
     });
@@ -70,6 +72,8 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
   if (stats.snp?.enabled) {
     filterSteps.push({
       name: "SNP",
+      label: "SNP Cutoff",
+      labelValue: stats.snp.maf_cutoff,
       removed: stats.snp.removed,
       after: stats.snp.after,
     });
@@ -96,40 +100,40 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
 
   return (
       <section
-          className="w-full max-w-4xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+          className="w-full max-w-4xl rounded-lg border border-neutral-borderDefault bg-neutral-card p-6 shadow-sm"
           aria-labelledby="filtering-stats-title"
       >
         <div className="mb-6">
-          <h2 id="filtering-stats-title" className="text-2xl font-semibold text-slate-900">
+          <h2 id="filtering-stats-title" className="text-2xl font-semibold text-neutral-textPrimary">
             Filterstatistik
           </h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-neutral-textSecondary">
             Übersicht der angewendeten Filterschritte und deren Auswirkungen.
           </p>
         </div>
 
         {/* Top Stats Cards */}
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-medium text-slate-600">Sonden Start</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-900">
+          <div className="rounded-md border border-neutral-borderDefault bg-neutral-background px-4 py-3">
+            <p className="text-xs font-medium text-neutral-textSecondary">Sonden Start</p>
+            <p className="mt-2 text-2xl font-semibold text-neutral-textPrimary">
               {formatNumber(stats.total_start)}
             </p>
           </div>
 
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-xs font-medium text-amber-700">Entfernt insgesamt</p>
-            <p className="mt-2 text-2xl font-semibold text-amber-900">
+          <div className="rounded-md border border-warning bg-warning-badgeBackground px-4 py-3">
+            <p className="text-xs font-medium text-warning-badgeText">Entfernt insgesamt</p>
+            <p className="mt-2 text-2xl font-semibold text-warning-badgeText">
               {formatNumber(stats.total_removed)}
             </p>
-            <p className="mt-1 text-xs text-amber-700">
+            <p className="mt-1 text-xs text-warning-badgeText">
               ({formatPercentage(stats.total_removed, stats.total_start)})
             </p>
           </div>
 
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3">
-            <p className="text-xs font-medium text-emerald-700">Sonden Ende</p>
-            <p className="mt-2 text-2xl font-semibold text-emerald-900">
+          <div className="rounded-md border border-success bg-success-badgeBackground px-4 py-3">
+            <p className="text-xs font-medium text-success-badgeText">Sonden Ende</p>
+            <p className="mt-2 text-2xl font-semibold text-success-badgeText">
               {formatNumber(stats.total_end)}
             </p>
           </div>
@@ -138,14 +142,14 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
         {/* Probe Filters Table */}
         {filterSteps.length > 0 && (
             <div className="mb-6">
-              <h3 className="mb-3 text-sm font-semibold text-slate-700">Sonden-Filter</h3>
+              <h3 className="mb-3 text-sm font-semibold text-neutral-textSecondary">Sonden-Filter</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full border-collapse text-left text-sm">
                   <caption className="sr-only">
                     Probe-Filter mit entfernten und verbleibenden Sonden
                   </caption>
                   <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-700">
+                  <tr className="border-b border-neutral-borderDefault bg-neutral-background text-neutral-textSecondary">
                     <th scope="col" className="px-4 py-3 font-semibold">
                       Filter
                     </th>
@@ -161,26 +165,26 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
                   </tr>
                   </thead>
                   <tbody>
-                  {filterSteps.map((step) => (
+                  {filterSteps.map((step : FilterStep) => (
                       <tr
                           key={step.name}
-                          className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
+                          className="border-b border-neutral-surface last:border-b-0 hover:bg-neutral-background"
                       >
-                        <th scope="row" className="px-4 py-3 font-medium text-slate-900">
+                        <th scope="row" className="px-4 py-3 font-medium text-neutral-textPrimary">
                           {step.name}
-                          {step.cutoff !== undefined && (
-                              <span className="ml-2 text-xs font-normal text-slate-600">
-                          (Cutoff: {step.cutoff})
-                        </span>
+                          {step.labelValue !== undefined && step.labelValue !== null && (
+                            <span className="ml-2 text-xs font-normal text-neutral-textSecondary">
+                              ({step.label}: {step.labelValue})
+                            </span>
                           )}
                         </th>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-700 hidden sm:table-cell">
+                        <td className="px-4 py-3 text-right tabular-nums text-neutral-textSecondary hidden sm:table-cell">
                           {formatNumber(stats.total_start)}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-amber-700">
+                        <td className="px-4 py-3 text-right tabular-nums text-warning">
                           {formatNumber(step.removed)}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                        <td className="px-4 py-3 text-right tabular-nums text-neutral-textSecondary">
                           {formatNumber(step.after)}
                         </td>
                       </tr>
@@ -193,42 +197,42 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
 
         {/* Sample Quality Section */}
         {hasSampleQuality && (
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-4">
-              <h3 className="font-semibold text-blue-900">Sample Quality Filter</h3>
+            <div className="rounded-md border border-info bg-info-badgeBackground p-4">
+              <h3 className="font-semibold text-info-badgeText">Sample Quality Filter</h3>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs text-blue-700">Detection P Cutoff</p>
-                  <p className="mt-1 text-sm font-medium text-blue-900">
+                  <p className="text-xs text-info-badgeText">Detection P Cutoff</p>
+                  <p className="mt-1 text-sm font-medium text-info-badgeText">
                     {stats.sample_quality.detection_p_cutoff}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-blue-700">Sample Failure Rate</p>
-                  <p className="mt-1 text-sm font-medium text-blue-900">
+                  <p className="text-xs text-info-badgeText">Sample Failure Rate</p>
+                  <p className="mt-1 text-sm font-medium text-info-badgeText">
                     {(stats.sample_quality.sample_failure_rate * 100).toFixed(1)}%
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-blue-700">Samples vorher</p>
-                  <p className="mt-1 text-sm font-medium text-blue-900">
+                  <p className="text-xs text-info-badgeText">Samples vorher</p>
+                  <p className="mt-1 text-sm font-medium text-info-badgeText">
                     {stats.sample_quality.samples_before}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-blue-700">Samples entfernt</p>
-                  <p className="mt-1 text-sm font-medium text-blue-900">
+                  <p className="text-xs text-info-badgeText">Samples entfernt</p>
+                  <p className="mt-1 text-sm font-medium text-info-badgeText">
                     {stats.sample_quality.samples_removed}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-blue-700">Samples nachher</p>
-                  <p className="mt-1 text-sm font-medium text-blue-900">
+                  <p className="text-xs text-info-badgeText">Samples nachher</p>
+                  <p className="mt-1 text-sm font-medium text-info-badgeText">
                     {stats.sample_quality.samples_after}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-blue-700">PCA Outlier Detection</p>
-                  <p className="mt-1 text-sm font-medium text-blue-900">
+                  <p className="text-xs text-info-badgeText">PCA Outlier Detection</p>
+                  <p className="mt-1 text-sm font-medium text-info-badgeText">
                     {stats.sample_quality.enable_pca_outlier_detection ? "✓ Aktiv" : "○ Inaktiv"}
                   </p>
                 </div>

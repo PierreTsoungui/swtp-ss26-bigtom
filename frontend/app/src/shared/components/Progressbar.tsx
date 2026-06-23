@@ -1,33 +1,53 @@
 import LinearProgress from '@mui/material/LinearProgress';
-import type { JobStatus } from '../../features/analysis/utils/types.ts';
+import {JobPhase, type JobStatus, JobStatusValue} from "../utils/JobTypes.ts";
+import {Alert} from "@mui/material";
 
 /**
- * Props, die an die Progressbar übergeben werden
- * @property {JobStatus} jobStatus - Der aktuelle Status des Jobs, der die Fortschrittsinformationen enthält.
+ * Props für die Progressbar-Komponente.
  */
 type ProgressbarProps = {
+    /** Der aktuelle Status des Jobs mit allen Fortschrittsinformationen. */
     jobStatus: JobStatus;
+    /** Bestimmt, ob der "Weiter"-Button angezeigt wird. */
     showNextButton?: boolean;
+    /** Deaktiviert den "Weiter"-Button. */
     nextDisabled?: boolean;
+    /** Callback-Funktion, wenn auf "Weiter" geklickt wird. */
     onNext?: () => void;
 };
+
 
 /**
  * Fortschrittsanzeige-Komponente, die den aktuellen Status eines Analysejobs visualisiert.
  * Sie zeigt den Fortschrittsbalken, die Anzahl der abgeschlossenen Schritte,
  * den aktuellen Schritt und die geschätzte verbleibende Zeit an.
- * Außerdem enthält sie einen Button zum Abbrechen der Analyse.
  *
- * @param props - Props der Progressbar-Komponente
- * @param props.jobStatus - Aktueller Status des Analysejobs
- * @returns Die gerenderte Fortschrittsanzeige
+ * @param jobStatus - Aktueller Status des Analysejobs.
+ * @param showNextButton - Flag zur Anzeige des Next-Buttons.
+ * @param nextDisabled - Flag zum Deaktivieren des Next-Buttons.
+ * @param onNext - Callback für den Klickevent.
+ * @returns Das gerenderte JSX-Element.
  */
 function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, onNext }: ProgressbarProps) {
-    // const navigate = useNavigate();
-    // const { cancelJob, isLoading: isLoadingJobAbort, error: cancelError } = useJobCancel(jobStatus.job_id, handleCancelSuccess);
+    const finished = jobStatus.progress_percent === 100;
+
+    const isFailed = jobStatus.status?.toLowerCase() === "failed" || jobStatus.status === JobStatusValue.FAILED;
+
+    const currentError = isFailed ? jobStatus.error : null;
+
+    const getProgressBarColor = () => {
+        if (isFailed) return "error";
+        if (finished) return "success";
+        return "primary";
+    }
+
+    console.log("jobStatus:", jobStatus);
+    console.log("status:", jobStatus.status);
+    console.log("error:", jobStatus.error);
+    console.log("isFailed:", isFailed);
 
     return (
-        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mx-auto w-full max-w-3xl rounded-2xl border border-neutral-borderDefault bg-neutral-card p-5 shadow-sm">
             {/* Error PopUp Snackbar */}
             {/*cancelError && (
                 <ErrorMessage
@@ -41,17 +61,14 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
             {/* Header */}
             <div className="mb-4 flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-800">
-                        {jobStatus.phase === "normalization_preview"
-                            ? "Normalisierungsvorschau wird erstellt"
-                            : "Analyse läuft"}
+                    <h2 className="text-lg font-semibold text-neutral-textPrimary">
+                        {jobStatus.phase === JobPhase.NORMALIZATION_PREVIEW
+                            ? "Creating normalization preview..."
+                            : "Analyzing"}
                     </h2>
-                    {/*<p className="text-sm text-gray-500">
-                        `Schritte ${jobStatus.steps_completed} von ${jobStatus.steps_total}`
-                    </p>*/}
                 </div>
 
-                <div className="min-w-17.5 text-right text-sm font-medium text-gray-700">
+                <div className="min-w-17.5 text-right text-sm font-medium text-neutral-textSecondary">
                     {jobStatus.progress_percent}%
                 </div>
             </div>
@@ -60,52 +77,39 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
             <div className="mb-5">
                 <LinearProgress
                     variant="determinate"
+                    color={getProgressBarColor()}
                     value={jobStatus.progress_percent}
                     sx={{height: 10, borderRadius: 9999,}}
                 />
             </div>
 
-            {/* Cancel Status*/}
-            {/*isLoadingJobAbort && (
-                <p className="text-sm text-gray-500 mb-3">Job wird abgebrochen...</p>
-            )*/}
-
             {/* Infos */}
-            <div className="space-y-3 text-sm text-gray-700">
+            <div className="space-y-3 text-sm text-neutral-textSecondary">
                 <div className="flex flex-col gap-1">
-                    <span className="font-medium text-gray-500">
-                        Aktueller Schritt
+                    <span className="font-medium text-neutral-textSecondary">
+                        Current step
                     </span>
                     <span>{jobStatus.current_step}</span>
                 </div>
-
-                {/*jobStatus.estimated_seconds_remaining !== null && (
-                    <div className="flex flex-col gap-1">
-                        <span className="font-medium text-gray-500">
-                            Verbleibende Zeit
-                        </span>
-                        <span>
-                            {jobStatus.estimated_seconds_remaining} Sekunden
-                        </span>
+                {currentError && (
+                    <div className="w-full text-sm font-medium text-danger mt-3">
+                        <Alert severity="error">{currentError.detail || "An unexpected error occurred."}</Alert>
                     </div>
-                )*/}
+                )}
             </div>
 
             {/* Footer */}
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                {/*<CancelButton
-                    onCancel={cancelJob}
-                    disabled={isLoadingJobAbort}
-                />*/}
-
                 {showNextButton && (
                     <button
-                    onClick={onNext}
-                    disabled={nextDisabled}
-                    className="inline-flex min-w-24 items-center justify-center rounded-full bg-blue-500 px-6 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:bg-gray-300"
+                        onClick={onNext}
+                        disabled={nextDisabled}
+                        className="inline-flex min-w-24 items-center justify-center rounded-full
+                                 bg-primary px-6 py-3 font-bold text-primary-text transition-colors
+                                 hover:bg-primary-hover disabled:bg-neutral-borderEmphasis"
                     >
-                    Next
+                        Next
                     </button>
                 )}
             </div>

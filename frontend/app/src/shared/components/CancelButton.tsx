@@ -19,7 +19,7 @@ function CancelButton({ onCancel, disabled = false, }: CancelButtonProps) {
             <button
                 onClick={onCancel}
                 disabled={disabled}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-10 rounded-full transition-colors"
+                className="bg-danger hover:bg-danger-hover text-danger-text font-bold py-3 px-10 rounded-full transition-colors"
             >
                 Cancel
             </button>

@@ -16,6 +16,7 @@ function buildFilteringStats(overrides: Partial<FilteringStatsType> = {}): Filte
     },
     bead_count: {
       enabled: false,
+      bead_cutoff: 0.05,
       removed: 0,
       after: 488000,
     },
@@ -26,6 +27,7 @@ function buildFilteringStats(overrides: Partial<FilteringStatsType> = {}): Filte
     },
     snp: {
       enabled: true,
+      maf_cutoff: 0.05,
       removed: 3000,
       after: 485000,
     },

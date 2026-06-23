@@ -1,5 +1,5 @@
+# app/services/job_cleanup_service.py
 """Entfernt abgelaufene Job-Verzeichnisse automatisch vom Server."""
-
 import asyncio
 import logging
 import shutil
@@ -26,7 +26,7 @@ def cleanup_expired_jobs(
         logger.info("Job cleanup skipped: directory does not exist: %s", jobs_dir)
         return 0
 
-    cutoff = (time.time() if now is None else now) - retention_hours * 3600
+    cutoff        = (time.time() if now is None else now) - retention_hours * 3600
     deleted_count = 0
 
     try:
@@ -38,12 +38,9 @@ def cleanup_expired_jobs(
     for job_dir in job_directories:
         if not job_dir.is_dir():
             continue
-
         try:
-            modified_at = job_dir.stat().st_mtime
-            if modified_at >= cutoff:
+            if job_dir.stat().st_mtime >= cutoff:
                 continue
-
             shutil.rmtree(job_dir)
             deleted_count += 1
             logger.info("Deleted expired job directory: %s", job_dir)
@@ -66,19 +63,11 @@ async def run_job_cleanup_loop(
     """Führt die Job-Bereinigung dauerhaft im konfigurierten Intervall aus."""
     logger.info(
         "Job cleanup started: directory=%s, retention_hours=%s, interval_seconds=%s",
-        jobs_dir,
-        retention_hours,
-        interval_seconds,
+        jobs_dir, retention_hours, interval_seconds,
     )
-
     while True:
         try:
-            await asyncio.to_thread(
-                cleanup_expired_jobs,
-                jobs_dir,
-                retention_hours,
-            )
+            await asyncio.to_thread(cleanup_expired_jobs, jobs_dir, retention_hours)
         except Exception:
             logger.exception("Unexpected error during job cleanup")
-
         await asyncio.sleep(interval_seconds)

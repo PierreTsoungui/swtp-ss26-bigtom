@@ -20,7 +20,7 @@ const IdatUpload: React.FC<IdatUploadProps> = ({ idatFiles, idatErrors, handleId
 
     return (
         <div className="flex flex-col gap-2">
-            <label className="cursor-pointer bg-slate-400 hover:bg-slate-500
+            <label className="cursor-pointer bg-secondary text-secondary-text hover:bg-secondary-hover
                             rounded-full p-4 px-8 text-center">
                 IDAT-Dateien auswählen
                 <input
@@ -31,7 +31,7 @@ const IdatUpload: React.FC<IdatUploadProps> = ({ idatFiles, idatErrors, handleId
                     onChange={handleIdatChange}
                 />
             </label>
-            <label className="cursor-pointer bg-slate-400 hover:bg-slate-500
+            <label className="cursor-pointer bg-secondary text-secondary-text hover:bg-secondary-hover
                             rounded-full p-4 px-8 text-center">
                 IDAT-Ordner auswählen
                 <input
@@ -44,12 +44,12 @@ const IdatUpload: React.FC<IdatUploadProps> = ({ idatFiles, idatErrors, handleId
                 />
             </label>
             <p className="text-sm"><b>Erlaubte Dateien:</b> *.idat</p>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-neutral-textSecondary">
                 {idatFiles.length > 0 &&
                     `${idatFiles.length} Dateien (${pairCount} Paare)`}
           </p>
           {idatErrors.map((err, i) => (
-            <p key={i} className="text-sm text-red-600"><WarningIcon fontSize="small" /> {err}</p>
+            <p key={i} className="text-sm text-danger"><WarningIcon fontSize="small" /> {err}</p>
           ))}
         </div>
     );

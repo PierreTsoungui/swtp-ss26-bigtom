@@ -238,7 +238,7 @@ export function TableContainer() {
 
       {/* Filter-Status */}
       {hasFilters(activeTab) && (
-        <div className="mt-2 text-sm text-blue-600">
+        <div className="mt-2 text-sm text-primary">
           Gefiltert – {data?.pagination?.total_rows || 0} Einträge
         </div>
       )}
@@ -250,7 +250,7 @@ export function TableContainer() {
 
       {/* Error */}
       {error && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700">
+        <div className="mt-4 p-4 bg-danger-badgeBackground border border-danger rounded-md text-danger-badgeText">
           Fehler: {error}
         </div>
       )}

@@ -15,13 +15,14 @@ import { useParams } from "react-router-dom";
 
 import { useJobPolling } from "../../../analysis/hooks/useJobPolling.ts";
 
-import type { JobStatus } from "../../../analysis/utils/types.ts";
 import {useHeatMapOptions} from "../../hooks/useHeatMapOptions.ts";
 import {useGenerateHeatMap} from "../../hooks/useGenerateHeatMap.ts";
 import Progressbar from "../../../../shared/components/Progressbar.tsx";
 import ErrorMessage from "../../../../shared/error-handling/components/ErrorMessage.tsx";
 import downloadHeatmap from "../../utils/downloadHeatmap.ts";
 import type {HeatmapDmpFilter} from "../../utils/types.ts";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../../../shared/utils/JobTypes.ts";
+import type {ProblemDetail} from "../../../../shared/error-handling/types/ErrorTypes.ts";
 
 
 type HeatMapProps = {
@@ -55,7 +56,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const [persistentError, setPersistentError] = useState<any | null>(null);
+    const [persistentError, setPersistentError] = useState<ProblemDetail | Error | string | null>(null);
 
     const {
         data: options,
@@ -69,10 +70,9 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         generateHeatMap,
     } = useGenerateHeatMap(job_id ?? null);
 
-    const backendHeatmapError =
-        jobStatus?.status === "failed"
-            ? jobStatus.error
-            : null;
+    const backendHeatmapError = (jobStatus?.phase === JobPhase.HEATMAP && jobStatus?.status === JobStatusValue.FAILED) ? jobStatus.error : null;
+
+    const [showError, setShowError] = useState(false);
 
     console.log("backendHeatmapError", backendHeatmapError);
     console.log("jobStatus.error", jobStatus?.error);
@@ -90,12 +90,18 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
     );
 
     useEffect(() => {
-        if (jobStatus?.status === "failed" && jobStatus.error) {
+        if (jobStatus?.status === JobStatusValue.FAILED && jobStatus.error) {
             setPersistentError(jobStatus.error);
         }
     }, [jobStatus]);
 
-    const displayedError = error ?? persistentError ?? backendHeatmapError;
+    useEffect(() => {
+        if (error || persistentError || backendHeatmapError) {
+            setShowError(true);
+        }
+    }, [error, persistentError, backendHeatmapError]);
+
+    const displayedError = error ?? persistentError ?? backendHeatmapError ?? null;
 
     const handleGenerate = async () => {
         if (!primaryGrouping) {
@@ -103,6 +109,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
         }
         setHeatmapImageURL(null); // Vorherige Heatmap zurücksetzen
         setPersistentError(null);
+        setShowError(false);
         setPollingKey((prev => prev + 1)); // Trigger Job Status Polling
         setIsHeatmapPolling(true);
 
@@ -131,11 +138,13 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
     useEffect(() => {
         if (!jobStatus) return;
         console.log("[HeatMap Polling]", jobStatus.status, jobStatus.phase);
+        // TODO: Prüfen, könnte falsch sein, dass man bei RESULTS + WAITING fertig ist (eig nicht)
         const isDone =
-            jobStatus.status === "heatmap_done" ||
-            (jobStatus.phase === "heatmap" && jobStatus.status === "completed");
+            (jobStatus.status == JobStatusValue.COMPLETED && jobStatus.phase == JobPhase.HEATMAP) ||
+            (jobStatus.status == JobStatusValue.WAITING && jobStatus.phase == JobPhase.RESULTS) ;
 
-        const isFailed = jobStatus.phase === "heatmap" && jobStatus.status === "failed";
+        const isFailed = jobStatus.phase === JobPhase.HEATMAP && jobStatus.status === JobStatusValue.FAILED;
+
         if (isDone) {
             setIsHeatmapPolling(false);
             setHeatmapImageURL(
@@ -270,7 +279,7 @@ function HeatMap({ dmp_filter }: HeatMapProps) {
 
                     {/* Error */}
                     {displayedError && (
-                        <ErrorMessage open={true} error={displayedError} vertical="top" horizontal="center" />
+                        <ErrorMessage open={showError} error={displayedError} vertical="top" horizontal="center" onClose={() => setShowError(false)}/>
                     )}
 
 

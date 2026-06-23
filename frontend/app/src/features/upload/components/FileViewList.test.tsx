@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import FileViewList  from '../components/FileViewList.tsx'
+import FileViewList  from './FileViewList.tsx'
 import { render, screen } from '@testing-library/react'
 
 test('renders FileViewList with correct files', () => {

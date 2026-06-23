@@ -1,7 +1,7 @@
 import {render, screen} from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
-import type {JobStatus} from "../utils/types.ts";
+import {describe, expect, it, vi} from "vitest";
 import Progressbar from "../../../shared/components/Progressbar.tsx";
+import {JobPhase, type JobStatus, JobStatusValue} from "../../../shared/utils/JobTypes.ts";
 
 // MUI LinearProgress mocken da es kein echtes DOM-Rendering braucht
 vi.mock("@mui/material/LinearProgress", () => ({
@@ -33,13 +33,10 @@ vi.mock("../components/CancelButton", () => ({
 function buildJobStatus(overrides: Partial<JobStatus> = {}): JobStatus {
     return {
         job_id: "test-uuid-1234",
-        status: "running",
-        phase: "filtering",
+        status: JobStatusValue.RUNNING,
+        phase: JobPhase.FILTERING,
         progress_percent: 50,
         current_step: "SNP-Filter wird angewendet...",
-        steps_total: 6,
-        steps_completed: 3,
-        estimated_seconds_remaining: 30,
         ...overrides,
     };
 }
@@ -93,11 +90,12 @@ describe("Progressbar", () => {
         });
 
         it("aktiviert Next wenn Preview bereit ist", () => {
+            // Unklarheit, ob direkt der Übergang zu NORMALIZATION und WAITING geht
             render(
                 <Progressbar
                 jobStatus={buildJobStatus({
-                    status: "waiting",
-                    phase: "waiting_selection",
+                    status: JobStatusValue.COMPLETED,
+                    phase: JobPhase.NORMALIZATION_PREVIEW
                 })}
                 showNextButton
                 nextDisabled={false}
@@ -146,31 +144,6 @@ describe("Progressbar", () => {
 
     });
 
-    describe("Verbleibende Zeit", () => {
-        /*it("zeigt verbleibende Zeit an wenn estimated_seconds_remaining gesetzt ist", () => {
-            render(<Progressbar jobStatus={buildJobStatus({
-                estimated_seconds_remaining: 45,
-            })} />);
-            expect(screen.getByText("45 Sekunden")).toBeInTheDocument();
-            expect(screen.getByText("Verbleibende Zeit")).toBeInTheDocument();
-        });*/
-
-        it("versteckt verbleibende Zeit wenn estimated_seconds_remaining null ist", () => {
-            render(<Progressbar jobStatus={buildJobStatus({
-                estimated_seconds_remaining: null,
-            })} />);
-            expect(screen.queryByText("Verbleibende Zeit")).not.toBeInTheDocument();
-            expect(screen.queryByText(/Sekunden/)).not.toBeInTheDocument();
-        });
-
-        /*it("zeigt 0 Sekunden korrekt an", () => {
-            render(<Progressbar jobStatus={buildJobStatus({
-                estimated_seconds_remaining: 0,
-            })} />);
-            expect(screen.getByText("0 Sekunden")).toBeInTheDocument();
-        });*/
-    });
-
     describe("CancelButton", () => {
         it("zeigt den Abbrechen-Button an", () => {
             render(<Progressbar jobStatus={buildJobStatus()} />);
@@ -178,24 +151,14 @@ describe("Progressbar", () => {
                 screen.getByRole("button", { name: "Cancel" })
             ).toBeInTheDocument();
         });
-
-        /*it("ruft onCancel auf wenn Abbrechen geklickt wird", () => {
-            render(<Progressbar jobStatus={buildJobStatus()} />);
-
-            fireEvent.click(screen.getByRole("button", { name: "Analyse abbrechen" }));
-
-            const { cancelJob } = vi.mocked(useJobCancel({} as any, () => {}));
-            expect(cancelJob()).toHaveBeenCalled();
-        });*/
     });
 
     describe("Verschiedene Job-Zustände", () => {
         it("rendert korrekt bei Status 'queued'", () => {
             render(<Progressbar jobStatus={buildJobStatus({
-                status: "queued",
+                status: JobStatusValue.WAITING,
                 progress_percent: 0,
                 current_step: "Warte auf Start...",
-                steps_completed: 0,
             })} />);
             expect(screen.getByText("Warte auf Start...")).toBeInTheDocument();
             // expect(screen.getByText("Schritte 0 von 6")).toBeInTheDocument();
@@ -207,7 +170,6 @@ describe("Progressbar", () => {
                 phase: "filtering",
                 progress_percent: 38,
                 current_step: "Detection p-value Filter wird angewendet...",
-                steps_completed: 2,
             })} />);
             expect(
                 screen.getByText("Detection p-value Filter wird angewendet...")

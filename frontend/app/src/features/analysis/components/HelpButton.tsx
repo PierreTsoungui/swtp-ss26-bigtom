@@ -1,58 +1,170 @@
-import { useState } from "react";
-
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 /**
- * Props für die HelpButton-Komponente
- * @property helpText - Text, der im Hilfe-Modal angezeigt wird (konfigurierbar)
+ * Props für den HelpButton.
  */
 interface HelpButtonProps {
-    helpText?: string;
+    /**
+     * Der Text, der im Dialog angezeigt wird.
+     */
+    helpText: string;
+
+    /**
+     * Optionales ARIA-Label für den Button.
+     * @default "Hilfe öffnen"
+     */
+    ariaLabel?: string;
+
+    /**
+     * Optionaler Titel für den Dialog.
+     * @default "Hilfe"
+     */
+    dialogTitle?: string;
 }
 
-/**
- * Wiederverwendbare Komponente für einen kleinen Hilfe-Button.
- * Beim Anklicken öffnet sich ein modales Fenster, das konfigurierbare Hilfetexte anzeigen kann.
- * Diese Komponente enthält keine fachliche Logik und kann flexibel in beliebige Seiten integriert werden.
- */
-function HelpButton({ helpText = "Hilfetext folgt später..." }: HelpButtonProps) {
+function HelpButton({
+                        helpText,
+                        ariaLabel = "Hilfe öffnen",
+                        dialogTitle = "Hilfe",
+                    }: HelpButtonProps) {
     const [open, setOpen] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const closeButtonRef = useRef<HTMLButtonElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
+
+    const titleId = useId();
+    const descriptionId = useId();
+
+    const closeDialog = useCallback(() => {
+        setOpen(false);
+    }, []);
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+
+        closeButtonRef.current?.focus();
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                closeDialog();
+                return;
+            }
+
+            if (event.key !== "Tab" || !dialogRef.current) {
+                return;
+            }
+
+            const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
+                [
+                    "button:not([disabled])",
+                    "[href]",
+                    "input:not([disabled])",
+                    "select:not([disabled])",
+                    "textarea:not([disabled])",
+                    '[tabindex]:not([tabindex="-1"])',
+                ].join(","),
+            );
+
+            if (focusableElements.length === 0) {
+                event.preventDefault();
+                return;
+            }
+
+            const firstElement = focusableElements[0];
+            const lastElement = focusableElements[focusableElements.length - 1];
+
+            if (event.shiftKey && document.activeElement === firstElement) {
+                event.preventDefault();
+                lastElement.focus();
+            }
+
+            if (!event.shiftKey && document.activeElement === lastElement) {
+                event.preventDefault();
+                firstElement.focus();
+            }
+        };
+
+        document.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            document.removeEventListener("keydown", handleKeyDown);
+            triggerRef.current?.focus();
+        };
+    }, [closeDialog, open]);
 
     return (
         <>
-            {/* Kleiner quadratischer Button mit "?" */}
             <button
+                ref={triggerRef}
+                type="button"
                 onClick={() => setOpen(true)}
-                className="flex items-center justify-center w-6 h-6 rounded-md border border-slate-300 bg-slate-100 text-slate-700 font-bold hover:bg-slate-200"
-                aria-label="Hilfe öffnen"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-sm font-bold text-zinc-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-100 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                aria-label={ariaLabel}
+                aria-haspopup="dialog"
+                aria-expanded={open}
             >
                 ?
             </button>
 
-            {/* Modal */}
             {open && (
                 <div
-                    className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
-                    onClick={() => setOpen(false)}
-                    aria-modal="true"
-                    role="dialog"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 p-4"
+                    onMouseDown={closeDialog}
                 >
                     <div
-                        className="bg-white p-6 rounded-lg shadow-lg min-w-[260px] max-w-sm"
-                        onClick={(e) => e.stopPropagation()}
+                        ref={dialogRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={titleId}
+                        aria-describedby={descriptionId}
+                        className="flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-900 shadow-2xl"
+                        onMouseDown={(event) => event.stopPropagation()}
                     >
-                        <h2 className="text-lg font-semibold text-slate-900 mb-3">
-                            Hilfe
-                        </h2>
+                        <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-6 py-4">
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                                    Kontextuelle Hilfe
+                                </p>
+                                <h2 id={titleId} className="mt-1 text-xl font-semibold">
+                                    {dialogTitle}
+                                </h2>
+                            </div>
 
-                        <p className="text-slate-700 mb-4">
-                            {helpText}
-                        </p>
+                            <button
+                                ref={closeButtonRef}
+                                type="button"
+                                onClick={closeDialog}
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-xl font-semibold leading-none text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                                aria-label="Hilfe schließen"
+                            >
+                                ×
+                            </button>
+                        </div>
 
-                        <button
-                            onClick={() => setOpen(false)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                        >
-                            Schließen
-                        </button>
+                        <div className="overflow-y-auto px-6 py-5">
+                            <p
+                                id={descriptionId}
+                                className="whitespace-pre-line text-sm leading-7 text-zinc-700"
+                            >
+                                {helpText}
+                            </p>
+                        </div>
+
+                        <div className="flex justify-end border-t border-zinc-200 px-6 py-4">
+                            <button
+                                type="button"
+                                onClick={closeDialog}
+                                className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-zinc-50 shadow-sm transition hover:bg-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                            >
+                                Schließen
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

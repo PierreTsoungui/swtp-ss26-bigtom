@@ -15,17 +15,17 @@ interface InfoPanelProps {
 function InfoPanel({ title, message }: InfoPanelProps) {
     return (
         <section
-            className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+            className="w-full max-w-2xl rounded-lg border border-neutral-borderDefault bg-neutral-card p-6 shadow-sm"
             aria-labelledby="analysis-title"
         >
             <h1
                 id="analysis-title"
-                className="text-2xl font-semibold text-slate-900"
+                className="text-2xl font-semibold text-neutral-textPrimary"
             >
                 {title}
             </h1>
 
-            <p className="mt-3 text-slate-600">
+            <p className="mt-3 text-neutral-textSecondary">
                 {message}
             </p>
         </section>
