@@ -8,25 +8,11 @@ suppressPackageStartupMessages({
 # ── Progress-Vertrag einbinden ───────────────────────────────────────────────
 source("/app/r_backend/utils/progress.R")
 
-#' ── Sample Sheet einlesen ─────────────────────────────────────────────────────
-read_sample_sheet_smart <- function(path) {
-  lines <- readLines(path, warn = FALSE)
-  
-  # Suche Start der eigentlichen Daten
-  data_start <- grep("^\\[Data\\]", lines)
-  skip_n <- if (length(data_start) > 0) data_start[1] else 0
-  
-  read_csv(path, skip = skip_n, show_col_types = FALSE)
-}
-
-#' ── ID-Normalisierung ─────────────────────────────────────────────────────────
-normalize_id <- function(x) {
-  x <- as.character(x)
-  trimws(x)
-  x <- gsub("[[:space:]]+", "", x)
-  x <- gsub("\r|\n|\t", "", x)
-  x
-}
+# ── Shared sample-sheet helpers ───────────────────────────────────────────────
+# read_sample_sheet_smart() / normalize_id() / sample_sheet_array_id() live in a
+# single shared module so every script reads sheets identically (see the module
+# header for why minfi::read.metharray.sheet must not be used here).
+source("/app/r_backend/utils/samplesheet.R")
 
 #' ── Argumente ─────────────────────────────────────────────────────────────────
 args <- commandArgs(trailingOnly = TRUE)

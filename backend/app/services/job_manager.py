@@ -1,27 +1,31 @@
 # app/services/job_manager.py
+import asyncio
+import logging
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, Optional, Any, Set, Tuple
+
 from app.models.job import JobStatus
 from app.core.exceptions import InvalidTransitionError
-import asyncio
-import logging
 
 logger = logging.getLogger(__name__)
 
+
 # ── In-Memory Storage ────────────────────────────────────────────────────────
-jobs: Dict[str, JobStatus] = {}
-running_processes: Dict[str, asyncio.subprocess.Process] = {}
+jobs:          Dict[str, JobStatus]    = {}
+cancel_events: Dict[str, asyncio.Event] = {}
+resetting_jobs: Set[str]               = set()  # jobs currently being reset
+job_tasks:     Dict[str, asyncio.Task]  = {}     # active pipeline tasks (s. pipeline_task.py)
 
 
 # ── Enums ────────────────────────────────────────────────────────────────────
 
 class JobStatusValue(str, Enum):
     """Betriebszustand eines Jobs innerhalb einer Phase."""
-    RUNNING   = "running"   # R-Skript läuft aktiv
-    WAITING   = "waiting"   # Wartet auf Userinput (IDLE im Zustandsautomaten)
-    COMPLETED = "completed" # Phase erfolgreich abgeschlossen
-    FAILED    = "failed"    # Fehler innerhalb der Phase
+    RUNNING   = "running"
+    WAITING   = "waiting"
+    COMPLETED = "completed"
+    FAILED    = "failed"
 
 
 class JobPhase(str, Enum):
@@ -40,7 +44,7 @@ class JobPhase(str, Enum):
 # ── Erlaubte Übergänge ───────────────────────────────────────────────────────
 _ALLOWED_TRANSITIONS: Dict[
     Tuple[JobPhase, JobStatusValue],
-    Set[Tuple[JobPhase, JobStatusValue]]
+    Set[Tuple[JobPhase, JobStatusValue]],
 ] = {
     # UPLOAD
     (JobPhase.UPLOADED, JobStatusValue.WAITING): {
@@ -75,7 +79,7 @@ _ALLOWED_TRANSITIONS: Dict[
         (JobPhase.NORMALIZATION,         JobStatusValue.FAILED),
     },
     (JobPhase.NORMALIZATION, JobStatusValue.FAILED): {
-        (JobPhase.NORMALIZATION,         JobStatusValue.RUNNING),  # Retry mit anderer Methode
+        (JobPhase.NORMALIZATION,         JobStatusValue.RUNNING),
     },
     (JobPhase.NORMALIZATION, JobStatusValue.COMPLETED): {
         (JobPhase.SVD,                   JobStatusValue.RUNNING),
@@ -91,17 +95,17 @@ _ALLOWED_TRANSITIONS: Dict[
     # BATCH
     (JobPhase.BATCH, JobStatusValue.WAITING): {
         (JobPhase.BATCH,                 JobStatusValue.RUNNING),
-        (JobPhase.ANALYSIS,              JobStatusValue.RUNNING),  # User überspringt Batch
+        (JobPhase.ANALYSIS,              JobStatusValue.RUNNING),
     },
     (JobPhase.BATCH, JobStatusValue.RUNNING): {
         (JobPhase.BATCH,                 JobStatusValue.COMPLETED),
         (JobPhase.BATCH,                 JobStatusValue.FAILED),
     },
     (JobPhase.BATCH, JobStatusValue.FAILED): {
-        (JobPhase.BATCH,                 JobStatusValue.RUNNING),  # Retry mit anderen Einstellungen
+        (JobPhase.BATCH,                 JobStatusValue.RUNNING),
     },
     (JobPhase.BATCH, JobStatusValue.COMPLETED): {
-        (JobPhase.SVD,                   JobStatusValue.RUNNING),  # Neuer SVD nach Korrektur
+        (JobPhase.SVD,                   JobStatusValue.RUNNING),
     },
     # ANALYSIS
     (JobPhase.ANALYSIS, JobStatusValue.RUNNING): {
@@ -115,7 +119,7 @@ _ALLOWED_TRANSITIONS: Dict[
     (JobPhase.RESULTS, JobStatusValue.WAITING): {
         (JobPhase.RESULTS,               JobStatusValue.COMPLETED),
         (JobPhase.RESULTS,               JobStatusValue.FAILED),
-        (JobPhase.HEATMAP,               JobStatusValue.RUNNING),  # Guard: TableTab == DMP (FE)
+        (JobPhase.HEATMAP,               JobStatusValue.RUNNING),
     },
     (JobPhase.RESULTS, JobStatusValue.COMPLETED): {
         (JobPhase.RESULTS,               JobStatusValue.WAITING),
@@ -126,8 +130,8 @@ _ALLOWED_TRANSITIONS: Dict[
         (JobPhase.HEATMAP,               JobStatusValue.FAILED),
     },
     (JobPhase.HEATMAP, JobStatusValue.FAILED): {
-        (JobPhase.HEATMAP,               JobStatusValue.RUNNING),  # Retry mit anderen Filtern/Gruppierung
-        (JobPhase.RESULTS,               JobStatusValue.WAITING),  # User bricht ab, zurück zur Tabelle
+        (JobPhase.HEATMAP,               JobStatusValue.RUNNING),
+        (JobPhase.RESULTS,               JobStatusValue.WAITING),
     },
     (JobPhase.HEATMAP, JobStatusValue.COMPLETED): {
         (JobPhase.RESULTS,               JobStatusValue.WAITING),
@@ -138,7 +142,6 @@ _ALLOWED_TRANSITIONS: Dict[
 # ── Kern-API ─────────────────────────────────────────────────────────────────
 
 def create_job(job_id: str) -> JobStatus:
-    """Erstellt einen neuen Job im Initialzustand (uploaded, waiting)."""
     job = JobStatus(
         job_id=job_id,
         status=JobStatusValue.WAITING.value,
@@ -160,11 +163,14 @@ def transition_job(
     current_step: str = None,
     error: Dict[str, Any] = None,
 ) -> JobStatus:
-    """
-    Führt einen validierten Zustandsübergang durch.
-    Wirft InvalidTransitionError bei ungültigem Übergang.
-    Alle Phasen- und Statuswechsel laufen ausschließlich über diese Funktion.
-    """
+    # Reset takes precedence over any transition. While a job is being reset
+    # its background task may still emit trailing transitions until it observes
+    # the cancel event — these are expected and silently dropped instead of
+    # raising or mutating a job that is about to disappear.
+    if job_id in resetting_jobs:
+        logger.debug("[transition_job] Skipped, job is being reset: job_id=%s", job_id)
+        return None
+
     job = jobs.get(job_id)
     if job is None:
         raise KeyError(f"Job '{job_id}' nicht gefunden.")
@@ -206,15 +212,10 @@ def transition_job(
     return job
 
 
-def set_progress(
-    job_id: str,
-    percent: int,
-    message: str,
-) -> Optional[JobStatus]:
-    """
-    Aktualisiert ausschließlich Fortschrittsfelder eines laufenden Jobs.
-    Kein Phasenwechsel — nur für progress-Events aus dem R-Executor.
-    """
+def set_progress(job_id: str, percent: int, message: str) -> Optional[JobStatus]:
+    # Drop progress updates for jobs that are being reset (see transition_job).
+    if job_id in resetting_jobs:
+        return None
     job = jobs.get(job_id)
     if job is None:
         return None
@@ -236,21 +237,77 @@ def delete_job(job_id: str) -> bool:
     return False
 
 
-# ── Process-Tracking ─────────────────────────────────────────────────────────
+# ── Cancel-Event-Tracking (für den neuen Command-basierten Executor) ─────────
 
-def register_process(job_id: str, process: asyncio.subprocess.Process) -> None:
-    running_processes[job_id] = process
-
-
-def unregister_process(job_id: str) -> None:
-    running_processes.pop(job_id, None)
+def register_cancel_event(job_id: str, event: asyncio.Event) -> None:
+    """Registriert das Abbruch-Event für einen laufenden Job."""
+    cancel_events[job_id] = event
 
 
-async def kill_process(job_id: str) -> bool:
-    process = running_processes.get(job_id)
-    if process and process.returncode is None:
-        process.kill()
-        await process.wait()
-        unregister_process(job_id)
+def unregister_cancel_event(job_id: str) -> None:
+    """Entfernt das Cancel-Event nach Abschluss des Jobs."""
+    cancel_events.pop(job_id, None)
+
+
+def get_cancel_event(job_id: str) -> Optional[asyncio.Event]:
+    """Gibt das Cancel-Event zurück, falls vorhanden (z.B. für Sub-Services)."""
+    return cancel_events.get(job_id)
+
+
+def trigger_cancel(job_id: str) -> bool:
+    """
+    Setzt das Cancel-Event des Jobs (z.B. vom Reset-Endpunkt).
+    Gibt True zurück wenn ein aktives Event gefunden und gesetzt wurde.
+    """
+    event = cancel_events.get(job_id)
+    if event and not event.is_set():
+        event.set()
+        logger.info("[trigger_cancel] Cancel-Event gesetzt: job_id=%s", job_id)
         return True
     return False
+
+
+# ── Background-Task-Registry ─────────────────────────────────────────────────
+# Ergänzung zur Cancel-Event-Registry: hält die asyncio.Task-Referenz selbst,
+# damit pipeline_task.py (und potenziell eine künftige Shutdown-Routine) weiß,
+# welche Pipeline-Tasks gerade für einen Job aktiv sind. Wird ausschließlich
+# von pipeline_task.start_job_pipeline() befüllt — Services rufen das nicht
+# direkt auf (siehe r_executor_spec.md Abschnitt 6, Regel 3).
+
+def register_job_task(job_id: str, task: asyncio.Task) -> None:
+    job_tasks[job_id] = task
+
+
+def unregister_job_task(job_id: str) -> None:
+    job_tasks.pop(job_id, None)
+
+
+def get_job_task(job_id: str) -> Optional[asyncio.Task]:
+    return job_tasks.get(job_id)
+
+
+# ── Reset-Lifecycle ──────────────────────────────────────────────────────────
+# A job is added to `resetting_jobs` for the whole duration of a reset. This
+# both serializes concurrent resets of the same job and turns any trailing
+# transition_job/set_progress call into a silent no-op (see those functions).
+
+def begin_reset(job_id: str) -> bool:
+    """Claim the reset slot for a job. Returns False if a reset is already
+    active for it.
+
+    No lock needed: the event loop is single-threaded and there is no await
+    between the membership test and the insert, so this is atomic.
+    """
+    if job_id in resetting_jobs:
+        return False
+    resetting_jobs.add(job_id)
+    return True
+
+
+def end_reset(job_id: str) -> None:
+    """Release the reset slot. Safe to call even if no reset was active."""
+    resetting_jobs.discard(job_id)
+
+
+def is_resetting(job_id: str) -> bool:
+    return job_id in resetting_jobs
