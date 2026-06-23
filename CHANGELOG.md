@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-23
+
+### Added
+- **SVD Plot Zoom:** Added an enlargement feature for SVD plots using MUI components, improving the visual inspection of batch correction results.
+- **Help System Integration:** Integrated help buttons into the analysis workflow, including upload, normalization, batch correction and result table views.
+- **Central WCAG Color Theme:** Added a central WCAG-compliant color system and integrated it across the frontend application.
+- **Backend Job Manager:** Introduced a new backend job manager to centralize job state transitions and improve pipeline state handling.
+- **Backend Exceptions:** Added a dedicated backend exception structure for job state transitions.
+- **Backend Logging Setup:** Added a central backend logging configuration and integrated the initial logging setup into the FastAPI application, upload route and R executor.
+- **Frontend Tests:** Added and extended frontend tests for help buttons, upload filters, normalization, result pages, table tabs, heatmap components and color definitions.
+
+### Changed
+- **Job State Handling:** Updated backend routes and services to use the new job state transition logic across upload, normalization preview, normalization, batch correction, heatmap, table, stats, status and reset workflows.
+- **Frontend Job State Integration:** Updated frontend status and phase handling to match the revised backend job states.
+- **Progress Bar:** Adjusted progress bar behavior and error handling to better reflect failed states and pipeline progress.
+- **Landing Page:** Revised the landing page and related tests according to review feedback.
+- **Batch Analysis UI:** Improved button disabling and button labeling during batch analysis.
+- **Filter Validation:** Adjusted validation logic for SNP, Bead Count and SampleQuality filter parameters.
+- **SampleQuality Defaults:** Updated the default values for SampleQuality filter settings.
+- **Help Text Structure:** Moved help texts into the shared frontend structure and updated the corresponding imports.
+- **Frontend Refactoring:** Reorganized frontend files, moved tests closer to their related components and removed unused frontend types.
+- **WCAG Styling:** Applied the central color theme across analysis, batch, landing page, normalization, table, upload, layout and shared UI components.
+- **Type Definitions:** Consolidated job-related frontend types into a shared `JobTypes` utility.
+
+### Fixed
+- **Error Modal Close Function:** Fixed the close behavior of the error message modal.
+- **Error Message Component:** Adjusted the size and close behavior of the shared `ErrorMessage` component.
+- **Progress Bar Error Display:** Fixed the visual display of errors in the progress bar by using red coloring and corresponding error messages.
+- **Filter Statistics Display:** Fixed the display of SNP and Bead Count parameter values in the filter statistics.
+- **Normalization Preview Feedback:** Replaced the previous “Filterstats not available” display with clearer MUI Alert-based feedback for normalization preview results.
+- **Batch Page Cleanup:** Removed a remaining debug line from the `BatchPage`.
+- **Backend Failed State Recovery:** Added a new backend state transition that allows jobs to continue after renewed user input from the `FAILED` state.
+- **Backend Error Values:** Fixed incorrect error values related to failed job states.
+- **Text Colors:** Corrected frontend text colors to improve accessibility and consistency with the WCAG color concept.
+
+### Removed
+- **Temporary Backend Files:** Removed previously versioned temporary backend files, including sample IDAT files and sample CSV files from backend temp directories.
+- **Unused Frontend Files:** Removed obsolete upload test files and unused table view type definitions.
+
+### Documentation
+- **API Contract:** Added and updated the backend API contract documentation.
+- **Pipeline Progress Specification:** Added architecture documentation for unified pipeline progress handling.
+- **Backend Logging Specification:** Added architecture documentation for the unified backend logging concept.
+- **Architecture File Naming:** Renamed architecture documentation files to align with the existing specification naming structure.
+- **State Naming Clarification:** Updated the API contract by renaming the success state to `completed`, since the state marks the end of a pipeline step rather than the final success of the complete analysis.
+
 ## [0.4.0] - 2026-06-15
 
 ### Added
