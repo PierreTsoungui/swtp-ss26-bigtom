@@ -1,6 +1,8 @@
 import {Accordion, AccordionDetails, AccordionSummary, Stack, Switch, TextField, Typography} from "@mui/material";
 import type {SnpFilterType} from "../utils/types.ts";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import {FILTER_CONSTRAINTS, validateFilterValue} from "../utils/filterValidation.ts";
+import React from "react";
 
 
 type SnpFilterProps = {
@@ -9,6 +11,16 @@ type SnpFilterProps = {
 }
 
 function SnpFilter({value, onChange} : SnpFilterProps) {
+    const constraints = FILTER_CONSTRAINTS.snp.maf_cutoff;
+    const validation = validateFilterValue(value.maf_cutoff, constraints.min, constraints.max);
+
+
+    const handleMafCutoffChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = Number(e.target.value);
+        const clampedValue = Math.max(constraints.min, Math.min(newValue, constraints.max));
+        onChange({...value, maf_cutoff: clampedValue});
+    }
+
     return (
         <Accordion>
             <AccordionSummary expandIcon={<ExpandMoreIcon/>}>
@@ -32,12 +44,21 @@ function SnpFilter({value, onChange} : SnpFilterProps) {
                 <Stack spacing={2}>
                     <TextField
                         type="number"
-                        label="Minor Allele Frequency (MAF)"
+                        label={constraints.label}
                         value={value.maf_cutoff}
-                        onChange={(e) => onChange({...value, maf_cutoff: Number(e.target.value)})}
+                        onChange={handleMafCutoffChange}
                         size="small"
                         fullWidth
                         disabled={!value.enabled}
+                        slotProps={{
+                            htmlInput: {
+                                step: constraints.step,
+                                min: constraints.min,
+                                max: constraints.max
+                            }
+                        }}
+                        error={!validation.isValid}
+                        helperText={validation.error || constraints.description}
                     />
                 </Stack>
             </AccordionDetails>
