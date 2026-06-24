@@ -20,7 +20,8 @@ find_project_file_smart <- function(filename) {
 }
 
 RDS_PATH     <- find_project_file_smart("filtered_data.rds")
-SAMPLES_PATH <- find_project_file_smart("Demo_EPIC-8v2-0_A1_SampleSheet_16.csv")
+#SAMPLES_PATH <- find_project_file_smart("Demo_EPIC-8v2-0_A1_SampleSheet_16.csv")
+SAMPLES_PATH <- find_project_file_smart("Samplesheet.csv")
 PREVIEW_SCR  <- find_project_file_smart("normalization_preview.R")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -124,4 +125,40 @@ test_that("Fachliche Validierung: Verwertung biologischer Gruppen und technische
   
   messages <- unlist(sapply(res$logs, function(x) x$message))
   expect_true(any(grepl("Array IDs:", messages)), info = "Skript prozessiert keine Array-IDs für das Mapping.")
+})
+# Zusätzliche Tests 
+test_that("Beschädigtes RDS wird erkannt", {
+
+  skip_if_not(file.exists(SAMPLES_PATH))
+  skip_if_not(file.exists(PREVIEW_SCR))
+
+  broken_rds <- tempfile(fileext = ".rds")
+
+  writeLines("kaputte datei", broken_rds)
+
+  res <- run_preview(
+    rds = broken_rds,
+    samples = SAMPLES_PATH
+  )
+  cat("\n--- STDOUT ---\n")
+  cat(res$stdout)
+  cat("\n--- LOGS ---\n")
+  print(res$logs)
+  expect_true(res$status != 0)
+})
+
+test_that("Fehlendes filtered_data.rds wird erkannt", {
+
+  skip_if_not(file.exists(SAMPLES_PATH))
+  skip_if_not(file.exists(PREVIEW_SCR))
+
+  res <- run_preview(
+    rds = "/tmp/not_existing.rds",
+    samples = SAMPLES_PATH
+  )
+  cat("\n--- STDOUT ---\n")
+  cat(res$stdout)
+  cat("\n--- LOGS ---\n")
+  print(res$logs)
+  expect_true(res$status != 0)
 })
