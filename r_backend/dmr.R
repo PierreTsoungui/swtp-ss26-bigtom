@@ -1,17 +1,30 @@
 #!/usr/bin/env Rscript
 
-#' DMR-Analyse
+#' Differentially Methylated Region Analysis
 #'
-#' Ausführung:
-#'   Rscript dmr.R <beta_rds> <sample_sheet> <job_dir>
-#' Optional:
-#'   [minProbes] [cutoff] [adjPvalDmr] [maxGap] [arraytype] [nBootstraps] [nCores]
+#' Executes a Differentially Methylated Region (DMR) workflow
+#' using the ChAMP Bumphunter implementation.
+#'
+#' The script:
+#' - loads a beta matrix
+#' - aligns metadata from the sample sheet
+#' - validates genomic probe clusters
+#' - identifies significant DMRs
+#' - exports results as CSV and RDS files
+#'
+#' Usage:
+#' Rscript dmr.R <sample_sheet_path> <job_dir> <beta_filename>
+#'
+#' Optional parameters:
+#' [minProbes] [cutoff] [adjPvalDmr]
+#' [maxGap] [arraytype]
+#' [nBootstraps] [nCores]
 
-# ── Verwendete Bibliotheken ──────────────────────────────────────────────────
+# # ── Libraries used ───────────────────────────────────────────────────────────────────────────
 suppressPackageStartupMessages({
-  library(methods) 
+  library(methods)
   library(DBI)
-  library(RSQLite) 
+  library(RSQLite)
   library(lumi)
   library(ChAMP)
   library(readr)
@@ -19,9 +32,9 @@ suppressPackageStartupMessages({
   library(doParallel)
 })
 
-# ── Progress-Vertrag einbinden ───────────────────────────────────────────────
+# ── Integrate Progress contract ───────────────────────────────────────────────
 source("/app/r_backend/utils/progress.R")
-# ── Eingabeparameter ─────────────────────────────────────────────────────────
+# ── Parse input parameters ───────────────────────────────────────────────────────────
 args <- commandArgs(trailingOnly = TRUE)
 
 if (length(args) < 3) {
@@ -73,10 +86,10 @@ if (!dir.exists(job_dir)) {
   dir.create(job_dir, recursive = TRUE)
 }
 
-# Initialisierung an Backend melden
+# Report initialization to the backend
 emit_progress(0, "Initializing Differential Methylation Region (DMR) workflow")
 
-# ── Parallelismus konfigurieren ──────────────────────────────────────────────
+# ── Configure parallelism ────────────────────────────────────────────────────
 emit_progress(5, "Configuring parallel processing compute environments")
 
 if (n_cores == 1L) {
@@ -90,14 +103,25 @@ if (n_cores == 1L) {
   on.exit(stopCluster(cl), add = TRUE)
 }
 
-# ── Beta-Matrix laden ────────────────────────────────────────────────────────
+# ── Load beta matrix ─────────────────────────────────────────────────────────
 emit_progress(15, "Loading and validating methylation beta matrix")
 
 if (!file.exists(beta_path)) {
   emit_error(sprintf("Beta matrix file not found at path: %s", beta_path))
 }
 
-beta <- readRDS(beta_path)
+beta <- tryCatch(
+  readRDS(beta_path),
+  error = function(e) {
+    emit_error(
+      sprintf(
+        "Beta matrix loading failed: Unable to read RDS file '%s'. %s",
+        beta_path,
+        conditionMessage(e)
+      )
+    )
+  }
+)
 
 if (isS4(beta)) {
   suppressPackageStartupMessages(library(minfi))
@@ -112,23 +136,56 @@ if (nrow(beta) == 0 || ncol(beta) == 0) {
   emit_error("Loaded beta matrix contains no features or samples (empty matrix)")
 }
 
-# Schutzschild für batch-korrigierte Daten (Werte auf Intervall [0,1] kappen)
+# Clamp beta values to the valid range [0,1]
 if (any(beta < 0, na.rm = TRUE) || any(beta > 1, na.rm = TRUE)) {
   beta[beta < 0] <- 0
   beta[beta > 1] <- 1
 }
 
-# ── Sample Sheet laden ───────────────────────────────────────────────────────
+# ── Load sample sheet ───────────────────────────────────────────────────────
 emit_progress(35, "Loading and parsing sample sheet metadata")
 
-all_lines  <- readLines(sample_sheet_path)
-data_start <- which(grepl("^\\[Data\\]", all_lines))
-
-samples <- if (length(data_start) > 0) {
-  read_csv(sample_sheet_path, skip = data_start, show_col_types = FALSE)
-} else {
-  read_csv(sample_sheet_path, show_col_types = FALSE)
+if (!file.exists(sample_sheet_path)) {
+  emit_error(
+    sprintf(
+      "Sample sheet file not found: %s",
+      sample_sheet_path
+    )
+  )
 }
+all_lines <- tryCatch(
+  readLines(sample_sheet_path),
+  error = function(e) {
+    emit_error(
+      sprintf(
+        "Failed to read sample sheet: %s",
+        conditionMessage(e)
+      )
+    )
+  }
+)
+data_start <- which(grepl("^\\[Data\\]", all_lines))[1]
+
+samples <- tryCatch({
+
+  if (length(data_start) > 0) {
+    read_csv(sample_sheet_path,skip = data_start,show_col_types = FALSE
+    )
+  } else {
+    read_csv(sample_sheet_path,show_col_types = FALSE
+    )
+  }
+
+}, error = function(e) {
+
+  emit_error(
+    sprintf(
+      "Failed to parse sample sheet: %s",
+      conditionMessage(e)
+    )
+  )
+
+})
 
 required_cols <- c("Sample_Name", "Sample_Group")
 
@@ -136,7 +193,15 @@ if (!all(required_cols %in% colnames(samples))) {
   emit_error(sprintf("Sample sheet is missing mandatory columns. Missing: %s", paste(setdiff(required_cols, colnames(samples)), collapse = ", ")))
 }
 
-# ── Robustes Alignment ───────────────────────────────────────────────────────
+if (any(is.na(samples$Sample_Name)) ||
+    any(is.na(samples$Sample_Group))) {
+  emit_error(
+    "Sample sheet validation failed: Missing values detected in mandatory columns."
+  )
+}
+
+# ––––––––––––––– Align phenotype metadata with beta matrix samples ––––––––––
+
 emit_progress(50, "Aligning sample sheet metadata with beta matrix columns")
 
 beta_samples <- colnames(beta)
@@ -174,8 +239,7 @@ pheno <- factor(samples_aligned$Sample_Group)
 if (length(levels(pheno)) < 2) {
   emit_error("Statistical group error: At least 2 distinct groups are required for DMR region analysis.")
 }
-
-# ── Hotfix für Single-Sample-Gruppen (Verhindert ChAMP-Dimension-Drop) ────────
+# ── Handle single-sample groups ──
 for (g in levels(pheno)) {
   if (sum(pheno == g) == 1) {
     idx <- which(pheno == g)
@@ -194,7 +258,8 @@ for (g in levels(pheno)) {
   }
 }
 
-# ── Vorprüfung: Gibt es überhaupt verwertbare Cluster? ───────────────────────
+# ── Preliminary check: Are there any usable clusters at all? ───────────────────────
+
 emit_progress(65, "Validating genomic probe density and cluster allocations")
 
 cluster_count <- tryCatch({
@@ -222,15 +287,23 @@ cluster_count <- tryCatch({
   sum(table(cl) > min_probes)
   
 }, error = function(e) {
-  -1L
+  emit_error(
+    sprintf(
+      "Cluster validation failed: %s",
+      conditionMessage(e)
+    )
+  )
 })
 
 if (identical(cluster_count, 0L)) {
   emit_error(sprintf("Density boundary violation: Found 0 genomic probe clusters matching the constraints (minProbes=%d, maxGap=%d bp). Consider relaxing thresholds.", min_probes, max_gap))
 }
 
-# ── DMR-Analyse ──────────────────────────────────────────────────────────────
+# ── DMR Analysis ──────────────────────────────────────────────────────────────
 emit_progress(75, "Executing statistical region discovery algorithm (Bumphunter engine)")
+
+# ChAMP/Bumphunter may emit worker warnings in parallel mode.
+# A returned DMR result table is considered valid despite these warnings.
 
 dmr_raw <- tryCatch({
   champ.DMR(
@@ -248,7 +321,7 @@ dmr_raw <- tryCatch({
   emit_error(sprintf("ChAMP DMR mathematical execution failed: %s", conditionMessage(e)))
 })
 
-# ── Ergebnis validieren ──────────────────────────────────────────────────────
+# ── Validate result ──────────────────────────────────────────────────────
 if (is.null(dmr_raw)) {
   emit_error("Analysis anomaly: champ.DMR returned a NULL result object.")
 }
@@ -263,7 +336,8 @@ if (is.null(dmr_table) || nrow(dmr_table) == 0) {
   emit_error(sprintf("Filtering constraint violation: No significant DMR regions remaining after threshold filter (adjPvalDmr <= %g). Try relaxing the p-value parameters.", adj_pval))
 }
 
-# ── Ausgabe formatieren ──────────────────────────────────────────────────────
+# ── Format output ───────────────────────────────────────────────────────────
+
 emit_progress(90, "Formatting and extracting genomic region metrics tables")
 
 get_col <- function(df, candidates, fallback = NA_real_) {
@@ -287,7 +361,7 @@ if (nrow(dmr_out) == 0) {
   emit_error("DMR parsing failure: Formatted output data frame contains 0 records.")
 }
 
-# ── Ergebnisse speichern ─────────────────────────────────────────────────────
+# ── Save results ──────────────────────────────────────────────────────────────
 emit_progress(100, "Saving discovered DMR regions into pipeline assets")
 
 output_csv <- file.path(job_dir, "dmr_results.csv")
@@ -296,7 +370,7 @@ output_rds <- file.path(job_dir, "dmr_results.rds")
 write.csv(dmr_out, output_csv, row.names = FALSE)
 saveRDS(dmr_out, output_rds)
 
-# Finale Erfolgsmeldung an das Backend abgeben
+# Submit final success notification to the backend
 emit_done(
   output_csv = output_csv,
   output_rds = output_rds,
