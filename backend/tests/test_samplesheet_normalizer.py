@@ -15,7 +15,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.services.samplesheet_normalizer import normalize_sample_sheet
+from app.services.samplesheet_normalizer import (
+    normalize_sample_sheet,
+    read_sample_sheet_table,
+    suggest_column_mapping,
+)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -156,6 +160,75 @@ def test_basename_only_sheet_is_accepted():
     headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv"))
     assert headers == ["Basename"]
     assert rows == [["sample_1"], ["sample_2"]]
+
+
+# ── Explicit role mapping (user picks columns via dropdowns) ────────────────────
+
+CUSTOM_CSV = b"""Patient,Diagnosis,Chip,Well
+P1,Tumor,206891110001,R01C01
+P2,Normal,206891110001,R03C01
+"""
+
+
+def test_explicit_mapping_renames_chosen_columns():
+    mapping = {
+        "Sentrix_ID": "Chip",
+        "Sentrix_Position": "Well",
+        "Sample_Group": "Diagnosis",
+        "Sample_Name": "Patient",
+    }
+    headers, rows = parse_canonical(
+        normalize_sample_sheet(CUSTOM_CSV, "custom.csv", column_mapping=mapping)
+    )
+    assert headers == ["Sample_Name", "Sample_Group", "Sentrix_ID", "Sentrix_Position"]
+    assert rows[0] == ["P1", "Tumor", "206891110001", "R01C01"]
+
+
+def test_explicit_mapping_passes_other_columns_through():
+    sheet = b"Patient,Diagnosis,Chip,Well,Batch\nP1,Tumor,206891110001,R01C01,B1\n"
+    mapping = {
+        "Sentrix_ID": "Chip",
+        "Sentrix_Position": "Well",
+        "Sample_Group": "Diagnosis",
+        "Sample_Name": "Patient",
+    }
+    headers, _ = parse_canonical(normalize_sample_sheet(sheet, "x.csv", column_mapping=mapping))
+    assert "Batch" in headers  # dynamic, non-role columns survive verbatim
+
+
+def test_explicit_mapping_disambiguates_colliding_column():
+    # A non-mapped column literally named "Sample_Group" must not collide with the
+    # role we assign to a *different* column — R would otherwise mangle duplicate
+    # headers. The unmapped one is suffixed so the canonical role stays unique.
+    sheet = b"Patient,Sample_Group,Chip,Well,Extra\nP1,Tumor,206891110001,R01C01,x\n"
+    mapping = {
+        "Sentrix_ID": "Chip",
+        "Sentrix_Position": "Well",
+        "Sample_Group": "Patient",   # role Sample_Group goes to the "Patient" column
+        "Sample_Name": "Extra",
+    }
+    headers, _ = parse_canonical(normalize_sample_sheet(sheet, "x.csv", column_mapping=mapping))
+    assert headers.count("Sample_Group") == 1
+    assert "Sample_Group_original" in headers
+
+
+def test_read_sample_sheet_table_returns_raw_headers():
+    headers, rows = read_sample_sheet_table(CUSTOM_CSV, "custom.csv")
+    assert headers == ["Patient", "Diagnosis", "Chip", "Well"]
+    assert rows[0] == ["P1", "Tumor", "206891110001", "R01C01"]
+
+
+def test_suggest_mapping_recognizes_aliases_only():
+    assert suggest_column_mapping(["SentrixBarcode_A", "Sample_Name", "Foo"]) == {
+        "Sentrix_ID": "SentrixBarcode_A",
+        "Sample_Name": "Sample_Name",
+    }
+    assert suggest_column_mapping(["Patient", "Chip", "Well"]) == {}
+
+
+def test_mapping_to_missing_column_raises():
+    with pytest.raises(ValueError):
+        normalize_sample_sheet(CUSTOM_CSV, "x.csv", column_mapping={"Sentrix_ID": "Nope"})
 
 
 # ── Error handling ─────────────────────────────────────────────────────────────

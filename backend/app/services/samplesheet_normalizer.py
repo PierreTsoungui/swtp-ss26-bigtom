@@ -26,7 +26,7 @@ import csv
 import io
 import logging
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -34,6 +34,19 @@ logger = logging.getLogger(__name__)
 
 # Marker the R backend greps for (``^\[Data\]``) to find the column header row.
 DATA_MARKER = "[Data]"
+
+# The four roles every downstream consumer (R scripts, heatmap, batch, preview)
+# reads by name. ``Sentrix_ID``/``Sentrix_Position`` locate the IDAT files and
+# build the array id; ``Sample_Name`` identifies a sample; ``Sample_Group`` is
+# the biological grouping for DMP/DMR. When a sheet uses names the alias table
+# below does not know, the user maps these roles explicitly (see
+# ``normalize_sample_sheet(..., column_mapping=...)``).
+CANONICAL_ROLES: Tuple[str, ...] = (
+    "Sentrix_ID",
+    "Sentrix_Position",
+    "Sample_Group",
+    "Sample_Name",
+)
 
 # Delimiters we try to detect in CSV uploads, most-specific first.
 _CSV_DELIMITERS = (";", "\t", ",")
@@ -62,7 +75,11 @@ _HEADER_ALIASES = {
 }
 
 
-def normalize_sample_sheet(content: bytes, filename: str) -> str:
+def normalize_sample_sheet(
+    content: bytes,
+    filename: str,
+    column_mapping: Optional[Dict[str, str]] = None,
+) -> str:
     """Convert a raw uploaded sample sheet into the canonical CSV text.
 
     Accepts the raw bytes of an .xlsx, .xls or .csv upload and returns a UTF-8
@@ -73,8 +90,38 @@ def normalize_sample_sheet(content: bytes, filename: str) -> str:
         HeLa,...,206891110001,R01C01
         ...
 
+    ``column_mapping`` (optional) explicitly assigns the four canonical roles to
+    *raw* column names, e.g.::
+
+        {"Sentrix_ID": "Chip_Barcode", "Sentrix_Position": "Well",
+         "Sample_Group": "Disease_State", "Sample_Name": "Patient_ID"}
+
+    When given, exactly those columns are renamed to the canonical role names and
+    every other column is passed through verbatim (the user is authoritative).
+    When omitted, the legacy Illumina alias detection is applied instead — this
+    keeps the deprecated single-shot upload and already-canonical sheets working.
+
     Raises ``ValueError`` (with a human-readable, German message) on any
     structural problem so the upload layer can surface it as a 400.
+    """
+    raw_headers, rows = read_sample_sheet_table(content, filename)
+
+    if column_mapping:
+        headers = _apply_explicit_mapping(raw_headers, column_mapping)
+    else:
+        headers = _canonicalize_headers(raw_headers)
+
+    return _write_canonical_csv(headers, rows)
+
+
+def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], List[List[str]]]:
+    """Read a sheet's data section into ``(raw_headers, rows)`` without renaming.
+
+    This is the shared front-half of the normalization: it reads the source
+    format, finds the column-header row, drops unnamed (padding) columns and
+    projects every data row onto the kept columns. The headers are returned
+    *exactly as the user wrote them* (stripped of surrounding whitespace) so the
+    upload UI can offer them as the options for the four role dropdowns.
     """
     ext = Path(filename).suffix.lower()
 
@@ -96,14 +143,31 @@ def normalize_sample_sheet(content: bytes, filename: str) -> str:
     if not keep:
         raise ValueError("SampleSheet enthält keine benannten Spalten.")
 
-    headers = _canonicalize_headers([raw_headers[i] for i in keep])
+    headers = [raw_headers[i].strip() for i in keep]
     rows = [_select_and_pad(row, keep) for row in raw_rows]
     rows = [row for row in rows if any(cell.strip() for cell in row)]
 
     if not rows:
         raise ValueError("SampleSheet enthält keine Datenzeilen.")
 
-    return _write_canonical_csv(headers, rows)
+    return headers, rows
+
+
+def suggest_column_mapping(raw_headers: List[str]) -> Dict[str, str]:
+    """Best-effort role → raw-column guess used to pre-fill the role dropdowns.
+
+    Reuses the Illumina alias table: every raw header that resolves to one of the
+    four canonical roles becomes that role's suggestion (first match wins, so an
+    explicit ``Sentrix_ID`` beats a later ``SentrixBarcode_A``). Roles without a
+    confident match are simply absent — the user picks those manually.
+    """
+    suggestion: Dict[str, str] = {}
+    for name in raw_headers:
+        key = name.strip().lower().replace(" ", "").replace("_", "")
+        role = _HEADER_ALIASES.get(key)
+        if role in CANONICAL_ROLES and role not in suggestion:
+            suggestion[role] = name.strip()
+    return suggestion
 
 
 # ── Reading the various source formats into a string grid ──────────────────────
@@ -215,6 +279,37 @@ def _canonicalize_headers(headers: List[str]) -> List[str]:
             canonical = cleaned  # avoid creating a duplicate canonical column
         result.append(canonical)
         seen.add(canonical)
+    return result
+
+
+def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> List[str]:
+    """Rename the user-mapped columns to their canonical role names.
+
+    ``mapping`` is ``role -> raw column name`` (e.g. ``{"Sentrix_ID": "Chip"}``).
+    Every mapped column is renamed to its role; every other column keeps its
+    original name. A non-mapped column whose raw name happens to collide with a
+    canonical role name is disambiguated (``<name>_original``) so the canonical
+    role names appear exactly once — R's ``read_csv`` would otherwise silently
+    mangle duplicate headers into ``Sample_Group``/``Sample_Group.1``.
+    """
+    missing = sorted({raw for raw in mapping.values() if raw not in raw_headers})
+    if missing:
+        raise ValueError(f"Zugeordnete Spalte(n) nicht im SampleSheet vorhanden: {missing}")
+
+    raw_to_role = {raw: role for role, raw in mapping.items()}
+    targets = set(mapping.keys())
+
+    result: List[str] = []
+    assigned: set[str] = set()
+    for name in raw_headers:
+        role = raw_to_role.get(name)
+        if role is not None and role not in assigned:
+            assigned.add(role)
+            result.append(role)
+        elif name in targets:
+            result.append(f"{name}_original")
+        else:
+            result.append(name)
     return result
 
 

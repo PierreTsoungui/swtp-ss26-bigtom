@@ -11,6 +11,8 @@ The system automatically scans the selected directory and all subdirectories to 
 
 In addition, a Sample Sheet must be provided in either CSV or Excel format. This file links the raw data to biological information such as disease status, treatment groups, sex, batch identifiers, plate information, or other experimental variables.
 
+Because sample sheets from different databases use very different column names, you assign four required roles after the sheet is read: Sentrix_ID and Sentrix_Position (which locate the IDAT files), Sample_Group (the biological grouping), and Sample_Name (the sample identifier). Recognized columns are pre-selected; each column can only be used for one role. All other columns are carried over automatically. The analysis can only start once all four roles are assigned.
+
 These metadata variables are essential because they are used throughout the workflow for:
 sample grouping,
 quality assessment,

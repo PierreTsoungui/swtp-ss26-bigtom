@@ -4,6 +4,11 @@ import asyncio
 from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import (
+    STAGING_BASE_DIR,
+    STAGING_CLEANUP_INTERVAL_SECONDS,
+    STAGING_RETENTION_HOURS,
+)
 from app.core.error_types import AppException, app_exception_handler
 from app.services.job_cleanup_service import run_job_cleanup_loop
 from app.api.routes import (
@@ -27,15 +32,27 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startet den Cleanup-Dienst mit der Anwendung und beendet ihn beim Shutdown."""
+    """Startet die Cleanup-Dienste mit der Anwendung und beendet sie beim Shutdown."""
+    # Reuse the generic cleanup loop for both the job and the staging directories
+    # (TTL-based deletion of expired subdirectories by mtime).
     cleanup_task = asyncio.create_task(run_job_cleanup_loop(), name="job-cleanup")
+    staging_cleanup_task = asyncio.create_task(
+        run_job_cleanup_loop(
+            jobs_dir=STAGING_BASE_DIR,
+            retention_hours=STAGING_RETENTION_HOURS,
+            interval_seconds=STAGING_CLEANUP_INTERVAL_SECONDS,
+        ),
+        name="staging-cleanup",
+    )
     app.state.job_cleanup_task = cleanup_task
+    app.state.staging_cleanup_task = staging_cleanup_task
     try:
         yield
     finally:
-        cleanup_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await cleanup_task
+        for task in (cleanup_task, staging_cleanup_task):
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 app = FastAPI(title="Methylation Analysis API", version="1.0", lifespan=lifespan)
 app.add_exception_handler(AppException, app_exception_handler)
