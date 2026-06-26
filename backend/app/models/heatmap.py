@@ -1,25 +1,10 @@
 # app/models/heatmap.py
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 # ── Request Models ─────────────────────────────────────────────────────────────
-
-class DmpFilterPayload(BaseModel):
-    """
-    Optionale Filter zur Einschränkung der CpG-Auswahl.
-    Alle Felder sind optional – nicht gesetzte Felder werden ignoriert.
-    """
-    dmr_id:           Optional[str]   = Field(None,  description="Filtert auf eine spezifische DMR-ID")
-    chromosome:       Optional[str]   = Field(None,  description="Chromosom, z. B. 'chr19'")
-    start:            Optional[int]   = Field(None,  description="Genomische Startposition (inklusiv)")
-    stop:             Optional[int]   = Field(None,  description="Genomische Endposition (inklusiv)")
-    p_value_max:      Optional[float] = Field(None,  ge=0.0, le=1.0)
-    adj_p_value_max:  Optional[float] = Field(None,  ge=0.0, le=1.0)
-    delta_beta_min:   Optional[float] = Field(None,  ge=-1.0, le=1.0)
-    delta_beta_max:   Optional[float] = Field(None,  ge=-1.0, le=1.0)
-
 
 class GroupingPayload(BaseModel):
     primary:   str
@@ -27,8 +12,17 @@ class GroupingPayload(BaseModel):
 
 
 class HeatmapRequest(BaseModel):
-    dmp_filter: Optional[DmpFilterPayload] = None
-    grouping:   GroupingPayload
+    """
+    The heatmap reuses the *exact same* filters as the DMP table view. The
+    frontend sends the currently applied table filters as a flat map of
+    ``{filter_key: value}`` (same keys as the table, e.g. ``chr``, ``gene``,
+    ``feature`` …). The backend applies them through the single shared filter
+    layer (``table_filter.apply_filters``) so the heatmap is guaranteed to show
+    exactly the rows visible in the table — see
+    ``docs/architecture/heatmap-konzept.md``.
+    """
+    filters:  Dict[str, str] = Field(default_factory=dict)
+    grouping: GroupingPayload
 
 
 # ── Response Models ────────────────────────────────────────────────────────────
@@ -46,9 +40,16 @@ class HeatmapRunResponse(BaseModel):
     heatmap_metadata: HeatmapMetadata
 
 
+class AnnotationColumn(BaseModel):
+    """A sample-sheet column offered as a heatmap annotation (primary/secondary)."""
+    name:       str
+    type:       str   # "categorical" | "continuous" | "identifier"
+    n_distinct: int
+
+
 class HeatmapOptionsResponse(BaseModel):
     job_id:            str
-    available_columns: List[str]
+    available_columns: List[AnnotationColumn]
 
     class Config:
         from_attributes = True

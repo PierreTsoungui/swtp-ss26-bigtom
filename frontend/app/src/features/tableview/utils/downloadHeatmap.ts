@@ -1,27 +1,27 @@
 /**
- * Hilfsfunktion zum Herunterladen der Heatmap als PNG-Datei
- * Voraussetzung: Die Heatmap wurde bereits generiert und ist unter der angegebenen Job-ID verfügbar.
- * Sie sendet eine GET-Anfrage an den Endpunkt, um die Heatmap als Blob zu erhalten, und löst dann den Download im Browser aus.
- * @param jobId
+ * Downloads the generated heatmap as PNG or PDF.
+ * Requires the heatmap to have been generated for the given job id.
+ * Fetches the file as a blob and triggers a browser download.
+ *
+ * @param jobId  the job id
+ * @param format "png" (default) or "pdf"
  */
-async function downloadHeatmap(jobId: string) {
-    const response = await fetch(`/api/v1/heatmap/${jobId}`);
+async function downloadHeatmap(jobId: string, format: "png" | "pdf" = "png") {
+    const response = await fetch(`/api/v1/heatmap/${jobId}?format=${format}`);
 
     if (!response.ok) {
         throw new Error("Download failed");
     }
 
     const blob = await response.blob();
-
     const url = window.URL.createObjectURL(blob);
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `heatmap_${jobId}.png`;
+    a.download = `heatmap_${jobId}.${format}`;
 
     document.body.appendChild(a);
     a.click();
-
     a.remove();
 
     window.URL.revokeObjectURL(url);

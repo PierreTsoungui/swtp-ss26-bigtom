@@ -9,7 +9,11 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 const mockHeatMapOptions = {
     job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
-    available_columns: ["Sample_Group", "Gender", "Treatment"],
+    available_columns: [
+        {name: "Sample_Group", type: "categorical", n_distinct: 2},
+        {name: "Gender", type: "categorical", n_distinct: 2},
+        {name: "Treatment", type: "categorical", n_distinct: 3},
+    ],
 };
 
 const mockHeatMapResponse = {
@@ -79,7 +83,7 @@ const renderWithRouter = (jobId = "eb547f74-642d-41aa-91d2-7572c1e28516") =>
     render(
         <MemoryRouter initialEntries={[`/test/${jobId}`]}>
             <Routes>
-                <Route path="/test/:job_id" element={<HeatMap dmp_filter={{}} />} />
+                <Route path="/test/:job_id" element={<HeatMap filters={{}} />} />
             </Routes>
         </MemoryRouter>
     );

@@ -37,7 +37,8 @@ group2   <- Sys.getenv("HEATMAP_GROUP2", unset = "")
 max_rows <- suppressWarnings(
   as.integer(Sys.getenv("HEATMAP_MAX_ROWS", unset = "1000"))
 )
-out_file <- Sys.getenv("HEATMAP_OUTPUT", unset = "heatmap.png")
+out_file   <- Sys.getenv("HEATMAP_OUTPUT", unset = "heatmap.png")
+input_file <- Sys.getenv("HEATMAP_INPUT",  unset = "heatmap_input.csv")
 
 if (is.na(max_rows) || max_rows < 1L) {
   emit_error("HEATMAP_MAX_ROWS must be a positive integer")
@@ -61,6 +62,7 @@ if (!dir.exists(job_dir)) {
 }
 
 output_path <- file.path(job_dir, out_file)
+pdf_path    <- file.path(job_dir, paste0(tools::file_path_sans_ext(out_file), ".pdf"))
 
 # ── Step 2 – Load DMP/DMR table ───────────────────────────────────────────────
 curr_pct <- as.integer(round(2L / TOTAL_STEPS * 100))
@@ -108,55 +110,36 @@ if (is.null(cpg_ids) || any(!nzchar(cpg_ids)))
 
 emit_progress(curr_pct, paste("DMP/DMR table loaded:", nrow(dmp), "rows"))
 
-# ── Step 2b – Apply filters from environment variables ────────────────────────
-chr_filter     <- Sys.getenv("HEATMAP_CHR",           unset = "")
-start_filter   <- suppressWarnings(as.integer(Sys.getenv("HEATMAP_START",          unset = "")))
-stop_filter    <- suppressWarnings(as.integer(Sys.getenv("HEATMAP_STOP",           unset = "")))
-pval_max       <- suppressWarnings(as.numeric(Sys.getenv("HEATMAP_PVAL_MAX",       unset = "")))
-adj_pval_max   <- suppressWarnings(as.numeric(Sys.getenv("HEATMAP_ADJ_PVAL_MAX",   unset = "")))
-delta_beta_min <- suppressWarnings(as.numeric(Sys.getenv("HEATMAP_DELTA_BETA_MIN", unset = "")))
-delta_beta_max <- suppressWarnings(as.numeric(Sys.getenv("HEATMAP_DELTA_BETA_MAX", unset = "")))
-dmr_id_filter  <- Sys.getenv("HEATMAP_DMR_ID", unset = "")
+# ── Step 2b – Restrict to the CpGs selected in the table (single filter source)
+# Filtering happens ONCE in the backend (table_filter.apply_filters). The backend
+# writes the chosen CpG IDs to heatmap_input.csv; here we only subset to them, so
+# the heatmap is guaranteed to match the table view. See heatmap-konzept.md §3.
+input_path <- file.path(job_dir, input_file)
+if (!file.exists(input_path))
+  emit_error(paste0("Heatmap input not found: ", input_path,
+                    " – the backend must write the filtered CpG list."))
+
+selection <- tryCatch(
+  read_csv(input_path, show_col_types = FALSE),
+  error = function(e) emit_error(paste("Failed to read heatmap input:", conditionMessage(e)))
+)
+sel_id_col   <- if ("ID" %in% colnames(selection)) "ID" else colnames(selection)[1]
+selected_ids <- unique(as.character(selection[[sel_id_col]]))
+selected_ids <- selected_ids[nzchar(selected_ids)]
+if (length(selected_ids) == 0L)
+  emit_error("Heatmap input contains no CpG IDs.")
 
 rows_before <- nrow(dmp)
+keep <- rownames(dmp) %in% selected_ids
+if (has_col_ci(dmp, "ID")) {
+  keep <- keep | (as.character(get_col_ci(dmp, "ID")) %in% selected_ids)
+}
+dmp <- dmp[keep, , drop = FALSE]
 
-if (nzchar(chr_filter) && has_col_ci(dmp, "chr")) {
-  chr_col <- as.character(get_col_ci(dmp, "chr"))
-  dmp <- dmp[!is.na(chr_col) & toupper(chr_col) == toupper(chr_filter), , drop = FALSE]
-}
-if (!is.na(start_filter) && has_col_ci(dmp, "pos")) {
-  pos_col <- as.numeric(get_col_ci(dmp, "pos"))
-  dmp <- dmp[!is.na(pos_col) & pos_col >= start_filter, , drop = FALSE]
-}
-if (!is.na(stop_filter) && has_col_ci(dmp, "pos")) {
-  pos_col <- as.numeric(get_col_ci(dmp, "pos"))
-  dmp <- dmp[!is.na(pos_col) & pos_col <= stop_filter, , drop = FALSE]
-}
-if (!is.na(pval_max) && has_col_ci(dmp, "pvalue")) {
-  pval_col <- as.numeric(get_col_ci(dmp, "pvalue"))
-  dmp <- dmp[!is.na(pval_col) & pval_col <= pval_max, , drop = FALSE]
-}
-if (!is.na(adj_pval_max) && "ADJ_P" %in% colnames(dmp)) {
-  adj_col <- as.numeric(dmp[["ADJ_P"]])
-  dmp <- dmp[!is.na(adj_col) & adj_col <= adj_pval_max, , drop = FALSE]
-}
-if (!is.na(delta_beta_min) && has_col_ci(dmp, "deltaBeta")) {
-  db_col <- as.numeric(get_col_ci(dmp, "deltaBeta"))
-  dmp <- dmp[!is.na(db_col) & db_col >= delta_beta_min, , drop = FALSE]
-}
-if (!is.na(delta_beta_max) && has_col_ci(dmp, "deltaBeta")) {
-  db_col <- as.numeric(get_col_ci(dmp, "deltaBeta"))
-  dmp <- dmp[!is.na(db_col) & db_col <= delta_beta_max, , drop = FALSE]
-}
-if (nzchar(dmr_id_filter) && has_col_ci(dmp, "dmr_id")) {
-  dmr_col <- as.character(get_col_ci(dmp, "dmr_id"))
-  dmp <- dmp[!is.na(dmr_col) & dmr_col == dmr_id_filter, , drop = FALSE]
-}
-
-emit_progress(curr_pct, paste0("Filters applied: ", rows_before, " → ", nrow(dmp), " rows remaining"))
+emit_progress(curr_pct, paste0("Filtered CpG selection applied: ", rows_before, " → ", nrow(dmp), " rows"))
 
 if (nrow(dmp) == 0L)
-  emit_error("No rows remaining after applying filters. Please relax the filter criteria.")
+  emit_error("None of the selected CpGs were found in the DMP results. Please regenerate the analysis.")
 
 # ── Step 3 – Row limit ────────────────────────────────────────────────────────
 curr_pct <- as.integer(round(3L / TOTAL_STEPS * 100))
@@ -336,24 +319,23 @@ if (group_avg_mode) {
   group2_active <- FALSE
   emit_progress(curr_pct, paste("Group-avg mode: annotation uses clean labels:", paste(g1_vals, collapse = ", ")))
 } else {
-  non_id_cols      <- setdiff(colnames(pd_aligned), name_col)
-  valid_group_cols <- Filter(function(col) {
-    vals   <- pd_aligned[[col]]
-    n_uniq <- length(unique(na.omit(as.character(vals))))
-    n_uniq >= 2L && n_uniq < nrow(pd_aligned)
-  }, non_id_cols)
-  
-  if (length(valid_group_cols) == 0L) {
-    emit_error(paste0("No valid grouping columns found in sample sheet. Columns checked: ", paste(non_id_cols, collapse = ", ")))
-  }
-  emit_progress(curr_pct, paste("Valid grouping columns:", paste(valid_group_cols, collapse = ", ")))
-  
+  non_id_cols <- setdiff(colnames(pd_aligned), name_col)
+
+  # The user explicitly chooses the primary column (any non-empty column is
+  # allowed, incl. continuous ones like "age"). Auto-selection is only a
+  # fallback when no column was provided.
   if (!group1_set) {
-    group1 <- if ("Sample_Group" %in% valid_group_cols) "Sample_Group" else valid_group_cols[1L]
+    valid_group_cols <- Filter(function(col) {
+      n_uniq <- length(unique(na.omit(as.character(pd_aligned[[col]]))))
+      n_uniq >= 2L && n_uniq < nrow(pd_aligned)
+    }, non_id_cols)
+    group1 <- if ("Sample_Group" %in% valid_group_cols) "Sample_Group"
+              else if (length(valid_group_cols) > 0L) valid_group_cols[1L]
+              else if (length(non_id_cols) > 0L) non_id_cols[1L]
+              else emit_error("No usable columns in sample sheet for grouping.")
     emit_progress(curr_pct, paste("Primary grouping column auto-selected:", group1))
-  } else {
-    if (!group1 %in% colnames(pd_aligned))
-      emit_error(paste("Primary grouping column not found:", group1))
+  } else if (!group1 %in% colnames(pd_aligned)) {
+    emit_error(paste("Primary grouping column not found:", group1))
   }
   
   if (group2_active) {
@@ -391,110 +373,134 @@ if (has_col_ci(dmp, "chr") && has_col_ci(dmp, "pos")) {
   emit_progress(curr_pct, "chr/pos columns absent – keeping original row order")
 }
 
-# ── Build annotation colour palettes ─────────────────────────────────────────
+# ── Build annotations (type-aware: categorical → discrete, continuous → gradient)
 build_colours <- function(values) {
-  lvls    <- unique(values)
+  lvls    <- unique(as.character(values))
   palette <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2",
                "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7",
                "#9C755F", "#BAB0AC", "#D37295", "#A0CBE8")
   setNames(rep_len(palette, length(lvls)), lvls)
 }
 
-g1_colours <- build_colours(g1_vals)
-
-top_anno <- if (group2_active && exists("g2_vals")) {
-  HeatmapAnnotation(
-    df  = data.frame(Primary = g1_vals, Secondary = g2_vals, check.names = FALSE),
-    col = list(Primary   = g1_colours, Secondary = build_colours(g2_vals)),
-    annotation_name_side = "right",
-    annotation_name_gp   = gpar(fontsize = 9),
-    annotation_height    = unit(rep(6, 2), "mm"),
-    gap                  = unit(1, "mm"),
-    show_legend          = FALSE
-  )
-} else {
-  HeatmapAnnotation(
-    df  = data.frame(Group = g1_vals, check.names = FALSE),
-    col = list(Group = g1_colours),
-    annotation_name_side = "right",
-    annotation_name_gp   = gpar(fontsize = 9),
-    annotation_height    = unit(6, "mm"),
-    show_legend          = FALSE
-  )
+# Decide per annotation column whether it is continuous (numeric, many distinct
+# values → gradient, e.g. "age") or categorical (discrete colours).
+make_anno_spec <- function(name, raw_values) {
+  vals_chr <- as.character(raw_values)
+  nonempty <- vals_chr[nzchar(trimws(vals_chr))]
+  n_dist   <- length(unique(nonempty))
+  num      <- suppressWarnings(as.numeric(vals_chr))
+  is_num   <- length(nonempty) > 0L && all(!is.na(suppressWarnings(as.numeric(nonempty))))
+  if (is_num && n_dist > 10L) {
+    rng <- range(num, na.rm = TRUE)
+    if (is.finite(rng[1]) && is.finite(rng[2]) && rng[1] != rng[2]) {
+      col_fun <- colorRamp2(c(rng[1], mean(rng), rng[2]),
+                            c("#FFF7BC", "#FEC44F", "#D95F0E"))
+      return(list(name = name, kind = "continuous", values = num, col = col_fun))
+    }
+  }
+  list(name = name, kind = "discrete", values = vals_chr, col = build_colours(vals_chr))
 }
 
-# ── Step 8 – Draw & export ────────────────────────────────────────────────────
+primary_name <- if (group2_active) "Primary" else "Group"
+anno_specs   <- list(make_anno_spec(primary_name, g1_vals))
+if (group2_active && exists("g2_vals"))
+  anno_specs <- c(anno_specs, list(make_anno_spec("Secondary", g2_vals)))
+
+anno_df <- data.frame(lapply(anno_specs, function(s) s$values),
+                      check.names = FALSE, stringsAsFactors = FALSE)
+colnames(anno_df) <- vapply(anno_specs, function(s) s$name, character(1))
+anno_col <- setNames(lapply(anno_specs, function(s) s$col),
+                     vapply(anno_specs, function(s) s$name, character(1)))
+
+top_anno <- HeatmapAnnotation(
+  df  = anno_df,
+  col = anno_col,
+  annotation_name_side = "right",
+  annotation_name_gp   = gpar(fontsize = 9),
+  gap                  = unit(1, "mm"),
+  show_legend          = FALSE
+)
+
+# ── Step 8 – Geometry, draw & export ──────────────────────────────────────────
 curr_pct <- as.integer(round(8L / TOTAL_STEPS * 100))
-emit_progress(curr_pct, "Drawing heatmap and saving PNG")
+emit_progress(curr_pct, "Drawing heatmap and saving PNG + PDF")
 
 heatmap_col <- colorRamp2(c(0, 0.5, 1), c("#2166AC", "#F7F7F7", "#D6604D"))
 
 n_cpg  <- nrow(beta)
 n_samp <- ncol(beta)
 
-DPI <- if (n_cpg > 300L) 100L else 200L
+# Clustering + dendrograms (HMP-01). Needs an NA-free matrix and ≥2 items;
+# otherwise fall back to the manual group/position ordering above.
+do_cluster        <- (na_count == 0L)
+cluster_cols_flag <- do_cluster && n_samp >= 2L
+cluster_rows_flag <- do_cluster && n_cpg  >= 2L
+if (!do_cluster)
+  emit_progress(curr_pct, "NA values present – clustering disabled; ordered by group/position")
+
+# Dendrogram depth (the axis that carries the merge heights). Generous, so even
+# fine/low branches stay distinguishable instead of collapsing into a thin band.
+COL_DEND_MM <- if (cluster_cols_flag) 28 else 0
+ROW_DEND_MM <- if (cluster_rows_flag) 32 else 0
+
+# Output resolution. Tall heatmaps (many CpGs) are capped at a lower DPI so the
+# pixel count and memory stay sane; small ones get crisp 200 dpi.
+DPI <- if (n_cpg > 150L) 100L else 200L
 MM_PER_INCH <- 25.4
 PT_PER_MM   <- 72 / MM_PER_INCH
-mm_to_px    <- function(mm) round(mm * DPI / MM_PER_INCH)
+mm_to_px    <- function(mm) max(1L, round(mm * DPI / MM_PER_INCH))
 
-cell_h_mm <- max(2, min(25, 200 / max(n_cpg, 1L)))
+# ── Cell geometry: every CpG row stays labelled AND legible ───────────────────
+# Each row carries its CpG id, so a row must never be shorter than its label's
+# line height (otherwise labels overlap and the rows turn into an unreadable
+# smear — the problem reported at ~100 rows). Few rows → comfortably tall cells;
+# many rows → shrink only down to the legibility floor, never below.
+#
+# KNOB: `row_label_floor_mm` is the single place to later add an optional
+# "hide row labels above N rows" threshold — drop the floor and set
+# show_row_names = (n_cpg <= N).
+BASE_ROW_FONT_PT   <- 8
+row_label_floor_mm <- (BASE_ROW_FONT_PT / PT_PER_MM) * 1.25   # ≈ label line height + slack
+cell_h_mm <- max(row_label_floor_mm, min(12, 240 / max(n_cpg, 1L)))
 cell_w_mm <- max(18, min(45, 140 / max(n_samp, 1L)))
 
-row_name_fontsize_pt  <- max(7, min(11, cell_h_mm * 2.2))
+# Font scales up when cells are tall; never below the legible base.
+row_name_fontsize_pt  <- max(BASE_ROW_FONT_PT, min(12, cell_h_mm * 2.0))
 col_label_fontsize_pt <- 9
 LEGEND_FONTSIZE_PT    <- 9
-
-char_w_mm <- function(fontsize_pt) fontsize_pt * 0.55 / PT_PER_MM
 
 body_w_mm <- n_samp * cell_w_mm
 body_h_mm <- n_cpg  * cell_h_mm
 
-max_rowname_chars <- max(nchar(rownames(beta)), na.rm = TRUE)
-row_name_mm       <- max_rowname_chars * char_w_mm(row_name_fontsize_pt) + 6
-
-max_colname_chars <- max(nchar(colnames(beta)), na.rm = TRUE)
-col_label_mm      <- max_colname_chars * char_w_mm(col_label_fontsize_pt) * sin(pi / 4) + 8
-
-n_anno_bars   <- if (group2_active) 2L else 1L
-anno_total_mm <- n_anno_bars * 6 + max(0L, n_anno_bars - 1L) * 1 + 2
-
+# ── Legends: content built here, PLACEMENT + sizing delegated to ComplexHeatmap
+# We keep full control over what the legends say (custom beta ticks, per-column
+# annotation legends) but let the library reserve their space — the manual
+# viewport placement it replaces was what clipped the legend on the right.
 lgd_beta <- Legend(
-  col_fun       = heatmap_col,
-  title         = "Beta value",
-  at            = c(0, 0.25, 0.5, 0.75, 1),
-  labels        = c("0", "0.25", "0.5", "0.75", "1"),
-  direction     = "vertical",
+  col_fun        = heatmap_col,
+  title          = "Beta value",
+  at             = c(0, 0.25, 0.5, 0.75, 1),
+  labels         = c("0", "0.25", "0.5", "0.75", "1"),
+  direction      = "vertical",
   title_position = "topcenter",
-  labels_gp     = gpar(fontsize = LEGEND_FONTSIZE_PT),
-  title_gp      = gpar(fontsize = LEGEND_FONTSIZE_PT, fontface = "bold"),
-  legend_height = unit(35, "mm"),
-  grid_width    = unit(5,  "mm")
+  labels_gp      = gpar(fontsize = LEGEND_FONTSIZE_PT),
+  title_gp       = gpar(fontsize = LEGEND_FONTSIZE_PT, fontface = "bold"),
+  legend_height  = unit(35, "mm"),
+  grid_width     = unit(5,  "mm")
 )
 
-lgd_group1 <- Legend(
-  labels    = names(g1_colours),
-  legend_gp = gpar(fill = g1_colours),
-  title     = if (group2_active) "Primary" else "Group",
-  title_gp  = gpar(fontsize = LEGEND_FONTSIZE_PT, fontface = "bold"),
-  labels_gp = gpar(fontsize = LEGEND_FONTSIZE_PT)
-)
-
-lgd_list <- if (group2_active && exists("g2_vals")) {
-  g2_colours <- build_colours(g2_vals)
-  lgd_group2 <- Legend(
-    labels    = names(g2_colours),
-    legend_gp = gpar(fill = g2_colours),
-    title     = "Secondary",
-    title_gp  = gpar(fontsize = LEGEND_FONTSIZE_PT, fontface = "bold"),
-    labels_gp = gpar(fontsize = LEGEND_FONTSIZE_PT)
-  )
-  packLegend(lgd_beta, lgd_group1, lgd_group2, direction = "vertical", gap = unit(5, "mm"))
-} else {
-  packLegend(lgd_beta, lgd_group1, direction = "vertical", gap = unit(5, "mm"))
-}
-
-lgd_w_mm <- convertWidth( ComplexHeatmap:::width(lgd_list),  "mm", valueOnly = TRUE)
-lgd_h_mm <- convertHeight(ComplexHeatmap:::height(lgd_list), "mm", valueOnly = TRUE)
+# One legend per annotation column (gradient for continuous, swatches otherwise).
+anno_legends <- lapply(anno_specs, function(s) {
+  if (identical(s$kind, "continuous")) {
+    Legend(col_fun = s$col, title = s$name,
+           title_gp  = gpar(fontsize = LEGEND_FONTSIZE_PT, fontface = "bold"),
+           labels_gp = gpar(fontsize = LEGEND_FONTSIZE_PT))
+  } else {
+    Legend(labels = names(s$col), legend_gp = gpar(fill = s$col), title = s$name,
+           title_gp  = gpar(fontsize = LEGEND_FONTSIZE_PT, fontface = "bold"),
+           labels_gp = gpar(fontsize = LEGEND_FONTSIZE_PT))
+  }
+})
 
 ht <- Heatmap(
   matrix               = beta,
@@ -508,9 +514,13 @@ ht <- Heatmap(
   row_names_gp         = gpar(fontsize = row_name_fontsize_pt),
   show_row_names       = TRUE,
   show_column_names    = TRUE,
-  cluster_rows         = FALSE,
-  cluster_columns      = FALSE,
-  show_heatmap_legend  = FALSE,
+  cluster_rows         = cluster_rows_flag,
+  cluster_columns      = cluster_cols_flag,
+  show_row_dend        = cluster_rows_flag,
+  show_column_dend     = cluster_cols_flag,
+  row_dend_width       = unit(ROW_DEND_MM, "mm"),
+  column_dend_height   = unit(COL_DEND_MM, "mm"),
+  show_heatmap_legend  = FALSE,                 # supplied via heatmap_legend_list
   border     = FALSE,
   rect_gp    = gpar(col = NA),
   na_col     = "#CCCCCC",
@@ -519,45 +529,51 @@ ht <- Heatmap(
   height = unit(body_h_mm, "mm")
 )
 
-OUTER_MM      <- 18
-LEGEND_GAP_MM <- 18
+OUTER_MM <- 12
 
-pad_top_mm    <- anno_total_mm + OUTER_MM
-pad_bottom_mm <- col_label_mm  + OUTER_MM
-pad_left_mm   <- row_name_mm   + OUTER_MM
-pad_right_mm  <- LEGEND_GAP_MM + lgd_w_mm + OUTER_MM
+# Single draw routine for both measuring and output. ComplexHeatmap lays out the
+# body, labels, dendrograms and the supplied legends together and reserves space
+# for each — so nothing is ever clipped once the device matches its size.
+draw_all <- function() {
+  draw(ht,
+       heatmap_legend_list    = list(lgd_beta),
+       annotation_legend_list = anno_legends,
+       heatmap_legend_side    = "right",
+       annotation_legend_side = "right",
+       merge_legends          = TRUE,
+       padding                = unit(rep(OUTER_MM, 4L), "mm"))
+}
 
-body_area_h_mm   <- pad_top_mm + body_h_mm + pad_bottom_mm
-legend_area_h_mm <- lgd_h_mm + 2 * OUTER_MM + 10
-canvas_h_mm <- max(body_area_h_mm, legend_area_h_mm, 100)
+# Measure the FULL drawn layout (body + labels + dendrograms + legends) on a null
+# device, then size the real devices to it. Measuring the real object — instead
+# of estimating padding by hand — is what guarantees the legend is never cut off.
+measure_layout <- function() {
+  grDevices::pdf(NULL, width = 300, height = 300)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  drawn <- draw_all()
+  c(
+    w = convertWidth( ComplexHeatmap:::width(drawn),  "mm", valueOnly = TRUE),
+    h = convertHeight(ComplexHeatmap:::height(drawn), "mm", valueOnly = TRUE)
+  )
+}
 
-canvas_w_mm <- pad_left_mm + body_w_mm + pad_right_mm
-canvas_w_mm <- max(canvas_w_mm, 160)
+dims <- tryCatch(measure_layout(), error = function(e) {
+  emit_progress(curr_pct, paste("Layout measurement failed, using estimate:", conditionMessage(e)))
+  c(w = body_w_mm + ROW_DEND_MM + 130, h = body_h_mm + COL_DEND_MM + 80)
+})
+
+canvas_w_mm <- max(as.numeric(dims[["w"]]), 160)
+canvas_h_mm <- max(as.numeric(dims[["h"]]), 100)
 
 png_width_px  <- mm_to_px(canvas_w_mm)
 png_height_px <- mm_to_px(canvas_h_mm)
 
 emit_progress(curr_pct, paste0("Canvas: ", round(canvas_w_mm), " x ", round(canvas_h_mm), " mm | ", png_width_px, " x ", png_height_px, " px @ ", DPI, " dpi | grid: ", n_samp, "c x ", n_cpg, "r | cell: ", round(cell_w_mm,1), "x", round(cell_h_mm,1), " mm"))
 
+# PNG (primary; shown in the UI)
 tryCatch({
-  png(output_path, width  = png_width_px, height = png_height_px, res    = DPI)
-  
-  draw(ht, show_annotation_legend = FALSE, padding = unit(c(pad_bottom_mm, pad_left_mm, pad_top_mm, pad_right_mm), "mm"))
-  
-  lgd_cx_npc <- (pad_left_mm + body_w_mm + LEGEND_GAP_MM + lgd_w_mm / 2) / canvas_w_mm
-  lgd_cy_npc <- 0.5
-  
-  half_lgd_w_npc <- (lgd_w_mm / 2 + OUTER_MM) / canvas_w_mm
-  half_lgd_h_npc <- (lgd_h_mm / 2 + OUTER_MM) / canvas_h_mm
-  
-  lgd_cx_npc <- max(half_lgd_w_npc, min(lgd_cx_npc, 1 - half_lgd_w_npc))
-  lgd_cy_npc <- max(half_lgd_h_npc, min(lgd_cy_npc, 1 - half_lgd_h_npc))
-  
-  tryCatch(seekViewport("global"), error = function(e) upViewport(0))
-  pushViewport(viewport(x = unit(lgd_cx_npc, "npc"), y = unit(lgd_cy_npc, "npc"), just = c("center", "center"), name = "legend_vp"))
-  draw(lgd_list)
-  popViewport()
-  
+  png(output_path, width = png_width_px, height = png_height_px, res = DPI)
+  draw_all()
   dev.off()
 }, error = function(e) {
   try(dev.off(), silent = TRUE)
@@ -566,6 +582,16 @@ tryCatch({
 
 if (!file.exists(output_path))
   emit_error(paste("PNG not created at expected path:", output_path))
+
+# PDF (publication / download). Non-fatal: a missing PDF must not fail the job.
+tryCatch({
+  pdf(pdf_path, width = canvas_w_mm / MM_PER_INCH, height = canvas_h_mm / MM_PER_INCH)
+  draw_all()
+  dev.off()
+}, error = function(e) {
+  try(dev.off(), silent = TRUE)
+  emit_progress(curr_pct, paste("Warning: failed to save PDF:", conditionMessage(e)))
+})
 
 emit_progress(100L, paste("Heatmap saved:", output_path))
 emit_done(output = output_path)

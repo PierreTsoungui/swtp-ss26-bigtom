@@ -24,24 +24,19 @@ export const useGenerateHeatMap = (jobId: string | null) => {
             setIsLoading(true);
             setError(null);
 
-            console.log("[useGenerateHeatMap] Sending payload:", payload);
-
             const response = await fetch(`/api/v1/heatmap/${jobId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
 
-            console.log("[useGenerateHeatMap] Response status:", response.status);
-
-            // ── Einmal lesen, dann für beides verwenden ───────────
             const body = await response.json();
-            console.log("[useGenerateHeatMap] Response body:", body);
 
             if (!response.ok) {
                 const errorResponse = body as HeatMapErrorResponse;
-                console.error("[useGenerateHeatMap] Error response:", errorResponse);
-                throw new Error(errorResponse.message);
+                throw new Error(
+                    errorResponse.detail ?? errorResponse.message ?? "Heatmap generation failed",
+                );
             }
 
             const result = body as HeatMapResponse;
