@@ -1,265 +1,100 @@
-import React, { useState } from 'react';
-import type { BatchRound } from '../utils/types';
-import { colors } from '../../../shared/theme/colors';
-import {
-    Box,
-    Dialog,
-    Fade,
-    IconButton,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import NavigateBefore from "@mui/icons-material/NavigateBefore";
-import NavigateNext from "@mui/icons-material/NavigateNext";
-import ZoomIn from "@mui/icons-material/ZoomIn";
+import React, { useState } from "react";
+import type { BatchRound } from "../utils/types";
 
 export interface SvdPlotProps {
-    rounds: BatchRound[];
+  rounds: BatchRound[];
 }
 
+/**
+ * Static SVD diagnostic heatmaps across all correction rounds.
+ *
+ * Each plot is a server-rendered figure (PNG for display, vector PDF for
+ * publication). Reading aid: a strong colour in a *technical* row = batch
+ * effect; after correction it should fade, while the *biological* row you
+ * protected should stay coloured (signal preserved).
+ */
 export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
-    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [enlarged, setEnlarged] = useState<BatchRound | null>(null);
 
-    const isOpen = selectedIndex !== null;
-    const imageHost = 'http://localhost:8000';
+  if (rounds.length === 0) return <p>No SVD diagnostics available.</p>;
 
-    const handleOpen  = (index: number) => setSelectedIndex(index);
-    const handleClose = () => setSelectedIndex(null);
+  const titleOf = (r: BatchRound) =>
+    `${r.type === "initial" ? "Before correction" : "After correction"} (Round ${r.round})`;
 
-    const handlePrev = () =>
-        setSelectedIndex((prev) =>
-            prev !== null ? (prev - 1 + rounds.length) % rounds.length : 0
-        );
+  return (
+    <div>
+      <h3 className="mb-3 text-lg font-semibold">SVD diagnostic plots</h3>
 
-    const handleNext = () =>
-        setSelectedIndex((prev) =>
-            prev !== null ? (prev + 1) % rounds.length : 0
-        );
-
-    // Pfeiltasten-Navigation
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "ArrowLeft")  handlePrev();
-        if (e.key === "ArrowRight") handleNext();
-        if (e.key === "Escape")     handleClose();
-    };
-
-    if (rounds.length === 0) return <p>No SVD plots available.</p>;
-
-    return (
-        <div onKeyDown={handleKeyDown}>
-            <h3>SVD Diagnostic Plots</h3>
-
-            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                {rounds.map((round: BatchRound, index: number) => (
-                    <div
-                        key={round.round}
-                        style={{
-                            flex: '0 1 400px',
-                            border: `1px solid ${colors.neutral.borderDefault}`,
-                            padding: '15px',
-                            borderRadius: '8px',
-                            backgroundColor:
-                                round.type === 'initial'
-                                    ? colors.neutral.background
-                                    : colors.success.badgeBackground,
-                        }}
-                    >
-                        {/* Titel */}
-                        <h4 style={{ margin: '0 0 10px 0', color: colors.neutral.textPrimary }}>
-                            {round.type === 'initial' ? 'Before Correction' : 'After Correction'}{' '}
-                            (Round {round.round})
-                        </h4>
-
-                        {/* Bild mit Zoom-Overlay */}
-                        <div
-                            style={{ position: 'relative', cursor: 'pointer' }}
-                            onClick={() => handleOpen(index)}
-                        >
-                            <img
-                                src={`${imageHost}${round.svd_plot}`}
-                                alt={`SVD Plot Round ${round.round}`}
-                                style={{
-                                    width: '100%',
-                                    height: 'auto',
-                                    display: 'block',
-                                    borderRadius: '4px',
-                                    marginBottom: '10px',
-                                }}
-                            />
-                            {/* Hover-Overlay */}
-                            <Box
-                                sx={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    bgcolor: 'rgba(0,0,0,0)',
-                                    borderRadius: '4px',
-                                    transition: 'background-color 0.2s',
-                                    '&:hover': { bgcolor: 'rgba(0,0,0,0.25)' },
-                                    '&:hover .zoom-icon': { opacity: 1 },
-                                }}
-                            >
-                                <ZoomIn
-                                    className="zoom-icon"
-                                    sx={{
-                                        opacity: 0,
-                                        color: '#fff',
-                                        fontSize: 40,
-                                        transition: 'opacity 0.2s',
-                                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
-                                    }}
-                                />
-                            </Box>
-                        </div>
-
-                        {/* Infos */}
-                        <div
-                            style={{
-                                fontSize: '0.9em',
-                                color: colors.neutral.textSecondary,
-                                borderTop: `1px solid ${colors.neutral.borderDefault}`,
-                                paddingTop: '10px',
-                            }}
-                        >
-                            <div style={{ marginBottom: '8px' }}>
-                                <strong>Timestamp:</strong>{' '}
-                                {new Date(round.timestamp).toLocaleString('de-DE')}
-                            </div>
-
-                            {round.settings_used && (
-                                <>
-                                    <div style={{ marginBottom: '8px' }}>
-                                        <strong>Batch Variable:</strong>{' '}
-                                        {round.settings_used.batch_variable}
-                                    </div>
-                                    <div>
-                                        <strong>Covariates:</strong>{' '}
-                                        {round.settings_used.covariates.length > 0
-                                            ? round.settings_used.covariates.join(', ')
-                                            : 'None'}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {/* ── Lightbox Dialog ─────────────────────────────────── */}
-            <Dialog
-                open={isOpen}
-                onClose={handleClose}
-                slots={{
-                    transition: Fade
-                }}
-                slotProps={{
-                    backdrop: { onClick: handleClose },
-                    transition: { timeout: 300 },
-                    paper: {
-                        sx: {
-                            bgcolor: 'transparent',
-                            boxShadow: 'none',
-                            overflow: 'visible',
-                        },
-                    },
-                }}
-                maxWidth="xl"
-                fullWidth
+      <div className="space-y-4">
+        {rounds.map((round) => {
+          const s = round.settings_used;
+          return (
+            <div
+              key={round.round}
+              className={`rounded-xl border p-4 ${
+                round.type === "initial"
+                  ? "border-neutral-borderDefault bg-neutral-background"
+                  : "border-success bg-success-badgeBackground"
+              }`}
             >
-                {isOpen && selectedIndex !== null && (
-                    <Box
-                        sx={{
-                            position: 'relative',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            p: 4,
-                        }}
-                    >
-                        {/* Schließen */}
-                        <IconButton
-                            onClick={handleClose}
-                            sx={{
-                                position: 'absolute',
-                                top: -16,
-                                right: -16,
-                                color: '#fff',
-                                bgcolor: 'rgba(0,0,0,0.5)',
-                                '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' },
-                                zIndex: 10,
-                            }}
-                        >
-                            <CloseIcon />
-                        </IconButton>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-base font-semibold text-neutral-textPrimary">
+                    {titleOf(round)}
+                  </h4>
+                  {s && (
+                    <p className="text-xs text-neutral-textSecondary">
+                      Removed: <strong>{s.batch_variable}</strong> · Protected:{" "}
+                      {s.covariates.length > 0 ? s.covariates.join(", ") : "none"}
+                    </p>
+                  )}
+                </div>
+                <a
+                  href={`${round.svd_plot}?format=pdf`}
+                  className="rounded-lg border-2 border-primary px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary hover:text-primary-text"
+                >
+                  Download PDF
+                </a>
+              </div>
 
-                        {/* Pfeil links */}
-                        {rounds.length > 1 && (
-                            <IconButton
-                                onClick={handlePrev}
-                                sx={{
-                                    position: 'absolute',
-                                    left: -24,
-                                    color: '#fff',
-                                    bgcolor: 'rgba(0,0,0,0.4)',
-                                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
-                                }}
-                            >
-                                <NavigateBefore fontSize="large" />
-                            </IconButton>
-                        )}
+              <button
+                type="button"
+                onClick={() => setEnlarged(round)}
+                className="block w-full cursor-zoom-in overflow-x-auto rounded-md border border-neutral-borderDefault bg-white p-2"
+                aria-label={`Enlarge ${titleOf(round)}`}
+              >
+                <img
+                  src={round.svd_plot}
+                  alt={titleOf(round)}
+                  className="mx-auto block h-auto max-w-full"
+                />
+              </button>
+            </div>
+          );
+        })}
+      </div>
 
-                        {/* Bild */}
-                        <Box
-                            component="img"
-                            src={`${imageHost}${rounds[selectedIndex].svd_plot}`}
-                            alt={`SVD Plot Round ${rounds[selectedIndex].round}`}
-                            sx={{
-                                maxWidth: '90vw',
-                                maxHeight: '85vh',
-                                objectFit: 'contain',
-                                borderRadius: '4px',
-                                bgcolor: '#fff',
-                                boxShadow: 24,
-                            }}
-                        />
-
-                        {/* Bildnummer */}
-                        <Box
-                            sx={{
-                                position: 'absolute',
-                                bottom: 8,
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                color: '#fff',
-                                bgcolor: 'rgba(0,0,0,0.45)',
-                                borderRadius: '12px',
-                                px: 2,
-                                py: 0.5,
-                                fontSize: '0.85rem',
-                            }}
-                        >
-                            {selectedIndex + 1} / {rounds.length}
-                        </Box>
-
-                        {/* Pfeil rechts */}
-                        {rounds.length > 1 && (
-                            <IconButton
-                                onClick={handleNext}
-                                sx={{
-                                    position: 'absolute',
-                                    right: -24,
-                                    color: '#fff',
-                                    bgcolor: 'rgba(0,0,0,0.4)',
-                                    '&:hover': { bgcolor: 'rgba(0,0,0,0.65)' },
-                                }}
-                            >
-                                <NavigateNext fontSize="large" />
-                            </IconButton>
-                        )}
-                    </Box>
-                )}
-            </Dialog>
+      {/* Enlarge overlay */}
+      {enlarged && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-textPrimary/70 p-4 backdrop-blur-sm"
+          onClick={() => setEnlarged(null)}
+        >
+          <div
+            className="relative max-h-[92vh] max-w-[95vw] overflow-auto rounded-xl bg-white p-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setEnlarged(null)}
+              aria-label="Close"
+              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-surface text-lg font-bold hover:bg-neutral-borderDefault"
+            >
+              ✕
+            </button>
+            <img src={enlarged.svd_plot} alt={titleOf(enlarged)} className="block h-auto" />
+          </div>
         </div>
-    );
+      )}
+    </div>
+  );
 };

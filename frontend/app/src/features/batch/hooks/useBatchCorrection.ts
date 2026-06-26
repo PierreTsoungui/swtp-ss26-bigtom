@@ -106,7 +106,11 @@ export const useBatchCorrection = (
     }
   };
 
-  const skipBatch = async () => {
+  const skipBatch = async (groupSelection?: {
+    group_column: string;
+    case_group: string;
+    control_group: string;
+  }) => {
     if (!jobId) return;
 
     setGlobalStatus("running");
@@ -117,6 +121,10 @@ export const useBatchCorrection = (
           `${API_BASE}/batch/${jobId}/skip`,
           {
             method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // The group selection makes Δβ deterministic (case − control). Sent
+            // only when the user picked one; otherwise the backend auto-detects.
+            body: groupSelection ? JSON.stringify(groupSelection) : undefined,
           }
       );
 
