@@ -33,8 +33,18 @@ beta_path <- if (file.exists(beta_filename)) {
   file.path(job_dir, beta_filename)
 }
 
-adjPVal           <- if (length(args) >= 4) as.numeric(args[4]) else 0.05
+# adjPVal is intentionally NOT used to filter here: the analysis keeps ALL probes
+# (champ.DMP runs with adjPVal = 1) and significance is applied later as a table
+# filter (TAB-01). The argument is kept for backward compatibility / logging.
+adjPVal           <- if (length(args) >= 4) as.numeric(args[4]) else 1.0
 arraytype         <- if (length(args) >= 5) args[5]             else "EPICv2"
+
+# Comparison is fully dynamic: the grouping column may have ANY name (not just
+# Sample_Group), and the user picks which value is the case and which is the
+# control. Δβ is then deterministic: mean(case) − mean(control) (TAB-02).
+group_column      <- if (length(args) >= 6 && nzchar(args[6])) args[6] else "Sample_Group"
+case_group        <- if (length(args) >= 7 && nzchar(args[7])) args[7] else ""
+control_group     <- if (length(args) >= 8 && nzchar(args[8])) args[8] else ""
 
 # Arraytype normalisieren
 if (arraytype %in% c("EPIC", "850K")) {
@@ -146,14 +156,38 @@ if (nrow(samples_aligned) != ncol(beta)) {
   emit_error("Sample alignment mismatch: Aligned samples count does not match beta matrix columns.")
 }
 
-pheno <- factor(samples_aligned$Sample_Group)
+# ── Vergleichsgruppen (dynamische Spalte + Case/Control) ──────────────────────
+if (!group_column %in% colnames(samples_aligned)) {
+  emit_error(sprintf("Group column '%s' not found in sample sheet.", group_column))
+}
+group_vec <- as.character(samples_aligned[[group_column]])
 
-if (length(levels(pheno)) != 2) {
-  emit_error(sprintf("Statistical group error: Exactly 2 distinct groups are required for DMP analysis. Found: %s", paste(levels(pheno), collapse = ", ")))
+# Ohne explizite Wahl: genau zwei Gruppen erwartet (Control = alphabetisch erste).
+if (!nzchar(case_group) || !nzchar(control_group)) {
+  lv <- sort(unique(group_vec[!is.na(group_vec) & nzchar(group_vec)]))
+  if (length(lv) != 2) {
+    emit_error(sprintf("Column '%s' has %d usable groups; a case and a control group must be specified.", group_column, length(lv)))
+  }
+  control_group <- lv[1]
+  case_group    <- lv[2]
 }
 
-group1 <- levels(pheno)[1]
-group2 <- levels(pheno)[2]
+if (case_group == control_group) {
+  emit_error("Case and control group must be different.")
+}
+if (!(case_group %in% group_vec) || !(control_group %in% group_vec)) {
+  emit_error(sprintf("Case ('%s') or control ('%s') group not present in column '%s'.", case_group, control_group, group_column))
+}
+
+# Auf die zwei gewählten Gruppen reduzieren (Spalte darf mehr Werte haben).
+keep      <- group_vec %in% c(case_group, control_group)
+beta      <- beta[, keep, drop = FALSE]
+group_vec <- group_vec[keep]
+
+# Control als Referenzlevel -> Δβ = mean(Case) − mean(Control), Vorzeichen fix.
+pheno  <- factor(group_vec, levels = c(control_group, case_group))
+group1 <- case_group     # GROUP1_AVG = Case
+group2 <- control_group  # GROUP2_AVG = Control
 
 # ── Hotfix für Single-Sample-Gruppen (Verhindert ChAMP-Dimension-Drop) ────────
 for (g in levels(pheno)) {
@@ -168,9 +202,10 @@ for (g in levels(pheno)) {
     new_col[new_col > 1] <- 1
     
     colnames(new_col) <- paste0(colnames(beta)[idx], "_virtual_rep")
-    
+
     beta <- cbind(beta, new_col)
-    pheno <- factor(c(as.character(pheno), g))
+    # Levels-Reihenfolge (Control, Case) bewahren, sonst kippt das Δβ-Vorzeichen.
+    pheno <- factor(c(as.character(pheno), g), levels = c(control_group, case_group))
   }
 }
 
@@ -203,47 +238,40 @@ if (is.null(dmp_table) || nrow(dmp_table) == 0) {
 }
 
 p_col <- intersect(c("adj.P.Val", "adj.p.val", "P.Value", "p.value"), colnames(dmp_table))[1]
-col_group1 <- paste0(group1, "_AVG")
-col_group2 <- paste0(group2, "_AVG")
 
-if (!col_group1 %in% colnames(dmp_table) || !col_group2 %in% colnames(dmp_table)) {
-  col_group1 <- intersect(colnames(dmp_table), paste0(levels(pheno), "_AVG"))[1]
-  col_group2 <- intersect(colnames(dmp_table), paste0(levels(pheno), "_AVG"))[2]
-}
+# Gruppen-Mittel & Δβ deterministisch direkt aus der Beta-Matrix berechnen
+# (unabhängig von ChAMPs interner, alphabetischer Kontrast-Richtung):
+#   GROUP1_AVG = mean(Case), GROUP2_AVG = mean(Control), Δβ = Case − Control.
+case_cols <- which(pheno == case_group)
+ctrl_cols <- which(pheno == control_group)
+case_mean <- rowMeans(beta[, case_cols, drop = FALSE], na.rm = TRUE)
+ctrl_mean <- rowMeans(beta[, ctrl_cols, drop = FALSE], na.rm = TRUE)
+
+ids <- rownames(dmp_table)
+g1  <- unname(case_mean[ids])   # Case
+g2  <- unname(ctrl_mean[ids])   # Control
 
 eps <- 1e-8
 dmp <- data.frame(
-  ID         = rownames(dmp_table),
+  ID         = ids,
   CHR        = dmp_table$CHR,
   POS        = dmp_table$MAPINFO,
   GENE       = dmp_table$gene,
   FEATURE    = dmp_table$feature,
   CGI        = dmp_table$cgi,
   ADJ_P      = dmp_table[[p_col]],
-  GROUP1_AVG = dmp_table[[col_group1]],
-  GROUP2_AVG = dmp_table[[col_group2]],
-  DELTA_BETA = dmp_table$deltaBeta,
-  LOG_FC     = log2((dmp_table[[col_group2]] + eps) / (dmp_table[[col_group1]] + eps)),
+  GROUP1_AVG = g1,
+  GROUP2_AVG = g2,
+  DELTA_BETA = g1 - g2,
+  LOG_FC     = log2((g1 + eps) / (g2 + eps)),
   DMR_ID     = "-",
   stringsAsFactors = FALSE
 )
 
-# NA-Bereinigung & Filterung
-dmp <- dmp[!is.na(dmp$GROUP1_AVG) & !is.na(dmp$GROUP2_AVG), ]
-dmp_filtered <- dmp[!is.na(dmp$ADJ_P) & dmp$ADJ_P <= adjPVal, ]
-
-# An empty result after the threshold filter is a valid scientific outcome
-# (nothing is significant at this adjPVal), NOT an execution error. Continue and
-# write an empty, well-formed result set so the pipeline completes gracefully —
-# the empty table (total_rows = 0) is how the frontend shows "no significant
-# results". dmp_filtered already has the correct columns with zero rows.
-no_significant_dmps <- nrow(dmp_filtered) == 0
-if (no_significant_dmps) {
-  min_p <- if (any(!is.na(dmp$ADJ_P))) min(dmp$ADJ_P, na.rm = TRUE) else NA_real_
-  emit_progress(95, sprintf(
-    "Analysis complete: no DMPs pass adjPVal <= %g (minimum observed adjusted p-value: %g).",
-    adjPVal, min_p))
-}
+# TAB-01: ALLE Sonden behalten (kein harter adjPVal-Cutoff hier). Die Signifikanz-
+# Filterung passiert nachgelagert im Tabellen-Filter. Nur Zeilen ohne berechenbare
+# Gruppen-Mittel werden entfernt. Eine leere Tabelle ist ein valides Ergebnis.
+dmp_filtered <- dmp[!is.na(dmp$GROUP1_AVG) & !is.na(dmp$GROUP2_AVG), ]
 
 # ── DMR-Linking über genomische Position ─────────────────────────────────────
 emit_progress(95, "Overlapping found DMPs with genomic DMR region coordinates")
@@ -254,18 +282,17 @@ if (file.exists(dmr_rds_path)) {
   dmr_data <- readRDS(dmr_rds_path)
   
   if (!is.null(dmr_data) && nrow(dmr_data) > 0) {
-    dmp_filtered$DMR_ID <- vapply(seq_len(nrow(dmp_filtered)), function(i) {
-      dmp_chr <- as.character(dmp_filtered$CHR[i])
-      dmp_pos <- as.numeric(dmp_filtered$POS[i])
-      
-      hit <- which(
-        as.character(dmr_data$CHR) == dmp_chr &
-        as.numeric(dmr_data$START) <= dmp_pos &
-        as.numeric(dmr_data$STOP)  >= dmp_pos
-      )
-      
-      if (length(hit) == 0) "-" else dmr_data$ID[hit[1]]
-    }, character(1))
+    # Über die (wenigen) DMR-Regionen iterieren und die enthaltenen CpGs
+    # vektorisiert markieren. O(#Regionen) statt O(#CpGs × #Regionen) — wichtig,
+    # da jetzt ALLE Sonden in der Tabelle stehen (TAB-01).
+    chr_v <- as.character(dmp_filtered$CHR)
+    pos_v <- as.numeric(dmp_filtered$POS)
+    for (j in seq_len(nrow(dmr_data))) {
+      in_region <- chr_v == as.character(dmr_data$CHR[j]) &
+                   pos_v >= as.numeric(dmr_data$START[j]) &
+                   pos_v <= as.numeric(dmr_data$STOP[j])
+      dmp_filtered$DMR_ID[in_region] <- as.character(dmr_data$ID[j])
+    }
   }
 }
 
@@ -280,10 +307,9 @@ saveRDS(dmp_filtered,   output_rds)
 
 # Finale Erfolgsmeldung an das Backend abgeben
 emit_done(
-  output_csv     = output_csv,
-  output_rds     = output_rds,
-  total_dmps     = nrow(dmp_filtered),
-  no_significant = no_significant_dmps
+  output_csv = output_csv,
+  output_rds = output_rds,
+  total_dmps = nrow(dmp_filtered)
 )
 
 quit(save = "no", status = 0)

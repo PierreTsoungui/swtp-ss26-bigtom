@@ -49,6 +49,13 @@ array_type    <- if (length(args) >= 8) args[8]             else "EPICv2"
 n_bootstraps  <- if (length(args) >= 9) as.integer(args[9]) else 10L
 n_cores       <- if (length(args) >= 10) as.integer(args[10]) else 1L
 
+# Dynamic comparison (any column name) + deterministic sign via control reference.
+# adj_pval is passed as 1.0 by the backend so ALL found regions are returned and
+# significance is applied later as a table filter (consistent with TAB-01/DMP).
+group_column  <- if (length(args) >= 11 && nzchar(args[11])) args[11] else "Sample_Group"
+case_group    <- if (length(args) >= 12 && nzchar(args[12])) args[12] else ""
+control_group <- if (length(args) >= 13 && nzchar(args[13])) args[13] else ""
+
 valid_arrays <- c("EPICv2", "EPICv1", "EPIC", "450K")
 if (!array_type %in% valid_arrays) {
   emit_error(sprintf("Invalid arraytype: '%s'. Allowed values are: %s", array_type, paste(valid_arrays, collapse = ", ")))
@@ -130,10 +137,8 @@ samples <- if (length(data_start) > 0) {
   read_csv(sample_sheet_path, show_col_types = FALSE)
 }
 
-required_cols <- c("Sample_Name", "Sample_Group")
-
-if (!all(required_cols %in% colnames(samples))) {
-  emit_error(sprintf("Sample sheet is missing mandatory columns. Missing: %s", paste(setdiff(required_cols, colnames(samples)), collapse = ", ")))
+if (!group_column %in% colnames(samples)) {
+  emit_error(sprintf("Group column '%s' not found in sample sheet.", group_column))
 }
 
 # ── Robustes Alignment ───────────────────────────────────────────────────────
@@ -169,7 +174,31 @@ if (nrow(samples_aligned) != ncol(beta)) {
   emit_error("Sample alignment mismatch: Aligned samples count does not match beta matrix columns.")
 }
 
-pheno <- factor(samples_aligned$Sample_Group)
+# ── Vergleichsgruppen (dynamische Spalte + Case/Control) ──────────────────────
+group_vec <- as.character(samples_aligned[[group_column]])
+
+if (!nzchar(case_group) || !nzchar(control_group)) {
+  lv <- sort(unique(group_vec[!is.na(group_vec) & nzchar(group_vec)]))
+  if (length(lv) != 2) {
+    emit_error(sprintf("Column '%s' has %d usable groups; a case and a control group must be specified.", group_column, length(lv)))
+  }
+  control_group <- lv[1]
+  case_group    <- lv[2]
+}
+
+if (case_group == control_group) {
+  emit_error("Case and control group must be different.")
+}
+if (!(case_group %in% group_vec) || !(control_group %in% group_vec)) {
+  emit_error(sprintf("Case ('%s') or control ('%s') group not present in column '%s'.", case_group, control_group, group_column))
+}
+
+# Auf die zwei gewählten Gruppen reduzieren; Control als Referenzlevel, damit
+# die Region-MEANDIFF deterministisch das Vorzeichen Case − Control trägt.
+keep      <- group_vec %in% c(case_group, control_group)
+beta      <- beta[, keep, drop = FALSE]
+group_vec <- group_vec[keep]
+pheno     <- factor(group_vec, levels = c(control_group, case_group))
 
 if (length(levels(pheno)) < 2) {
   emit_error("Statistical group error: At least 2 distinct groups are required for DMR region analysis.")
@@ -188,9 +217,9 @@ for (g in levels(pheno)) {
     new_col[new_col > 1] <- 1
     
     colnames(new_col) <- paste0(colnames(beta)[idx], "_virtual_rep")
-    
+
     beta <- cbind(beta, new_col)
-    pheno <- factor(c(as.character(pheno), g))
+    pheno <- factor(c(as.character(pheno), g), levels = c(control_group, case_group))
   }
 }
 
