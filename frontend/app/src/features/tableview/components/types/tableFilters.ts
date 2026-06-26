@@ -3,16 +3,19 @@ export interface DmpTableFilters {
     chr: string;
     start: string;
     stop: string;
-    gene: string;
+    gene: string;          // Teilstring-Suche
+    feature: string;       // genomische Region (TSS1500, Body, IGR, …)
+    cgi: string;           // CpG-Kontext (Island, Shore, Shelf, OpenSea)
     adj_p_value: string;   // Achtung: im Contract heißt der Query-Parameter filter_adj_p_value (ohne _max)
-    delta_beta: string;    // filter_delta_beta (absolut)
+    delta_beta: string;    // filter_delta_beta (absolut, |Δβ| ≥ x)
+    delta_direction: string; // "hyper" | "hypo" | "" (beide)
     group2_avg_min: string;
     group2_avg_max: string;
     group1_avg_min: string;
     group1_avg_max: string;
     log_fc_min: string;
     log_fc_max: string;
-    sample_group: string;
+    dmr_id: string;       // filter_dmr_id → DMP-Zeilen einer bestimmten DMR (exakt)
 }
 
 // DMR-Tabellenfilter

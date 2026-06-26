@@ -1,34 +1,11 @@
 /**
- * Entnommen aus API_CONTRACT (Stand 10.06.2026)
+ * Heatmap API types. The heatmap reuses the exact same filters as the DMP table
+ * (single filter source — see docs/architecture/heatmap-konzept.md), so the
+ * request simply forwards the applied table filters as a flat string map.
  */
 
 /**
- * Filter für die Auswahl der DMPs, aus denen die Heatmap generiert wird.
- */
-/*export type DmpFilter = {
-    dmr_id?: string;
-    chromosome?: string;
-    start?: number;
-    stop?: number;
-    p_value_max?: number;
-    adj_p_value_max?: number;
-    delta_beta_min?: number;
-    delta_beta_max?: number;
-};*/
-export interface HeatmapDmpFilter {
-    dmr_id?: string;              // optional
-    chromosome?: string;          // z.B. "chr19"
-    start?: number;
-    stop?: number;
-    p_value_max?: number;
-    adj_p_value_max?: number;
-    delta_beta_min?: number;
-    delta_beta_max?: number;
-}
-
-
-/**
- * Gruppierungsparameter für die Heatmap.
+ * Grouping parameters for the heatmap annotation bars.
  */
 export type HeatMapGrouping = {
     primary: string;
@@ -36,15 +13,16 @@ export type HeatMapGrouping = {
 };
 
 /**
- * Request Body für POST /heatmap/{job_id}
+ * Request body for POST /heatmap/{job_id}.
+ * `filters` mirrors the applied DMP table filters ({ filterKey: value }).
  */
 export type HeatMapRequest = {
-    dmp_filter: HeatmapDmpFilter;
+    filters: Record<string, string>;
     grouping: HeatMapGrouping;
 };
 
 /**
- * Metadaten einer erfolgreich generierten Heatmap.
+ * Metadata of a successfully started/generated heatmap.
  */
 export type HeatMapMetadata = {
     detected_cpgs: number;
@@ -53,7 +31,7 @@ export type HeatMapMetadata = {
 };
 
 /**
- * Erfolgreiche Response von POST /heatmap/{job_id}
+ * Successful response of POST /heatmap/{job_id}.
  */
 export type HeatMapResponse = {
     job_id: string;
@@ -63,27 +41,28 @@ export type HeatMapResponse = {
 };
 
 /**
- * Optionen für die Gruppierungs-Dropdowns.
- * GET /heatmap/{job_id}/options
+ * A sample-sheet column offered as a heatmap annotation.
+ * `type` is a hint: "categorical" | "continuous" | "identifier".
+ */
+export type AnnotationColumn = {
+    name: string;
+    type: string;
+    n_distinct: number;
+};
+
+/**
+ * Options for the grouping dropdowns. GET /heatmap/{job_id}/options
  */
 export type HeatMapOptionsResponse = {
     job_id: string;
-    available_columns: string[];
+    available_columns: AnnotationColumn[];
 };
 
 /**
- * Fehlerdetails bei Überschreitung des CpG-Limits.
- */
-export type HeatMapValidationErrorDetails = {
-    current_count: number;
-    max_allowed: number;
-};
-
-/**
- * Error Response von POST /heatmap/{job_id}
+ * Error response of POST /heatmap/{job_id}.
  */
 export type HeatMapErrorResponse = {
     error: string;
     message: string;
-    details?: HeatMapValidationErrorDetails;
+    detail?: string;
 };

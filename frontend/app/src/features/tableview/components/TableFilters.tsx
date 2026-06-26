@@ -8,24 +8,27 @@ import type {DmpFilters, DmrFilters} from "../hooks/useTableFilters.ts";
 const FILTER_DEFINITIONS = {
   dmp: [
     { key: "chr", label: "Chromosom", type: "select", options: getChromosomeOptions() },
-    { key: "start", label: "Start Position", type: "number", group: "positional" },
-    { key: "stop", label: "Stop Position", type: "number", group: "positional" },
-    { key: "gene", label: "Gen", type: "text" },
+    { key: "start", label: "Start Position", type: "number", group: "positional", min: 0 },
+    { key: "stop", label: "Stop Position", type: "number", group: "positional", min: 0 },
+    { key: "gene", label: "Gene (contains)", type: "text" },
+    { key: "feature", label: "Feature", type: "select", options: getFeatureOptions() },
+    { key: "cgi", label: "CpG context", type: "select", options: getCgiOptions() },
     { key: "adj_p_value", label: "Adj. P-Value (≤)", type: "number", step: 0.01, min: 0, max: 1 },
     { key: "delta_beta", label: "Delta Beta (abs ≥)", type: "number", step: 0.01, min: 0, max: 1 },
+    { key: "delta_direction", label: "Direction", type: "select", options: getDirectionOptions() },
     { key: "group1_avg_min", label: "Group1 Avg (Min)", type: "number", step: 0.01, min: 0, max: 1 },
     { key: "group1_avg_max", label: "Group1 Avg (Max)", type: "number", step: 0.01, min: 0, max: 1 },
     { key: "group2_avg_min", label: "Group2 Avg (Min)", type: "number", step: 0.01, min: 0, max: 1 },
     { key: "group2_avg_max", label: "Group2 Avg (Max)", type: "number", step: 0.01, min: 0, max: 1 },
     { key: "log_fc_min", label: "Log FC (abs Min)", type: "number", step: 0.1 },
     { key: "log_fc_max", label: "Log FC (abs Max)", type: "number", step: 0.1 },
-    { key: "sample_group", label: "Sample Group", type: "text" },
+    { key: "dmr_id", label: "DMR ID", type: "text" },
   ],
   dmr: [
     { key: "chr", label: "Chromosom", type: "select", options: getChromosomeOptions() },
     { key: "dmrid", label: "DMR ID", type: "text" },
-    { key: "start", label: "Start Position (≥)", type: "number", group: "positional" },
-    { key: "stop", label: "Stop Position (≤)", type: "number", group: "positional" },
+    { key: "start", label: "Start Position (≥)", type: "number", group: "positional", min: 0 },
+    { key: "stop", label: "Stop Position (≤)", type: "number", group: "positional", min: 0 },
     { key: "p_value", label: "P-Value (≤)", type: "number", step: 0.01, min: 0, max: 1 },
     { key: "mean_diff_min", label: "Mean Diff (abs Min)", type: "number", step: 0.01, min: 0, max: 1 },
     { key: "mean_diff_max", label: "Mean Diff (abs Max)", type: "number", step: 0.01, min: 0, max: 1 },
@@ -35,6 +38,73 @@ const FILTER_DEFINITIONS = {
     { key: "n_dmps_max", label: "N-DMPs (Max)", type: "number", min: 0 },
   ],
 };
+
+type FilterDef = { key: string; label: string; type: string; min?: number; max?: number };
+
+/**
+ * Validates the (string) filter inputs by their declared type/range and returns
+ * a map of field → English error message. Empty fields are ignored (a cleared
+ * filter is valid). Numeric fields must parse to a finite number within their
+ * [min, max]; positional Start must be ≤ Stop.
+ */
+function validateFilters(
+  values: Record<string, string>,
+  defs: FilterDef[],
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const parsed: Record<string, number> = {};
+
+  for (const def of defs) {
+    if (def.type !== "number") continue;
+    const raw = (values[def.key] ?? "").trim();
+    if (raw === "") continue;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      errors[def.key] = `${def.label}: must be a number`;
+      continue;
+    }
+    if (def.min !== undefined && n < def.min) {
+      errors[def.key] = `${def.label}: must be ≥ ${def.min}`;
+      continue;
+    }
+    if (def.max !== undefined && n > def.max) {
+      errors[def.key] = `${def.label}: must be ≤ ${def.max}`;
+      continue;
+    }
+    parsed[def.key] = n;
+  }
+
+  // Genomic range: Start must not exceed Stop.
+  if (
+    parsed.start !== undefined &&
+    parsed.stop !== undefined &&
+    parsed.start > parsed.stop
+  ) {
+    errors.stop = "Stop position must be ≥ start position";
+  }
+
+  return errors;
+}
+
+// Standard Illumina/ChAMP genomic-region categories.
+function getFeatureOptions() {
+  return ["TSS1500", "TSS200", "5'UTR", "1stExon", "Body", "ExonBnd", "3'UTR", "IGR", "Unknow"]
+    .map((v) => ({ value: v, label: v }));
+}
+
+// CpG-island context categories.
+function getCgiOptions() {
+  return ["Island", "Shore", "Shelf", "OpenSea"].map((v) => ({ value: v, label: v }));
+}
+
+// Δβ direction; empty value = both.
+function getDirectionOptions() {
+  return [
+    { value: "hyper", label: "Hyper (Δβ > 0)" },
+    { value: "hypo", label: "Hypo (Δβ < 0)" },
+  ];
+}
 
 function getChromosomeOptions() {
   const options = Array.from({ length: 22 }, (_, i) => ({
@@ -78,6 +148,12 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
   const handleChange = (key: string, value: string) => {
     onChange(key as keyof T, value);
   };
+
+  // Typed validation so a non-number (or out-of-range / start>stop) shows a clear
+  // message and blocks Apply — instead of silently sending a bad request.
+  const errors = validateFilters(filters as Record<string, string>, filterDefs);
+  const hasErrors = Object.keys(errors).length > 0;
+
   return (
     <div className="mb-4">
       {/* Toggle Button */}
@@ -125,26 +201,41 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
                           ))}
                         </select>
                     ) : (
+                        // Numeric fields are rendered as text so an invalid entry
+                        // (e.g. "abc") stays visible and can be flagged, rather
+                        // than being silently dropped by a native number input.
                         <input
-                            type={filterDef.type}
+                            type="text"
+                            inputMode={filterDef.type === "number" ? "decimal" : "text"}
                             placeholder={filterDef.label}
                             value={(filters as any)[filterDef.key] || ""}
                             onChange={(e) => handleChange(filterDef.key, e.target.value)}
-                            step={(filterDef as any).step}
-                            min={(filterDef as any).min}
-                            max={(filterDef as any).max}
-                            className="w-full border border-neutral-borderEmphasis p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                            aria-invalid={Boolean(errors[filterDef.key])}
+                            className={`w-full border p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                                errors[filterDef.key]
+                                    ? "border-danger"
+                                    : "border-neutral-borderEmphasis"
+                            }`}
                         />
+                    )}
+                    {errors[filterDef.key] && (
+                        <p className="mt-1 text-xs text-danger">{errors[filterDef.key]}</p>
                     )}
                   </div>
               ))}
             </div>
 
+            {hasErrors && (
+              <p className="mt-3 text-sm text-danger">
+                Please fix the highlighted fields before applying.
+              </p>
+            )}
+
             {/* Action Buttons */}
             <div className="flex gap-2 mt-4">
               <button
                   onClick={onApply}
-                  disabled={!hasFilters}
+                  disabled={!hasFilters || hasErrors}
                   className="px-4 py-2 bg-primary text-primary-text rounded-md text-sm font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Apply

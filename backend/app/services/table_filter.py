@@ -38,20 +38,23 @@ FILTER_MAP = {
         "chr": ("CHR", "eq"),
         "start": ("POS", "gte"),
         "stop": ("POS", "lte"),
-        "gene": ("GENE", "contains"),
+        "gene": ("GENE", "contains"),       # substring search (e.g. "HOX" → HOXA…)
+        "feature": ("FEATURE", "eq"),       # genomic region (TSS1500, Body, IGR, …)
+        "cgi": ("CGI", "eq"),               # CpG context (Island, Shore, Shelf, OpenSea)
         "adj_p_value": ("ADJ_P", "lte"),
-        "delta_beta": ("DELTA_BETA", "abs_gte"),
+        "delta_beta": ("DELTA_BETA", "abs_gte"),       # magnitude |Δβ| ≥ x
+        "delta_direction": ("DELTA_BETA", "direction"),  # hyper (Δβ>0) / hypo (Δβ<0)
         "group2_avg_min": ("GROUP2_AVG", "gte"),
         "group2_avg_max": ("GROUP2_AVG", "lte"),
         "group1_avg_min": ("GROUP1_AVG", "gte"),
         "group1_avg_max": ("GROUP1_AVG", "lte"),
         "log_fc_min": ("LOG_FC", "abs_gte"),
         "log_fc_max": ("LOG_FC", "abs_lte"),
-        "sample_group": ("SAMPLE_GROUP", "eq"),
+        "dmr_id": ("DMR_ID", "eq"),         # exact: "DMR_421" must NOT match "DMR_4211"
     },
     "dmr": {
         "chr": ("CHR", "eq"),
-        "dmrid": ("ID", "contains"),
+        "dmrid": ("ID", "eq"),              # exact DMR-ID match
         "start": ("START", "gte"),
         "stop": ("STOP", "lte"),
         "p_value": ("P_VALUE", "lte"),
@@ -110,6 +113,14 @@ def apply_filters(df: pd.DataFrame, table: str, filters: dict) -> pd.DataFrame:
 
         elif op == "abs_lte":
             mask &= df[column].abs() <= to_float(value)
+
+        elif op == "direction":
+            # Directional Δβ: hyper = stronger in case (Δβ > 0), hypo = weaker
+            # (Δβ < 0). Any other value (e.g. "both") imposes no constraint.
+            if value == "hyper":
+                mask &= df[column] > 0
+            elif value == "hypo":
+                mask &= df[column] < 0
 
     return df[mask]
 

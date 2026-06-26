@@ -217,3 +217,45 @@ def test_filter_chr_and_start(mock_job):
     for row in res.json()["data"]:
         assert row["CHR"] == "chr1"
         assert row["POS"] >= 2000
+
+_DMP_CSV = (
+    "ID,CHR,POS,GENE,FEATURE,CGI,ADJ_P,GROUP1_AVG,GROUP2_AVG,DELTA_BETA,LOG_FC,DMR_ID\n"
+    "cg1,chr1,100,EPHX3,TSS1500,Shore,0.01,0.9,0.1,0.8,3.0,DMR_421\n"   # hyper, in DMR_421
+    "cg2,chr1,200,CMTM2,Body,Island,0.02,0.2,0.8,-0.6,-2.0,DMR_4211\n"  # hypo, in DMR_4211
+    "cg3,chr1,300,GENE3,IGR,OpenSea,0.03,0.7,0.3,0.4,1.0,-\n"           # hyper, no DMR
+)
+
+
+def _write_dmp(tmp_path):
+    job_dir = tmp_path / "job-x"
+    job_dir.mkdir()
+    (job_dir / "dmp_results.csv").write_text(_DMP_CSV, encoding="utf-8")
+
+
+def test_dmp_filter_by_dmr_id_is_exact(tmp_path):
+    """DMR_421 must match only DMR_421 — never the substring sibling DMR_4211."""
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        res = client.get("/api/v1/table/job-x/dmp", params={"filter_dmr_id": "DMR_421"})
+        data = res.json()
+        assert data["pagination"]["total_rows"] == 1
+        assert data["data"][0]["ID"] == "cg1"
+
+
+def test_dmp_filter_feature_and_cgi(tmp_path):
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        res = client.get("/api/v1/table/job-x/dmp", params={"filter_feature": "TSS1500"})
+        assert res.json()["pagination"]["total_rows"] == 1
+        res = client.get("/api/v1/table/job-x/dmp", params={"filter_cgi": "Island"})
+        rows = res.json()["data"]
+        assert len(rows) == 1 and rows[0]["ID"] == "cg2"
+
+
+def test_dmp_filter_delta_direction(tmp_path):
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        hyper = client.get("/api/v1/table/job-x/dmp", params={"filter_delta_direction": "hyper"}).json()
+        assert {r["ID"] for r in hyper["data"]} == {"cg1", "cg3"}
+        hypo = client.get("/api/v1/table/job-x/dmp", params={"filter_delta_direction": "hypo"}).json()
+        assert {r["ID"] for r in hypo["data"]} == {"cg2"}
