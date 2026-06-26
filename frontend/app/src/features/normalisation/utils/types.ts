@@ -1,8 +1,6 @@
 /**
- * Beschreibt die 4 Normalisierungsmethoden, die in der Normalisierungsphase zur Auswahl stehen.
- * Die fünfte Methode "raw" ist die Option, keine Normalisierung durchzuführen und die Rohdaten zu verwenden.
- * Diese Typdefinition wird verwendet, um die Auswahlmöglichkeiten in der UI zu typisieren und sicherzustellen,
- * dass nur gültige Normalisierungsmethoden verwendet werden können.
+ * Die fünf Normalisierungs-Optionen, die in der Preview zur Auswahl stehen.
+ * "raw" = keine Normalisierung (Rohdaten).
  */
 export type NormalizationMethod =
   | "raw"
@@ -11,20 +9,46 @@ export type NormalizationMethod =
   | "swan"
   | "funnorm";
 
+/**
+ * Feste Reihenfolge der Methoden-Spalten in der Preview. RAW steht ganz links
+ * (NRM-01), danach die Normalisierungsmethoden in fachlich üblicher Folge.
+ */
+export const METHOD_ORDER: NormalizationMethod[] = [
+  "raw",
+  "noob",
+  "quantile",
+  "swan",
+  "funnorm",
+];
 
-
-export interface NormalizationPreview {
-    plots: MethodPlotGroup[];
-    recommendation: NormalizationMethod;
+/** Ein einzelner PCA-Punkt (ein Sample) aus dem Backend. */
+export interface PcaPoint {
+  sample: string;
+  /** Sample-Gruppe (Phänotyp); leerer String wenn unbekannt. */
+  group: string;
+  pc1: number;
+  pc2: number;
 }
 
-
-export interface PlotItem {
-  plot_kind: "density" | "pca";
-  url: string;
+/** PCA-Daten einer Methode (JSON statt PNG, für den interaktiven Plotter). */
+export interface PcaData {
+  method?: string;
+  axes?: { x: string; y: string };
+  variance_explained?: { pc1: number; pc2: number };
+  points: PcaPoint[];
+  /** Gesetzt, wenn die PCA für diese Methode fehlgeschlagen ist. */
+  error?: string;
 }
 
-export interface MethodPlotGroup {
+/** Vorschau einer Methode: statischer Density-Plot + dynamische PCA-Daten. */
+export interface MethodPreview {
   method: NormalizationMethod;
-  plots: PlotItem[];
+  density_url: string | null;
+  pca: PcaData | null;
+}
+
+/** Antwort des Preview-Endpunkts. */
+export interface NormalizationPreview {
+  job_id: string;
+  methods: MethodPreview[];
 }

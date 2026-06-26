@@ -41,6 +41,13 @@ raw_data <- readRDS(rds_path)
 # ── Normalisierung ──────────────────────────────────────────────────────────
 emit_progress(30, paste("Normalisiere mit Methode:", method))
 
+# Fixed seed for reproducibility: preprocessSWAN() randomly subsets probes and is
+# otherwise non-deterministic — without a seed, two runs of the same data produce
+# slightly different beta values, which then propagate into the DMP/DMR averages,
+# Δβ magnitudes and p-values. The other methods are deterministic; seeding is
+# harmless for them.
+set.seed(42)
+
 normalized <- switch(method,
   "noob"     = preprocessNoob(raw_data),
   "quantile" = preprocessQuantile(raw_data),

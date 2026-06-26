@@ -1,10 +1,12 @@
-import {useEffect, useState} from "react";
+import {useEffect, useMemo, useState} from "react";
 import { useParams, useNavigate } from "react-router";
-import type { NormalizationMethod } from "./utils/types";
+import type { MethodPreview, NormalizationMethod } from "./utils/types";
+import { METHOD_ORDER } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
 import Progressbar from "../../shared/components/Progressbar.tsx";
 import PlotModal from "./components/PlotModal.tsx";
+import PcaViewer from "./components/PcaViewer.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
@@ -32,7 +34,19 @@ export function NormalizationPage() {
   const [selected, setSelected] = useState<NormalizationMethod | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [pcaMethod, setPcaMethod] = useState<MethodPreview | null>(null);
   const [isNormalising, setIsNormalising] = useState(false);
+
+  // Feste Spaltenreihenfolge mit RAW ganz links (NRM-01); unbekannte Methoden
+  // werden hinten angehängt, damit nichts verloren geht.
+  const orderedMethods = useMemo(() => {
+    const methods = data?.methods ?? [];
+    return [...methods].sort(
+      (a, b) =>
+        (METHOD_ORDER.indexOf(a.method) + 1 || 99) -
+        (METHOD_ORDER.indexOf(b.method) + 1 || 99),
+    );
+  }, [data]);
 
   const jobStatus : JobStatus | null  = useJobPolling(isNormalising ? (job_id ?? null) : null);
 
@@ -56,8 +70,7 @@ export function NormalizationPage() {
         body: JSON.stringify({ method: selected }),
       });
 
-      if (!res.ok) throw new Error(`Fehler: ${res.status}`);
-      // TODO: Prüfen, wie der State abgefangen wird um die Progressbar anzuzeigen, wenn Preview ausgewählt wurde
+      if (!res.ok) throw new Error(`Error: ${res.status}`);
       setIsNormalising(true);
     } catch (e) {
       console.error(e);
@@ -66,11 +79,11 @@ export function NormalizationPage() {
     }
   };
 
-  if (isLoading) { return <LoadingScreen message="Normalisierungsvorschauen werden geladen..." /> }
+  if (isLoading) { return <LoadingScreen message="Loading normalization previews..." /> }
   if (error) { return <LoadingScreen message={error} /> }
   if (!data) return null;
 
-  const handleImageClick = (url: string, title: string) => {
+  const handleDensityClick = (url: string, title: string) => {
     setPreviewImage({ url, title });
   };
 
@@ -78,12 +91,21 @@ export function NormalizationPage() {
 
   return (
     <main className="min-h-screen bg-neutral-background px-6 py-10">
-      {/* MODAL für Plot-Vorschau */}
+      {/* MODAL für vergrößerten Density-Plot */}
       {previewImage && (
         <PlotModal
           imageURL={previewImage.url}
           title={previewImage.title}
           onClose={() => setPreviewImage(null)}
+        />
+      )}
+
+      {/* Interaktiver PCA-Viewer (Farben, Labels, PNG-Export) */}
+      {pcaMethod && pcaMethod.pca && (
+        <PcaViewer
+          method={pcaMethod.method}
+          data={pcaMethod.pca}
+          onClose={() => setPcaMethod(null)}
         />
       )}
 
@@ -101,14 +123,16 @@ export function NormalizationPage() {
           Click a plot for an enlarged view.
       </p>
 
-      {/* METHOD CARDS (5 methods) */}
+      {/* METHOD CARDS (RAW links, dann Normalisierungsmethoden) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-10">
-        {data.plots.map((group) => (
+        {orderedMethods.map((method) => (
             <MethodCard
-                group={group}
-                isSelected={selected === group.method}
+                key={method.method}
+                method={method}
+                isSelected={selected === method.method}
                 onSelect={setSelected}
-                onImageClick={handleImageClick}
+                onDensityClick={handleDensityClick}
+                onPcaClick={setPcaMethod}
             />
         ))}
       </div>

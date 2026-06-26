@@ -11,6 +11,27 @@ from app.services.r_executor import run_r_script, NormalizationPreviewCommand
 logger = logging.getLogger(__name__)
 
 
+def _scan_preview_artifacts(job_path: Path) -> dict[str, dict]:
+    """Collect the per-method preview artifacts written by the R script.
+
+    Returns ``{method: {"density": <png filename|None>, "pca": <json filename|None>}}``.
+    Only the expected ``density_<method>.png`` and ``pca_<method>.json`` files are
+    picked up, so unrelated files in the job dir (filter_settings.json,
+    preview_plots.json, …) are ignored.
+    """
+    artifacts: dict[str, dict] = {}
+
+    for png_file in sorted(job_path.glob("density_*.png")):
+        method = png_file.stem[len("density_"):]
+        artifacts.setdefault(method, {"density": None, "pca": None})["density"] = png_file.name
+
+    for json_file in sorted(job_path.glob("pca_*.json")):
+        method = json_file.stem[len("pca_"):]
+        artifacts.setdefault(method, {"density": None, "pca": None})["pca"] = json_file.name
+
+    return artifacts
+
+
 async def run_normalization_preview(
     job_id: str,
     job_dir: str,
@@ -78,33 +99,24 @@ async def run_normalization_preview(
         )
         return
 
-    # ── Plot-Erkennung: PNG-Scan (primäre Strategie) ─────────────────────────
-    # Dateibenennung: {plot_kind}_{method}.png  z.B. density_funnorm.png, pca_noob.png
+    # ── Plot-Erkennung: Dateisystem-Scan (primäre Strategie) ─────────────────
+    # normalization_preview.R schreibt pro Methode zwei Artefakte:
+    #   density_<method>.png  – server-gerenderter Dichteplot (statisch)
+    #   pca_<method>.json     – PCA-Punkte für den interaktiven Frontend-Plotter
+    # Beide werden hier eingesammelt, sodass das Frontend pro Methode den
+    # Density-Plot anzeigen und die PCA dynamisch rendern kann.
     job_path = Path(job_dir)
-    preview_plots: dict[str, list] = {}
-
-    for png_file in sorted(job_path.glob("*.png")):
-        filename = png_file.name
-        # Format: {plot_kind}_{method}.png → split am ersten Underscore
-        parts = filename.replace(".png", "").split("_", 1)
-        if len(parts) != 2:
-            logger.debug("PNG übersprungen (unbekanntes Format): %s", filename)
-            continue
-        plot_kind, method = parts[0], parts[1]
-        if method not in preview_plots:
-            preview_plots[method] = []
-        preview_plots[method].append({"plot_kind": plot_kind, "file": filename})
+    preview_plots = _scan_preview_artifacts(job_path)
 
     logger.info(
-        "PNG-Scan abgeschlossen: job_id=%s methoden=%s plots=%s",
+        "Preview-Scan abgeschlossen: job_id=%s methoden=%s",
         job_id,
-        list(preview_plots.keys()),
-        {m: [p["file"] for p in ps] for m, ps in preview_plots.items()},
+        {m: {k: v for k, v in arts.items() if v} for m, arts in preview_plots.items()},
     )
 
     if not preview_plots:
         logger.error(
-            "Keine PNG-Dateien im Job-Verzeichnis: job_id=%s job_dir=%s",
+            "Keine Preview-Artefakte im Job-Verzeichnis: job_id=%s job_dir=%s",
             job_id, job_dir,
         )
         job_manager.transition_job(
@@ -112,7 +124,7 @@ async def run_normalization_preview(
             new_phase=JobPhase.NORMALIZATION_PREVIEW,
             new_status=JobStatusValue.FAILED,
             current_step="Fehler: Keine Plots im Job-Verzeichnis gefunden.",
-            error={"detail": f"Keine PNG-Dateien in {job_dir} gefunden."},
+            error={"detail": f"Keine Preview-Dateien in {job_dir} gefunden."},
         )
         return
 

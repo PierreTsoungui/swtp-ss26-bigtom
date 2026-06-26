@@ -9,7 +9,19 @@ router = APIRouter()
 
 JOBS_DIR = Path("jobs").resolve()
 
-_ALLOWED_PLOT_PREFIXES = ("density_", "pca_")
+# Density plots are served as PNG files; PCA data is inlined as JSON in the
+# preview response (the frontend renders it), so only density images are
+# fetchable through the image endpoint.
+_ALLOWED_PLOT_PREFIXES = ("density_",)
+
+
+def _load_pca_json(job_dir: Path, filename: str) -> dict:
+    """Read a pca_<method>.json file, returning an error payload on failure."""
+    try:
+        with open(job_dir / filename, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"error": f"PCA-Daten konnten nicht gelesen werden: {exc}", "points": []}
 
 
 @router.get("/preview/normalization/{job_id}")
@@ -54,22 +66,24 @@ async def get_preview(job_id: str):
     with open(plots_path, "r", encoding="utf-8") as f:
         preview_plots = json.load(f)
 
-    return {
-        "job_id": job_id,
-        "plots": [
-            {
-                "method": method,
-                "plots": [
-                    {
-                        "plot_kind": p["plot_kind"].lower(),
-                        "url": f"/api/v1/preview/normalization/{job_id}/{p['file']}",
-                    }
-                    for p in items
-                ],
-            }
-            for method, items in preview_plots.items()
-        ],
-    }
+    job_dir = JOBS_DIR / job_id
+
+    # Per method: the density plot as an image URL, the PCA data inlined as JSON
+    # so the frontend plotter can render it (dynamic colours, labels, export).
+    methods = []
+    for method, artifacts in preview_plots.items():
+        density_file = artifacts.get("density")
+        pca_file = artifacts.get("pca")
+        methods.append({
+            "method": method.lower(),
+            "density_url": (
+                f"/api/v1/preview/normalization/{job_id}/{density_file}"
+                if density_file else None
+            ),
+            "pca": _load_pca_json(job_dir, pca_file) if pca_file else None,
+        })
+
+    return {"job_id": job_id, "methods": methods}
 
 
 @router.get("/preview/normalization/{job_id}/{plot_name}")

@@ -91,14 +91,23 @@ test_that("Technische Validierung: Pipeline läuft durch und schreibt intakte Da
   
   methods <- c("raw", "noob", "quantile", "swan", "funnorm")
   for (m in methods) {
+    # Density bleibt ein server-gerendertes PNG; PCA wird als JSON für den
+    # interaktiven Frontend-Plotter ausgegeben (NRM-03).
     density_file <- file.path(res$job_dir, paste0("density_", m, ".png"))
-    pca_file     <- file.path(res$job_dir, paste0("pca_", m, ".png"))
-    
+    pca_file     <- file.path(res$job_dir, paste0("pca_", m, ".json"))
+
     expect_true(file.exists(density_file))
     expect_true(file.exists(pca_file))
-    
+
     expect_true(file.info(density_file)$size > 1000, info = paste("Density-Plot leer für:", m))
-    expect_true(file.info(pca_file)$size > 1000, info = paste("PCA-Plot leer für:", m))
+
+    pca <- jsonlite::fromJSON(pca_file, simplifyVector = FALSE)
+    expect_true(!is.null(pca$points), info = paste("PCA-JSON ohne 'points' für:", m))
+    expect_true(length(pca$points) >= 1L, info = paste("PCA-JSON ohne Punkte für:", m))
+    # Jeder Punkt trägt Sample-Name, Gruppe und PC-Koordinaten.
+    first <- pca$points[[1]]
+    expect_true(all(c("sample", "group", "pc1", "pc2") %in% names(first)),
+                info = paste("PCA-Punkt unvollständig für:", m))
   }
 })
 

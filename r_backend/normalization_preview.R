@@ -6,9 +6,9 @@
 # AUFGABE:
 #   - Gefiltertes RGChannelSet laden
 #   - Mehrere Normalisierungsmethoden testen
-#   - Density-Plots erzeugen
-#   - PCA-Plots für Dimensionsreduktion erzeugen
-#   - JSON-Metadaten ans Backend senden
+#   - Density-Plots als PNG erzeugen (server-gerendert, nicht interaktiv)
+#   - PCA-Punkte als JSON ausgeben (Sample, Gruppe, PC1/PC2) für den
+#     interaktiven Frontend-Plotter (dynamische Farben, Label-Toggle, Export)
 #
 # KUNDENANFORDERUNGEN:
 # ------------------------------------------------------------
@@ -41,10 +41,8 @@ Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
 
 suppressPackageStartupMessages({
   library(minfi)
-  library(ggplot2)
   library(jsonlite)
   library(BiocParallel)
-  library(RColorBrewer)
 })
 
 # ------------------------------------------------------------
@@ -105,9 +103,16 @@ read_sample_sheet <- function(path) {
 
 sample_sheet <- read_sample_sheet(sample_sheet_path)
 
-# Lookup-Tabelle: Array_ID -> Sample_Name
+# Lookup-Tabellen: Array_ID -> Sample_Name und Array_ID -> Sample_Group.
+# Die Gruppe (Phänotyp) wird pro PCA-Punkt mitgegeben, damit das Frontend die
+# Punkte dynamisch nach Gruppe einfärben kann (NRM-03).
 sample_sheet$Array_ID <- paste0(sample_sheet$Sentrix_ID, "_", sample_sheet$Sentrix_Position)
 id_to_name <- setNames(sample_sheet$Sample_Name, sample_sheet$Array_ID)
+id_to_group <- if ("Sample_Group" %in% colnames(sample_sheet)) {
+  setNames(as.character(sample_sheet$Sample_Group), sample_sheet$Array_ID)
+} else {
+  setNames(character(0), character(0))
+}
 
 # ------------------------------------------------------------
 # LOAD FILTERED RGChannelSet
@@ -170,11 +175,14 @@ make_density_plot <- function(
   filename,
   title
 ) {
+  # Größer + höhere Auflösung als zuvor: Biolog:innen drucken/screenshotten die
+  # Plots, daher müssen Achsen und Beschriftungen auch im Ausdruck lesbar sein
+  # (NRM-02).
   png(
     filename,
-    width = 800,
-    height = 500,
-    res = 96,
+    width = 1000,
+    height = 650,
+    res = 120,
     type = "cairo"
   )
 
@@ -187,22 +195,27 @@ make_density_plot <- function(
     main = title,
     xlab = "Beta value",
     legend = FALSE,
-    cex.main = 1.6,
-    cex.lab  = 1.3,
-    cex.axis = 1.2,
-    lwd = 2
+    cex.main = 1.8,
+    cex.lab  = 1.5,
+    cex.axis = 1.3,
+    lwd = 2.5
   )
 
   dev.off()
 }
 
 # ------------------------------------------------------------
-# PCA PLOT
+# PCA -> JSON
 # ------------------------------------------------------------
+# Statt eines fertigen PNGs schreiben wir die PCA-Punktkoordinaten plus
+# Metadaten (Sample-Name, Gruppe) als JSON. Das Frontend rendert daraus einen
+# interaktiven Plot (dynamische Farben, Label-Toggle, PNG-Export) – siehe
+# NRM-03/NRM-04. Density-Plots bleiben PNG, weil sie nicht interaktiv sind.
 
-make_pca_plot <- function(beta_values, filename, title, sample_labels = NULL) {
+write_pca_json <- function(beta_values, filename, method_name,
+                           sample_labels = NULL, sample_groups = NULL) {
   if (is.null(beta_values) || ncol(beta_values) < 3) {
-    stop("PCA plot requires at least 3 samples")
+    stop("PCA requires at least 3 samples")
   }
 
   beta_values[!is.finite(beta_values)] <- NA
@@ -216,54 +229,59 @@ make_pca_plot <- function(beta_values, filename, title, sample_labels = NULL) {
 
   if (nrow(beta_values) > MAX_PROBES_FOR_PCA) {
     set.seed(123)
-    idx <- sample(1:nrow(beta_values), MAX_PROBES_FOR_PCA)
+    idx <- sample(seq_len(nrow(beta_values)), MAX_PROBES_FOR_PCA)
     beta_values <- beta_values[idx, ]
   }
 
-  pca <- prcomp(t(beta_values), center = TRUE, scale. = FALSE)
-
+  pca     <- prcomp(t(beta_values), center = TRUE, scale. = FALSE)
   var_exp <- round((pca$sdev^2 / sum(pca$sdev^2)) * 100, 1)
 
-  # Sample-Labels: Parameter nutzen, sonst Spaltennamen, sonst generisch
-  labels_to_use <- if (!is.null(sample_labels) && length(sample_labels) == ncol(beta_values)) {
+  n <- ncol(beta_values)
+
+  # Sample-Labels: Parameter nutzen, sonst Spaltennamen, sonst generisch.
+  # Spaltenreihenfolge bleibt durch das Zeilen-Filtering unverändert, daher
+  # bleiben labels/groups korrekt an pca$x (Zeilen = Samples) ausgerichtet.
+  labels_to_use <- if (!is.null(sample_labels) && length(sample_labels) == n) {
     sample_labels
-  } else {
+  } else if (!is.null(colnames(beta_values))) {
     colnames(beta_values)
+  } else {
+    paste0("Sample_", seq_len(n))
   }
 
-  if (is.null(labels_to_use)) {
-    labels_to_use <- paste0("Sample_", seq_len(ncol(beta_values)))
+  groups_to_use <- if (!is.null(sample_groups) && length(sample_groups) == n) {
+    as.character(sample_groups)
+  } else {
+    rep("", n)
   }
+  groups_to_use[is.na(groups_to_use)] <- ""
 
-  plot_data <- data.frame(
-    PC1    = pca$x[, 1],
-    PC2    = pca$x[, 2],
-    Sample = labels_to_use
+  points <- lapply(seq_len(n), function(i) {
+    list(
+      sample = labels_to_use[i],
+      group  = groups_to_use[i],
+      pc1    = round(unname(pca$x[i, 1]), 4),
+      pc2    = round(unname(pca$x[i, 2]), 4)
+    )
+  })
+
+  payload <- list(
+    method             = method_name,
+    axes               = list(x = "PC1", y = "PC2"),
+    variance_explained = list(pc1 = var_exp[1], pc2 = var_exp[2]),
+    points             = points
   )
 
-  p <- ggplot(plot_data, aes(x = PC1, y = PC2, color = Sample)) +
-    geom_point(size = 3, alpha = 0.85) +
-    geom_text(
-      aes(label = Sample),
-      vjust    = -0.8,
-      size     = 3,
-      check_overlap = TRUE,
-      show.legend = FALSE
-    ) +
-    labs(
-      title = paste(title, "- PCA Plot"),
-      x = paste0("PC1 (", var_exp[1], "%)"),
-      y = paste0("PC2 (", var_exp[2], "%)")
-    ) +
-    theme_minimal() +
-    theme(
-      plot.title = element_text(size = 14, face = "bold"),
-      axis.title = element_text(size = 12),
-      legend.position = "none"
-    ) +
-    scale_color_brewer(palette = "Set2")
+  jsonlite::write_json(payload, path = filename, auto_unbox = TRUE, pretty = TRUE)
+}
 
-  ggsave(filename, plot = p, width = 8, height = 6, dpi = 150)
+# Schreibt eine PCA-JSON, die nur einen Fehler transportiert, damit das Frontend
+# pro Methode eine klare Meldung anzeigen kann, statt eines leeren Plots.
+write_pca_error_json <- function(filename, method_name, message) {
+  jsonlite::write_json(
+    list(method = method_name, error = message, points = list()),
+    path = filename, auto_unbox = TRUE, pretty = TRUE
+  )
 }
 
 # ------------------------------------------------------------
@@ -281,7 +299,7 @@ run_method <- function(
 
   pca_filename <- file.path(
     job_dir,
-    paste0("pca_", tolower(method_name), ".png")
+    paste0("pca_", tolower(method_name), ".json")
   )
 
   emit_progress(base_pct, paste0("Führe Vorschau-Methode aus: ", method_name))
@@ -317,6 +335,12 @@ run_method <- function(
       array_ids                              # Fallback: Array-ID wenn nicht gefunden
     )
 
+    sample_groups <- ifelse(
+      array_ids %in% names(id_to_group),
+      id_to_group[array_ids],
+      ""                                     # Fallback: keine Gruppe bekannt
+    )
+
     tryCatch({
       emit_progress(base_pct + 3, paste0(method_name, ": Generiere Density-Plot..."))
       make_density_plot(
@@ -335,16 +359,15 @@ run_method <- function(
     })
 
     tryCatch({
-      emit_progress(base_pct + 6, paste0(method_name, ": Generiere PCA-Plot..."))
-      make_pca_plot(beta, pca_filename, method_name, sample_labels = sample_labels)
-    }, error = function(e) {
-      emit_progress(base_pct + 6, paste0("Hinweis: PCA-Plot fehlgeschlagen für ", method_name))
-      create_error_png(
-        pca_filename,
-        e$message,
-        method_name,
-        "pca"
+      emit_progress(base_pct + 6, paste0(method_name, ": Generiere PCA-Daten (JSON)..."))
+      write_pca_json(
+        beta, pca_filename, method_name,
+        sample_labels = sample_labels,
+        sample_groups = sample_groups
       )
+    }, error = function(e) {
+      emit_progress(base_pct + 6, paste0("Hinweis: PCA fehlgeschlagen für ", method_name))
+      write_pca_error_json(pca_filename, method_name, e$message)
     })
 
     rm(normalized, beta)
@@ -359,11 +382,10 @@ run_method <- function(
       "density"
     )
 
-    create_error_png(
+    write_pca_error_json(
       pca_filename,
-      paste("Normalization failed:", e$message),
       method_name,
-      "pca"
+      paste("Normalization failed:", e$message)
     )
   })
 
@@ -413,6 +435,8 @@ run_method(
 run_method(
   "SWAN",
   quote({
+    # preprocessSWAN randomly subsets probes — seed for a reproducible preview.
+    set.seed(42)
     mset_raw <- preprocessRaw(
       filtered_rgset
     )
