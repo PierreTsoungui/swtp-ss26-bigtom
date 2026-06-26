@@ -3,13 +3,25 @@ import json
 import uuid
 from typing import List
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request, Form, Query, status
 from pydantic import ValidationError
 
 from app.core.error_types import ErrorTypes, problem_detail
 from app.models.filter import FilterSettings
-from app.models.upload import UploadResponse
-from app.services import job_manager, pipeline_task, upload_service
+from app.models.upload import (
+    UploadResponse,
+    InspectManifest,
+    CommitRequest,
+    SheetPreview,
+)
+from app.services import (
+    job_manager,
+    pipeline_task,
+    upload_service,
+    upload_inspect_service,
+    upload_commit_service,
+    staging_manager,
+)
 from app.services.file_handler import (
     ensure_upload_dir,
     validate_idat_files,
@@ -20,7 +32,67 @@ from app.services.job_manager import JobPhase, JobStatusValue
 router = APIRouter()
 
 
-@router.post("/upload", response_model=UploadResponse, status_code=201)
+# ══════════════════════════════════════════════════════════════════════════════
+# Folder / ZIP upload: inspect → commit  (UPL-01)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/upload/inspect", response_model=InspectManifest, status_code=201)
+async def inspect_upload(files: List[UploadFile] = File(...)):
+    """Stage a folder/ZIP/file selection and return the classified manifest.
+
+    Heavy work (extraction, scanning) runs in a worker thread inside the service.
+    Non-fatal issues (e.g. multiple sample sheets) come back in ``errors`` and
+    block the UI; fatal problems map to RFC-9457 errors.
+    """
+    return await upload_inspect_service.inspect_upload(files)
+
+
+@router.get("/upload/{session_id}/preview", response_model=SheetPreview)
+async def preview_sample_sheet(
+    session_id: str,
+    sheet_id: str = Query(...),
+    rows: int = Query(20, ge=1, le=200),
+):
+    """Lazy tabular preview of a staged candidate sample sheet."""
+    session_dir = staging_manager.require_session(session_id)
+    return upload_inspect_service.build_sheet_preview(session_dir, sheet_id, rows)
+
+
+@router.post("/upload/commit", response_model=UploadResponse, status_code=201)
+async def commit_upload(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    payload: CommitRequest,
+):
+    """Confirm the selection, create the job and launch the filtering pipeline."""
+    job_id, job_dir = upload_commit_service.persist_committed_job(payload, request.url.path)
+
+    background_tasks.add_task(
+        pipeline_task.run_job_pipeline,
+        job_id,
+        lambda cancel_event: upload_service.run_upload_pipeline(
+            job_id, str(job_dir), "SampleSheet.csv", payload.filter_settings, cancel_event,
+        ),
+    )
+
+    return UploadResponse(
+        job_id=job_id,
+        status=JobStatusValue.WAITING.value,
+        filter_settings=payload.filter_settings.model_dump(),
+    )
+
+
+@router.delete("/upload/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def discard_upload(session_id: str):
+    """Discard a staging session (user cancelled)."""
+    staging_manager.delete_session(session_id)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Legacy single-shot upload (deprecated, replaced by inspect/commit)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.post("/upload", response_model=UploadResponse, status_code=201, deprecated=True)
 async def upload_files(
     request: Request,
     background_tasks: BackgroundTasks,
