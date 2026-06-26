@@ -43,25 +43,32 @@ def test_get_batch_history_job_not_found(mock_job):
     assert "nicht gefunden" in data["detail"]
 
 
-# ── GET: SVD PLOT TESTS ─────────────────────────────────────────────────────
+# ── GET: SVD PLOT TESTS (static PNG + vector PDF) ────────────────────────────
 
-def test_get_svd_plot_success(mock_job):
+def test_get_svd_plot_png(mock_job):
     job_id, job_dir = mock_job
-    
-    plot_file = job_dir / "svd_plot_0.png"
-    plot_file.write_bytes(b"fake_png_binary_data")
-    
+    (job_dir / "svd_plot_0.png").write_bytes(b"\x89PNG\r\n_fake")
+
     response = client.get(f"/api/v1/batch/{job_id}/svd-plot/0")
     assert response.status_code == 200
-    assert response.content == b"fake_png_binary_data"
     assert response.headers["content-type"] == "image/png"
+
+
+def test_get_svd_plot_pdf_download(mock_job):
+    job_id, job_dir = mock_job
+    (job_dir / "svd_plot_0.pdf").write_bytes(b"%PDF-1.4 fake")
+
+    response = client.get(f"/api/v1/batch/{job_id}/svd-plot/0", params={"format": "pdf"})
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers.get("content-disposition", "")
 
 
 def test_get_svd_plot_not_found(mock_job):
     job_id, _ = mock_job
-    
+
     response = client.get(f"/api/v1/batch/{job_id}/svd-plot/99")
-    
+
     assert response.status_code == 404
     data = response.json()
     assert data["type"] == ErrorTypes.PLOT_NOT_FOUND.path
@@ -207,3 +214,75 @@ def test_skip_batch_correction(mock_job, monkeypatch):
     data = response.json()
     # Das Backend liefert "running", da die Downstream-Analyse im Hintergrund startet!
     assert data["status"] == "running"
+
+# ── NEW: columns-with-levels + sample-sheet preview ──────────────────────────
+
+_EPIC_SHEET = (
+    "[Data]\n"
+    "Sample_Name,Sample_Group,Sentrix_ID,Sentrix_Position\n"
+    "HeLa,Cellline,206891110001,R01C01\n"
+    "Jurkat,Cellline,206891110001,R03C01\n"
+    "NA12873,Coriell,206891110001,R08C01\n"
+    "HeLa_2,Cellline,206891110002,R01C01\n"
+)
+
+
+def test_batch_options_returns_columns_with_levels(mock_job):
+    job_id, job_dir = mock_job
+    (job_dir / "SampleSheet.csv").write_text(_EPIC_SHEET, encoding="utf-8")
+
+    data = client.get(f"/api/v1/batch/{job_id}/batch-options").json()
+
+    by_name = {c["name"]: c["levels"] for c in data["columns"]}
+    # Same set offered for both roles; Sample_Name is unique → excluded.
+    # Sentrix_Position has 3 distinct values (R01C01, R03C01, R08C01).
+    assert by_name == {"Sample_Group": 2, "Sentrix_ID": 2, "Sentrix_Position": 3}
+    assert "Sample_Name" not in by_name
+    assert set(data["available_columns"]) == set(by_name)
+
+
+def test_sample_sheet_preview(mock_job):
+    job_id, job_dir = mock_job
+    (job_dir / "SampleSheet.csv").write_text(_EPIC_SHEET, encoding="utf-8")
+
+    data = client.get(f"/api/v1/batch/{job_id}/sample-sheet").json()
+
+    assert data["columns"] == ["Sample_Name", "Sample_Group", "Sentrix_ID", "Sentrix_Position"]
+    assert data["total_rows"] == 4
+    assert data["rows"][0] == ["HeLa", "Cellline", "206891110001", "R01C01"]
+
+
+def test_batch_options_includes_group_values(mock_job):
+    job_id, job_dir = mock_job
+    (job_dir / "SampleSheet.csv").write_text(_EPIC_SHEET, encoding="utf-8")
+
+    data = client.get(f"/api/v1/batch/{job_id}/batch-options").json()
+    by_name = {c["name"]: c for c in data["columns"]}
+    assert sorted(by_name["Sample_Group"]["values"]) == ["Cellline", "Coriell"]
+
+
+def test_skip_rejects_invalid_group_selection(mock_job):
+    job_id, job_dir = mock_job
+    (job_dir / "SampleSheet.csv").write_text(_EPIC_SHEET, encoding="utf-8")
+
+    # control group value does not exist in the chosen column
+    resp = client.post(f"/api/v1/batch/{job_id}/skip", json={
+        "group_column": "Sample_Group",
+        "case_group": "Cellline",
+        "control_group": "DoesNotExist",
+    })
+    assert resp.status_code == 400
+    assert resp.json()["type"] == ErrorTypes.INVALID_SELECTION.path
+
+
+def test_skip_rejects_unknown_group_column(mock_job):
+    job_id, job_dir = mock_job
+    (job_dir / "SampleSheet.csv").write_text(_EPIC_SHEET, encoding="utf-8")
+
+    resp = client.post(f"/api/v1/batch/{job_id}/skip", json={
+        "group_column": "NopeColumn",
+        "case_group": "A",
+        "control_group": "B",
+    })
+    assert resp.status_code == 400
+    assert resp.json()["type"] == ErrorTypes.INVALID_BATCH_VARIABLE.path
