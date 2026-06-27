@@ -10,8 +10,7 @@ import PcaViewer from "./components/PcaViewer.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
-import HelpButton from "../analysis/components/HelpButton.tsx";
-import {helpTexts} from "../../shared/utils/help/helpTexts.ts";
+import HelpButton from "../../shared/help/HelpButton.tsx";
 
 
 /**
@@ -113,11 +112,7 @@ export function NormalizationPage() {
         <h1 className="text-2xl font-semibold text-neutral-textPrimary">
             Choose a normalization method
         </h1>
-        <HelpButton
-          helpText={helpTexts.normalization}
-          ariaLabel="Open Help with normalization"
-          dialogTitle="Normalization"
-        />
+        <HelpButton topic="normalization" ariaLabel="Open Help with normalization" />
       </div>
       <p className="mb-8 text-neutral-textSecondary">
           Click a plot for an enlarged view.

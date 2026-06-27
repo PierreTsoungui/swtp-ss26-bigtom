@@ -8,8 +8,7 @@ import FileReviewList from "./components/FileReviewList";
 import SampleSheetPreviewModal from "./components/SampleSheetPreviewModal";
 import FilterPanel from "./components/FilterPanel.tsx";
 import type { SampleSheetCandidate } from "./utils/uploadApi";
-import HelpButton from "../analysis/components/HelpButton.tsx";
-import { helpTexts } from "../../shared/utils/help/helpTexts.ts";
+import HelpButton from "../../shared/help/HelpButton.tsx";
 
 /**
  * Upload as a single field with an inspect → review → commit flow (UPL-01).
@@ -33,11 +32,7 @@ function UploadView(): JSX.Element {
     <div className="container mx-auto pb-16">
       <div className="m-10 flex items-center justify-center gap-3">
         <h1 className="text-center text-4xl font-bold">Upload</h1>
-        <HelpButton
-          helpText={helpTexts.upload}
-          ariaLabel="Open upload help"
-          dialogTitle="Upload Raw Data & Sample Information"
-        />
+        <HelpButton topic="upload" ariaLabel="Open upload help" />
       </div>
 
       {flow.error && (

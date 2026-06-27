@@ -1,31 +1,31 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import HelpContent from "./HelpContent";
+import { helpTopics, type HelpTopicId } from "./registry";
+
 /**
- * Props für den HelpButton.
+ * Props for the {@link HelpButton}.
  */
 interface HelpButtonProps {
     /**
-     * Der Text, der im Dialog angezeigt wird.
+     * Id of the help topic to display. Title and Markdown body are resolved from
+     * the central {@link helpTopics} registry.
      */
-    helpText: string;
+    topic: HelpTopicId;
 
     /**
-     * Optionales ARIA-Label für den Button.
+     * Optional ARIA label for the trigger button.
      * @default "Hilfe öffnen"
      */
     ariaLabel?: string;
-
-    /**
-     * Optionaler Titel für den Dialog.
-     * @default "Hilfe"
-     */
-    dialogTitle?: string;
 }
 
-function HelpButton({
-                        helpText,
-                        ariaLabel = "Hilfe öffnen",
-                        dialogTitle = "Hilfe",
-                    }: HelpButtonProps) {
+/**
+ * A small "?" button that opens an accessible modal dialog with contextual,
+ * Markdown-formatted help for the given {@link HelpButtonProps.topic}.
+ */
+function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
+    const { title, body } = helpTopics[topic];
+
     const [open, setOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -43,6 +43,7 @@ function HelpButton({
             return;
         }
 
+        const triggerElement = triggerRef.current;
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";
 
@@ -94,7 +95,7 @@ function HelpButton({
         return () => {
             document.body.style.overflow = previousOverflow;
             document.removeEventListener("keydown", handleKeyDown);
-            triggerRef.current?.focus();
+            triggerElement?.focus();
         };
     }, [closeDialog, open]);
 
@@ -104,7 +105,7 @@ function HelpButton({
                 ref={triggerRef}
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-sm font-bold text-zinc-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-zinc-100 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-sm font-bold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
                 aria-label={ariaLabel}
                 aria-haspopup="dialog"
                 aria-expanded={open}
@@ -132,7 +133,7 @@ function HelpButton({
                                     Kontextuelle Hilfe
                                 </p>
                                 <h2 id={titleId} className="mt-1 text-xl font-semibold">
-                                    {dialogTitle}
+                                    {title}
                                 </h2>
                             </div>
 
@@ -140,27 +141,22 @@ function HelpButton({
                                 ref={closeButtonRef}
                                 type="button"
                                 onClick={closeDialog}
-                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-xl font-semibold leading-none text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-xl font-semibold leading-none text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
                                 aria-label="Hilfe schließen"
                             >
                                 ×
                             </button>
                         </div>
 
-                        <div className="overflow-y-auto px-6 py-5">
-                            <p
-                                id={descriptionId}
-                                className="whitespace-pre-line text-sm leading-7 text-zinc-700"
-                            >
-                                {helpText}
-                            </p>
+                        <div id={descriptionId} className="overflow-y-auto px-6 py-5">
+                            <HelpContent markdown={body} />
                         </div>
 
                         <div className="flex justify-end border-t border-zinc-200 px-6 py-4">
                             <button
                                 type="button"
                                 onClick={closeDialog}
-                                className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-zinc-50 shadow-sm transition hover:bg-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                                className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-zinc-50 shadow-sm transition-colors hover:bg-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
                             >
                                 Schließen
                             </button>

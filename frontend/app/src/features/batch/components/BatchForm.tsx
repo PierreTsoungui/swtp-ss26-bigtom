@@ -9,8 +9,7 @@ import {
     Autocomplete,
     Alert,
 } from "@mui/material";
-import HelpButton from "../../analysis/components/HelpButton.tsx";
-import { helpTexts } from "../../../shared/utils/help/helpTexts.ts";
+import HelpButton from "../../../shared/help/HelpButton.tsx";
 import { colors } from "../../../shared/theme/colors";
 import SampleSheetPreviewModal from "./SampleSheetPreviewModal.tsx";
 
@@ -126,11 +125,7 @@ export function BatchForm({
         <form onSubmit={handleSubmit} className="space-y-8">
             <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-semibold">Batch Analysis &amp; Correction</h3>
-                <HelpButton
-                    helpText={helpTexts.batchCorrection}
-                    ariaLabel="Hilfe zur Batch-Korrektur öffnen"
-                    dialogTitle="Batch Effects & Batch Correction"
-                />
+                <HelpButton topic="batchCorrection" ariaLabel="Hilfe zur Batch-Korrektur öffnen" />
                 <button
                     type="button"
                     onClick={() => setShowPreview(true)}
