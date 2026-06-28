@@ -139,31 +139,57 @@ MAX_PROBES_FOR_PCA <- 500000
 # ERROR PNG
 # ------------------------------------------------------------
 
+# Renders the same drawing to a PNG (for inline display) and a PDF (vector, for
+# export) so every static density plot is downloadable in both formats. The PDF
+# path is derived from the PNG path (density_<method>.png -> .pdf). PDF failures
+# never abort the PNG: the inline preview is the critical artifact.
+render_png_and_pdf <- function(
+  png_path,
+  draw,
+  width_px,
+  height_px,
+  res
+) {
+  png(png_path, width = width_px, height = height_px, res = res, type = "cairo")
+  tryCatch(draw(), finally = dev.off())
+
+  pdf_path <- sub("\\.png$", ".pdf", png_path)
+  width_in  <- width_px / res
+  height_in <- height_px / res
+  tryCatch({
+    open_pdf <- tryCatch(
+      grDevices::cairo_pdf(pdf_path, width = width_in, height = height_in),
+      error = function(e) grDevices::pdf(pdf_path, width = width_in, height = height_in)
+    )
+    tryCatch(draw(), finally = dev.off())
+  }, error = function(e) {
+    # A missing PDF only disables the PDF export button; the preview still works.
+    message("PDF export failed for ", pdf_path, ": ", conditionMessage(e))
+  })
+}
+
 create_error_png <- function(
   filename,
   message,
   method,
   plot_kind
 ) {
-  png(
+  render_png_and_pdf(
     filename,
-    width = 800,
-    height = 500,
-    res = 96,
-    type = "cairo"
+    draw = function() {
+      plot.new()
+      text(
+        0.5,
+        0.5,
+        paste("ERROR:\n", message),
+        cex = 1.3,
+        col = "red"
+      )
+    },
+    width_px = 800,
+    height_px = 500,
+    res = 96
   )
-
-  plot.new()
-
-  text(
-    0.5,
-    0.5,
-    paste("ERROR:\n", message),
-    cex = 1.3,
-    col = "red"
-  )
-
-  dev.off()
 }
 
 # ------------------------------------------------------------
@@ -177,31 +203,26 @@ make_density_plot <- function(
 ) {
   # Größer + höhere Auflösung als zuvor: Biolog:innen drucken/screenshotten die
   # Plots, daher müssen Achsen und Beschriftungen auch im Ausdruck lesbar sein
-  # (NRM-02).
-  png(
+  # (NRM-02). Wird als PNG (Anzeige) und PDF (Export) ausgegeben.
+  render_png_and_pdf(
     filename,
-    width = 1000,
-    height = 650,
-    res = 120,
-    type = "cairo"
+    draw = function() {
+      par(mar = c(5, 5, 4, 2))
+      densityPlot(
+        beta_values,
+        main = title,
+        xlab = "Beta value",
+        legend = FALSE,
+        cex.main = 1.8,
+        cex.lab  = 1.5,
+        cex.axis = 1.3,
+        lwd = 2.5
+      )
+    },
+    width_px = 1000,
+    height_px = 650,
+    res = 120
   )
-
-  par(
-    mar = c(5, 5, 4, 2)
-  )
-
-  densityPlot(
-    beta_values,
-    main = title,
-    xlab = "Beta value",
-    legend = FALSE,
-    cex.main = 1.8,
-    cex.lab  = 1.5,
-    cex.axis = 1.3,
-    lwd = 2.5
-  )
-
-  dev.off()
 }
 
 # ------------------------------------------------------------
