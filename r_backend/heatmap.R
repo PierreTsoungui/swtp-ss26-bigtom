@@ -412,10 +412,14 @@ colnames(anno_df) <- vapply(anno_specs, function(s) s$name, character(1))
 anno_col <- setNames(lapply(anno_specs, function(s) s$col),
                      vapply(anno_specs, function(s) s$name, character(1)))
 
+# Annotation names ("Primary"/"Secondary"/"Group") sit on the LEFT, i.e. opposite
+# the legends (drawn on the right). Keeping them on the right made them share the
+# right-hand column with the legend stack and overlap; placing them on the left
+# guarantees the two can never collide regardless of figure height.
 top_anno <- HeatmapAnnotation(
   df  = anno_df,
   col = anno_col,
-  annotation_name_side = "right",
+  annotation_name_side = "left",
   annotation_name_gp   = gpar(fontsize = 9),
   gap                  = unit(1, "mm"),
   show_legend          = FALSE
@@ -440,7 +444,10 @@ if (!do_cluster)
 
 # Dendrogram depth (the axis that carries the merge heights). Generous, so even
 # fine/low branches stay distinguishable instead of collapsing into a thin band.
-COL_DEND_MM <- if (cluster_cols_flag) 28 else 0
+# The column (top) dendrogram needs at least as much depth as the row (left) one:
+# with few samples its vertical branches otherwise compress into an unreadable
+# band, so it is given comparable/greater height.
+COL_DEND_MM <- if (cluster_cols_flag) 48 else 0
 ROW_DEND_MM <- if (cluster_rows_flag) 32 else 0
 
 # Output resolution. Tall heatmaps (many CpGs) are capped at a lower DPI so the
