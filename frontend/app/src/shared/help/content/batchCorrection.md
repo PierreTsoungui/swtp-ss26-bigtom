@@ -1,34 +1,39 @@
 ## What are batch effects?
 
-Batch effects are systematic technical differences that arise independently of
-biology. Common sources include:
+Batch effects are systematic, non-biological differences introduced while the
+data is generated. Common sources include:
 
-- processing dates
-- laboratory personnel
-- array batches
-- sample plates
-- scanner runs
+- processing date or technician
+- array (chip) or plate
+- scanner or reagent lot
 
-If left uncorrected, batch effects can obscure genuine biological findings or
-create false-positive results.
+If they are not addressed, batch effects can hide real biological findings or
+create false positives — samples may cluster by *when/where* they were processed
+instead of by their biology.
 
 ## Interpreting the SVD Heatmap
 
-The SVD heatmap displays associations between metadata variables and principal
-components. Each cell contains a statistical significance value indicating how
-strongly a variable contributes to variation in the dataset.
+The SVD heatmap summarises where the variation in your data comes from. It
+decomposes the methylation matrix into **principal components** (the main axes of
+variation) and tests each metadata variable against each component, showing the
+**association p-value** in every cell (darker = stronger association).
 
-- Strong associations between **technical** variables and major principal
-  components often indicate the presence of batch effects.
-- The **biological** variable of interest should generally explain a substantial
-  proportion of the observed variation.
+- A strong association between a **technical** variable (e.g. *chip*, *plate*)
+  and a major component is a red flag for a batch effect.
+- Your **biological** variable of interest should explain a meaningful share of
+  the variation — that is the signal you want to keep.
 
-## When should batch correction be applied?
+## When and how to apply correction
 
-Batch correction should only be performed when **evidence for technical batch
-effects exists**. The platform protects the selected biological variable from
-being removed during correction.
+Apply batch correction only when the SVD heatmap shows real evidence of a
+technical effect. In the form you select:
 
-> Applying batch correction unnecessarily may reduce or eliminate genuine
-> biological signals. Always base the decision on evidence from PCA and SVD
-> analyses rather than performing it automatically.
+- the **batch variable** — the technical factor to remove, and
+- the **covariates** — your biological variable(s) to protect, so the correction
+  does not strip out the signal you care about.
+
+Correction is then performed with `limma::removeBatchEffect`. You can run it
+**iteratively**: after each round a new SVD heatmap is produced, so you can check
+that the technical association has faded while the biological one remains. Avoid
+correcting unnecessarily — every correction also risks removing real signal, so
+base the decision on the PCA/SVD evidence rather than applying it by default.

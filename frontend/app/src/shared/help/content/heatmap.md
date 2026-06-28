@@ -1,15 +1,26 @@
-## How should I interpret the heatmap?
+## How should I read the heatmap?
 
-Heatmaps provide a visual overview of methylation patterns across samples and
-genomic features.
+The heatmap gives a visual overview of methylation across your samples and the
+selected CpGs (or DMRs).
 
-- **Rows** typically represent CpG sites or DMRs.
-- **Columns** represent samples.
-- **Color intensity** reflects methylation levels.
+- **Rows** are CpG sites or regions; **columns** are samples.
+- **Colour** encodes the beta value: low methylation at one end of the scale,
+  high methylation at the other (0–1).
+- **Dendrograms** (the tree branches) cluster rows and columns by similarity, so
+  samples with similar profiles sit next to each other.
+- The **annotation bars** on top show each sample's grouping (the primary and,
+  optionally, secondary variable you chose), making it easy to see whether the
+  clustering lines up with biology.
 
-Samples with similar methylation profiles are clustered together, allowing rapid
-visual identification of biological groups, technical artifacts, or unexpected
-sample relationships.
+### What it tells you
 
-> Heatmaps should always be interpreted together with the statistical results
-> rather than as standalone evidence.
+Reading rows and columns together reveals which CpGs separate which groups,
+whether samples cluster by biological condition (good) or by a technical factor
+(a possible batch effect), and whether any sample behaves unexpectedly.
+
+### Good to know
+
+The heatmap uses exactly the CpGs currently selected by your table filters, up to
+a fixed limit (tighten the filter if you exceed it). Treat the heatmap as a
+visual companion to the statistics — interpret it together with the DMP/DMR
+results rather than as standalone proof.

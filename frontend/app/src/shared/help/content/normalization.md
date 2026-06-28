@@ -1,59 +1,53 @@
 ## Why is normalization necessary?
 
 Normalization is one of the most influential preprocessing steps in methylation
-analysis. Its purpose is to **remove technical variation while preserving
-genuine biological differences** between samples.
+analysis. Its goal is to **remove technical variation while preserving real
+biological differences** between samples.
 
-Technical variation may arise from:
+Technical variation creeps in from:
 
-- scanner effects
-- laboratory processing
-- dye bias
-- chip-specific effects
-- probe design differences
+- the two-colour (Red/Green) dye chemistry and dye bias
+- background fluorescence and scanner differences
+- the two Infinium probe designs (Type I vs. Type II)
+- chip-, plate- and batch-level effects
 
-Without normalization, technical variation may be mistaken for biological
-variation. The platform provides several normalization methods and displays
-**density plots** and **PCA plots** to help compare their performance.
+Without normalization, this technical variation can be mistaken for biology. To
+help you choose, the platform shows two previews per method: a **density plot**
+(the distribution of beta values — well-normalized samples overlap closely) and
+an interactive **PCA plot** (samples should group by biological condition, not by
+technical factors).
+
+**RAW** is shown only as an unnormalized baseline for comparison; pick one of the
+methods below to actually normalize.
 
 ## How should I choose a method?
 
-A good normalization method typically produces:
-
-- similar sample distributions
-- reduced technical variation
-- improved clustering of biological groups
-- fewer batch-related patterns
-
-When reviewing PCA plots, samples should ideally cluster according to biological
-conditions rather than technical variables. For most studies, NOOB provides a
-robust and reliable starting point.
+A good choice generally produces similar sample distributions, tighter
+clustering of biological groups, and fewer technically driven patterns. When in
+doubt, compare the PCA previews. For most studies, NOOB provides a robust and
+reliable default.
 
 ### NOOB
 
-*Normal-Exponential Out-Of-Band* corrects background noise and dye-bias effects
-between the red and green channels. It is widely used and generally recommended
-as the **default** method for most datasets.
+*Normal-exponential out-of-band* correction estimates background and dye bias
+using out-of-band signal. It is widely used and is a safe default for most
+datasets.
 
 ### SWAN
 
-Adjusts for systematic differences between Infinium Type I and Type II probe
-designs. It improves comparability across probe types and may be beneficial when
-probe-design effects are prominent.
+*Subset-quantile Within-Array Normalization* reduces the systematic offset
+between Type I and Type II probe designs, improving comparability across probe
+types. Useful when probe-design effects are prominent.
 
-### Functional Normalization
+### Functional Normalization (FunNorm)
 
-Uses internal control probes to estimate and remove technical variation. It is
-particularly useful for:
-
-- cancer datasets
-- large cohorts
-- multi-batch studies
-- heterogeneous tissue samples
+Uses the array's internal control probes to model and remove technical variation.
+It is well suited to datasets with large global differences — for example cancer
+vs. normal tissue, large cohorts, or multi-batch studies.
 
 ### Quantile Normalization
 
-Forces all samples to have identical statistical distributions. This can
-effectively remove technical variation but **may also remove genuine biological
-differences** if applied to highly heterogeneous datasets, so it should be
-selected with care.
+Forces every sample to share an identical value distribution. This removes
+technical variation effectively but **can also erase genuine biological
+differences** when samples are expected to differ globally, so use it with care
+on heterogeneous data.

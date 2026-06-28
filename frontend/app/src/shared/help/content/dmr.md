@@ -1,13 +1,22 @@
 ## DMR Analysis
 
-**Differentially Methylated Regions (DMRs)** are genomic regions containing
-multiple neighbouring CpGs that exhibit coordinated methylation changes.
+**Differentially Methylated Regions (DMRs)** are stretches of the genome where
+several neighbouring CpGs change methylation together. Regions are discovered
+with a clustering approach (Bumphunter) that groups nearby CpGs and tests them
+jointly.
 
-Compared with individual DMPs, DMRs often provide **stronger biological
-evidence**, because regulatory processes usually affect groups of CpGs rather
-than isolated positions.
+### Why regions matter
+
+Compared with single DMPs, DMRs usually carry **stronger biological evidence**:
+gene regulation typically acts over groups of CpGs (promoters, CpG islands,
+enhancers) rather than at one isolated position, so a coordinated regional change
+is less likely to be a chance finding.
 
 ### What the analysis reports
 
-The analysis reports genomic coordinates, region size, number of CpGs, and
-significance metrics.
+For each region the analysis reports the genomic coordinates, region size (width
+in base pairs), the number of CpGs it contains, the mean methylation difference
+between groups, and a significance statistic.
+
+As with DMPs, all discovered regions are returned and you refine them with the
+table filters (e.g. by p-value, width, number of CpGs, or effect size).
