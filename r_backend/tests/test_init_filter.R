@@ -4,9 +4,10 @@ library(jsonlite)
 # ── Hilfsfunktionen ──────────────────────────────────────────────────────────
 
 SCRIPT_PATH      <- "/app/r_backend/init_filter.R"
-SAMPLESHEET_PATH <- "/app/jobs/07b7fa29-8a9d-418d-bc16-8308a2b387fd/Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
-IDAT_DIR         <- "/app/jobs/07b7fa29-8a9d-418d-bc16-8308a2b387fd"
-
+#SAMPLESHEET_PATH <- "/app/jobs/07b7fa29-8a9d-418d-bc16-8308a2b387fd/Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
+#IDAT_DIR         <- "/app/jobs/07b7fa29-8a9d-418d-bc16-8308a2b387fd"
+SAMPLESHEET_PATH <- "/app/r_backend/daten/450Kdemo-dataset/Samplesheet.csv"
+IDAT_DIR <- "/app/r_backend/daten/450Kdemo-dataset/idat"
 #' Führt init_filter.R als Subprocess aus und gibt stdout-Zeilen zurück
 run_filter_script <- function(job_dir,
                                sample_sheet = SAMPLESHEET_PATH,
@@ -163,4 +164,232 @@ test_that("Script bricht bei fehlendem Samplesheet mit Exit 1 ab", {
 
   expect_equal(result$returncode, 1L,
     label = "Script hätte mit Exit 1 abbrechen sollen")
+})
+
+# Tests für die fachliche Validierung der Filterlogik und der Datenintegrität
+# Debug-Hilfsfunktion 
+debug_output <- function(result, label = "Debug") {
+  cat("\n", label, "=== RETURN CODE ===\n", sep = "")
+  print(result$returncode)
+  
+  cat("\n", label, "=== OUTPUT ===\n", sep = "")
+  cat(paste(result$lines, collapse = "\n"))
+  
+  cat("\n", label, "=== LINES ===\n", sep = "")
+  print(result$lines)
+  cat("\n")
+}
+test_that("Ungültiger det_p Cutoff führt zum Abbruch", {
+
+  job_dir <- tempfile("job_invalid_detp_")
+  dir.create(job_dir)
+
+  file.copy(
+    list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE),
+    job_dir
+  )
+
+  invalid_json <- toJSON(list(
+    det_p = list(
+      enabled = TRUE,
+      cutoff = 0.5
+    )
+  ), auto_unbox = TRUE)
+
+  result <- suppressWarnings(
+    run_filter_script(job_dir, filter_json = invalid_json)
+  )
+
+  expect_equal(result$returncode, 1L)
+})
+
+test_that("Ungültiger SNP Cutoff führt zum Abbruch", {
+
+  job_dir <- tempfile("job_invalid_snp_")
+  dir.create(job_dir)
+
+  file.copy(
+    list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE),
+    job_dir
+  )
+
+  invalid_json <- toJSON(list(
+    snp = list(
+      enabled = TRUE,
+      maf_cutoff = 0.5
+    )
+  ), auto_unbox = TRUE)
+
+  result <- suppressWarnings(
+    run_filter_script(job_dir, filter_json = invalid_json)
+  )
+
+  expect_equal(result$returncode, 1L)
+})
+
+test_that("Keine vollständigen IDAT-Paare führen zum Abbruch", {
+
+  job_dir <- tempfile("job_no_pairs_")
+  dir.create(job_dir)
+
+  file.copy(
+    list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE),
+    job_dir
+  )
+
+  file.remove(
+    list.files(
+      job_dir,
+      pattern = "_Red\\.idat$",
+      full.names = TRUE
+    )
+  )
+
+  result <- suppressWarnings(
+    run_filter_script(job_dir)
+  )
+  debug_output(result, "No Pairs")
+
+  expect_equal(result$returncode, 1L)
+  expect_true(
+  any(grepl(
+    "Keine vollständigen IDAT-Paare gefunden",
+    result$lines,
+    fixed = TRUE
+  ))
+)
+
+})
+
+test_that("Sample Quality Filter kann aktiviert werden", {
+
+  job_dir <- tempfile("job_sample_quality_")
+  dir.create(job_dir)
+
+  file.copy(
+    list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE),
+    job_dir
+  )
+
+  cfg <- toJSON(list(
+    sample_quality = list(
+      enabled = TRUE,
+      detection_p_cutoff = 0.01,
+      sample_failure_rate = 0.10,
+      remove_failed_samples = TRUE,
+      enable_pca_outlier_detection = TRUE
+    )
+  ), auto_unbox = TRUE)
+
+  result <- run_filter_script(
+    job_dir,
+    filter_json = cfg
+  )
+  debug_output(result, "Sample Quality")
+  expect_equal(result$returncode, 0L)
+
+  expect_true(
+    any(grepl("Sample Quality", result$lines))
+  )
+})
+test_that("Leeres SampleSheet führt zum Fehler", {
+
+  job_dir <- tempfile("job_empty_sheet_")
+  dir.create(job_dir)
+
+  empty_sheet <- tempfile(fileext = ".csv")
+  writeLines("", empty_sheet)
+
+  result <- suppressWarnings(
+    run_filter_script(
+      job_dir,
+      sample_sheet = empty_sheet
+    )
+  )
+  debug_output(result, "Empty Sheet")
+  expect_equal(result$returncode, 1L)
+})
+
+test_that("Manipuliertes SampleSheet führt zum Fehler", {
+
+  job_dir <- tempfile("job_bad_sheet_")
+  dir.create(job_dir)
+  file.copy(
+    list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE),
+    job_dir
+  )
+
+  bad_sheet <- tempfile(fileext = ".csv")
+
+  writeLines(
+    c(
+      "abc,xyz,test",
+      "1,2,3"
+    ),
+    bad_sheet
+  )
+
+  result <- suppressWarnings(
+    run_filter_script(
+      job_dir,
+      sample_sheet = bad_sheet
+    )
+  )
+  debug_output(result, "Bad Sheet")
+  expect_equal(result$returncode, 1L)
+   expect_true(
+    any(grepl("Samplesheet", paste(result$lines, collapse = "\n"), ignore.case = TRUE)) ||
+    any(grepl("sheet", paste(result$lines, collapse = "\n"), ignore.case = TRUE))
+  )
+})
+
+test_that("Filterstatistik ist konsistent", {
+
+  job_dir <- tempfile("job_stats_check_")
+  dir.create(job_dir)
+
+  file.copy(
+    list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE),
+    job_dir
+  )
+
+  run_filter_script(job_dir)
+
+  stats <- fromJSON(
+    file.path(job_dir, "filter_stats.json")
+  )
+    
+  
+  expect_equal(
+    stats$total_start,
+    stats$total_end + stats$total_removed
+  )
+})
+
+test_that("Ungültige Sentrix-ID oder Position führt zum Fehler", {
+
+  job_dir <- tempfile("job_invalid_sentrix_")
+  dir.create(job_dir)
+
+  file.copy(
+    list.files(IDAT_DIR, pattern = "\\.idat$", full.names = TRUE),
+    job_dir
+  )
+  bad_files <- c(
+    "SampleA_Grn.idat",
+    "SampleA_Red.idat"
+  )
+
+  file.create(file.path(job_dir, bad_files))
+
+  result <- suppressWarnings(
+    run_filter_script(job_dir)
+  )
+
+  debug_output(result, "Invalid Sentrix")
+
+  expect_equal(result$returncode, 1L)
+  expect_true(
+    any(grepl("Sentrix|IDAT|Format|ungültig", paste(result$lines, collapse = "\n"), ignore.case = TRUE))
+  )
 })
