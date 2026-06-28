@@ -7,6 +7,44 @@ Stack: **React** · **FastAPI** · **R** · **Docker**
 
 ---
 
+## Lokale HTTPS-Entwicklung
+
+Die Docker-Anwendung kann lokal ueber HTTPS laufen. TLS terminiert im bestehenden
+Frontend-Nginx-Container; API-Aufrufe laufen im Browser relativ ueber `/api/`
+und werden intern an `http://backend:8000` weitergeleitet.
+
+Einmalig ein lokales mkcert-Zertifikat erzeugen:
+
+```powershell
+.\scripts\generate-dev-certificate.ps1
+```
+
+Container starten:
+
+```powershell
+docker compose up --build
+```
+
+HTTPS-Diagnose ausfuehren:
+
+```powershell
+.\scripts\diagnose-https.ps1
+```
+
+Wichtige lokale URLs:
+
+| Was | URL |
+|---|---|
+| Anwendung | https://localhost |
+| Upload | https://localhost/upload |
+| API ueber Nginx | https://localhost/api/ |
+| Backend Swagger direkt | http://localhost:8000/docs |
+
+`http://localhost` leitet auf `https://localhost` weiter. Details,
+LAN-IP-Zertifikate und Troubleshooting: [docs/HTTPS.md](docs/HTTPS.md).
+
+---
+
 ## Voraussetzungen
 
 - Docker + Docker Compose
@@ -37,15 +75,15 @@ docker compose up --build
 
 | Was | URL |
 |---|---|
-| Anwendung | http://localhost:3000 |
-| Upload | http://localhost:3000/upload |
+| Anwendung | https://localhost |
+| Upload | https://localhost/upload |
 | API (Swagger UI) | http://localhost:8000/docs |
 
 ---
 
 ## Upload-Workflow
 
-Aktuell ist der Upload ausschließlich über **http://localhost:3000/upload** verfügbar.
+Aktuell ist der Upload ueber **https://localhost/upload** verfuegbar.
 
 Benötigt werden:
 - Ein **Samplesheet** (`.csv`)
@@ -59,7 +97,7 @@ Hochgeladene Dateien werden temporär unter `backend/app/temp/<job-id>/` abgeleg
 
 | Container | Port (Host) | Port (intern) | Beschreibung |
 |---|---|---|---|
-| `frontend` | `3000` | `80` | React-App via nginx |
+| `frontend` | `80`, `443` | `80`, `443` | React-App via nginx, HTTP-Redirect auf HTTPS |
 | `backend` | `8000` | `8000` | FastAPI REST API |
 | `r_worker` | – | – | R-Analyse, kein Port nach außen |
 
@@ -71,7 +109,7 @@ Hochgeladene Dateien werden temporär unter `backend/app/temp/<job-id>/` abgeleg
 - Base Image: `node:20-alpine` → Build → `nginx:alpine`
 - React/Vite-App wird gebaut und statisch über nginx ausgeliefert
 - nginx ist über `nginx.conf` konfiguriert – SPA-Routing über `try_files` aktiviert
-- Upload-Oberfläche erreichbar unter: **http://localhost:3000/upload**
+- Upload-Oberflaeche erreichbar unter: **https://localhost/upload**
 
 ### Backend (`./backend`)
 - Base Image: `python:3.11-slim`
@@ -228,15 +266,15 @@ docker compose logs --tail=50 backend
 ### Port bereits belegt
 
 ```bash
-# Welcher Prozess nutzt Port 3000 oder 8000?
-sudo ss -tlnp | grep :3000
+# Welcher Prozess nutzt Port 80, 443 oder 8000?
+sudo ss -tlnp | grep :443
 sudo lsof -i :8000
 
 # Lösung A – laufende Container stoppen:
 docker compose down
 
 # Lösung B – Port in docker-compose.yml anpassen:
-# "3000:80" → "3001:80"
+# "80:80" -> "8080:80" oder "443:443" -> "8443:443"
 # Achtung: Nicht ins Repository pushen – einheitliches Setup beibehalten
 ```
 

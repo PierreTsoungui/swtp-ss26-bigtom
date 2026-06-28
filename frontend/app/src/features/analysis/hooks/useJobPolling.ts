@@ -81,7 +81,7 @@ export function useJobPolling(jobId: string | null, resetKey? : number): JobStat
                     ...prev,
                     status:  JobStatusValue.FAILED,
                     error: {
-                      type: "http://localhost:3000/analysis/errors#connection-error",
+                      type: "/analysis/errors#connection-error",
                       title: "Verbindungsfehler",
                       status: 503,
                       detail: "Verbindung zum Server nach 3 Versuchen unterbrochen.",

@@ -20,8 +20,6 @@ export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
     const isOpen = selectedIndex !== null;
-    const imageHost = 'http://localhost:8000';
-
     const handleOpen  = (index: number) => setSelectedIndex(index);
     const handleClose = () => setSelectedIndex(null);
 
@@ -75,7 +73,7 @@ export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
                             onClick={() => handleOpen(index)}
                         >
                             <img
-                                src={`${imageHost}${round.svd_plot}`}
+                                src={round.svd_plot}
                                 alt={`SVD Plot Round ${round.round}`}
                                 style={{
                                     width: '100%',
@@ -212,7 +210,7 @@ export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
                         {/* Bild */}
                         <Box
                             component="img"
-                            src={`${imageHost}${rounds[selectedIndex].svd_plot}`}
+                            src={rounds[selectedIndex].svd_plot}
                             alt={`SVD Plot Round ${rounds[selectedIndex].round}`}
                             sx={{
                                 maxWidth: '90vw',
