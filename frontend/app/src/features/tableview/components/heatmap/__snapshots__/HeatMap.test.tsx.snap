@@ -61,12 +61,25 @@ exports[`HeatMap > renders correctly 1`] = `
               <div
                 class="space-y-6"
               >
-                <p
-                  class="text-sm text-slate-500"
+                <div
+                  class="flex items-start justify-between gap-3"
                 >
-                  The heatmap uses the filters currently applied to the DMP table
-                  .
-                </p>
+                  <p
+                    class="text-sm text-slate-500"
+                  >
+                    The heatmap uses the filters currently applied to the DMP table
+                    .
+                  </p>
+                  <button
+                    aria-expanded="false"
+                    aria-haspopup="dialog"
+                    aria-label="Hilfe zur Heatmap öffnen"
+                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-sm font-bold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                    type="button"
+                  >
+                    ?
+                  </button>
+                </div>
                 <div
                   class="grid grid-cols-1 md:grid-cols-2 gap-6"
                 >
@@ -115,7 +128,7 @@ exports[`HeatMap > renders correctly 1`] = `
                           aria-hidden="true"
                           aria-invalid="false"
                           class="MuiSelect-nativeInput css-j0riat-MuiSelect-nativeInput"
-                          id="_r_1_"
+                          id="_r_3_"
                           tabindex="-1"
                           value=""
                         />
@@ -185,7 +198,7 @@ exports[`HeatMap > renders correctly 1`] = `
                           aria-hidden="true"
                           aria-invalid="false"
                           class="MuiSelect-nativeInput css-j0riat-MuiSelect-nativeInput"
-                          id="_r_3_"
+                          id="_r_5_"
                           tabindex="-1"
                           value=""
                         />

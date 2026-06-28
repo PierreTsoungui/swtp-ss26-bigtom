@@ -19,6 +19,7 @@ import {useGenerateHeatMap} from "../../hooks/useGenerateHeatMap.ts";
 import Progressbar from "../../../../shared/components/Progressbar.tsx";
 import ErrorMessage from "../../../../shared/error-handling/components/ErrorMessage.tsx";
 import {PlotView, type PlotSource} from "../../../../shared/plots";
+import HelpButton from "../../../../shared/help/HelpButton.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../../../shared/utils/JobTypes.ts";
 import type {ProblemDetail} from "../../../../shared/error-handling/types/ErrorTypes.ts";
 
@@ -146,11 +147,16 @@ function HeatMap({filters, rowCount}: HeatMapProps) {
 
             <AccordionDetails>
                 <div className="space-y-6">
-                    {/* Filter selection notice — the heatmap uses the table's current filters */}
-                    <p className="text-sm text-slate-500">
-                        The heatmap uses the filters currently applied to the DMP table
-                        {rowCount != null && <> — <strong>{rowCount}</strong> CpG{rowCount === 1 ? "" : "s"} selected</>}.
-                    </p>
+                    {/* Filter selection notice + contextual help for the heatmap.
+                        The help trigger lives here (not in the summary, which is
+                        itself a <button>) to keep the DOM valid — no nested buttons. */}
+                    <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm text-slate-500">
+                            The heatmap uses the filters currently applied to the DMP table
+                            {rowCount != null && <> — <strong>{rowCount}</strong> CpG{rowCount === 1 ? "" : "s"} selected</>}.
+                        </p>
+                        <HelpButton topic="heatmap" ariaLabel="Hilfe zur Heatmap öffnen" />
+                    </div>
 
                     {/* Row-limit / empty pre-checks */}
                     {tooMany && (
