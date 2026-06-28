@@ -5,7 +5,6 @@ import { METHOD_ORDER } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
 import Progressbar from "../../shared/components/Progressbar.tsx";
-import PlotModal from "./components/PlotModal.tsx";
 import PcaViewer from "./components/PcaViewer.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
@@ -32,7 +31,6 @@ export function NormalizationPage() {
   const { data, isLoading, error } = useNormalizationPreview(job_id ?? null);
   const [selected, setSelected] = useState<NormalizationMethod | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [pcaMethod, setPcaMethod] = useState<MethodPreview | null>(null);
   const [isNormalising, setIsNormalising] = useState(false);
 
@@ -82,23 +80,10 @@ export function NormalizationPage() {
   if (error) { return <LoadingScreen message={error} /> }
   if (!data) return null;
 
-  const handleDensityClick = (url: string, title: string) => {
-    setPreviewImage({ url, title });
-  };
-
   const isDisabled : boolean = !selected || isSubmitting || isNormalising;
 
   return (
     <main className="min-h-screen bg-neutral-background px-6 py-10">
-      {/* MODAL für vergrößerten Density-Plot */}
-      {previewImage && (
-        <PlotModal
-          imageURL={previewImage.url}
-          title={previewImage.title}
-          onClose={() => setPreviewImage(null)}
-        />
-      )}
-
       {/* Interaktiver PCA-Viewer (Farben, Labels, PNG-Export) */}
       {pcaMethod && pcaMethod.pca && (
         <PcaViewer
@@ -126,7 +111,6 @@ export function NormalizationPage() {
                 method={method}
                 isSelected={selected === method.method}
                 onSelect={setSelected}
-                onDensityClick={handleDensityClick}
                 onPcaClick={setPcaMethod}
             />
         ))}

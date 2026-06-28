@@ -2,20 +2,19 @@ import { useMemo } from "react";
 import type { MethodPreview, NormalizationMethod } from "../utils/types";
 import PcaPlot from "./PcaPlot";
 import { defaultGroupColors } from "../utils/pcaColors";
+import { PlotView, type PlotSource } from "../../../shared/plots";
 
 /**
  * Props of the MethodCard component.
  * @property method      Preview of a method (density URL + PCA data).
  * @property isSelected  Whether this method is selected.
  * @property onSelect    Selection callback.
- * @property onDensityClick  Opens the density plot enlarged (image modal).
  * @property onPcaClick      Opens the interactive PCA viewer.
  */
 interface MethodCardProps {
   method: MethodPreview;
   isSelected: boolean;
   onSelect: (method: NormalizationMethod) => void;
-  onDensityClick: (url: string, title: string) => void;
   onPcaClick: (method: MethodPreview) => void;
 }
 
@@ -32,7 +31,6 @@ function MethodCard({
   method,
   isSelected,
   onSelect,
-  onDensityClick,
   onPcaClick,
 }: MethodCardProps) {
   const { density_url, pca } = method;
@@ -43,6 +41,17 @@ function MethodCard({
     () => (pca?.points ? defaultGroupColors(pca.points) : {}),
     [pca],
   );
+
+  // The density plot is a static PNG served by the backend; the matching PDF
+  // lives next to it under the same name (density_<method>.png → .pdf).
+  const densitySource: PlotSource | null = density_url
+    ? {
+        pngUrl: density_url,
+        pdfUrl: density_url.replace(/\.png(\?.*)?$/, ".pdf"),
+        title: `${method.method.toUpperCase()} – Density plot`,
+        downloadName: `density_${method.method}`,
+      }
+    : null;
 
   const select = () => onSelect(method.method);
 
@@ -69,17 +78,18 @@ function MethodCard({
         )}
       </div>
 
-      {/* Density plot (PNG) */}
-      <div className="mb-3">
-        {density_url ? (
-          <img
-            src={density_url}
-            alt={`${method.method} density`}
-            className="w-full cursor-zoom-in rounded-md border bg-neutral-card transition-opacity hover:opacity-80"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDensityClick(density_url, `${method.method.toUpperCase()} – Density plot`);
-            }}
+      {/* Density plot (static PNG/PDF). Clicks must not bubble up and select
+          the card, so the whole plot block stops propagation. */}
+      <div
+        className="mb-3"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {densitySource ? (
+          <PlotView
+            source={densitySource}
+            maxHeightClass="max-h-40"
+            exportSize="small"
           />
         ) : (
           <div className="flex h-32 w-full items-center justify-center rounded-md border bg-neutral-surface text-xs text-neutral-textDisabled">
@@ -87,7 +97,7 @@ function MethodCard({
           </div>
         )}
         <div className="mt-1 text-center text-[10px] text-neutral-textDisabled">
-          Density • click to enlarge
+          Density
         </div>
       </div>
 
