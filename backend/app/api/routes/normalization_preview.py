@@ -9,10 +9,12 @@ router = APIRouter()
 
 JOBS_DIR = Path("jobs").resolve()
 
-# Density plots are served as PNG files; PCA data is inlined as JSON in the
-# preview response (the frontend renders it), so only density images are
-# fetchable through the image endpoint.
+# Density plots are served as static files; PCA data is inlined as JSON in the
+# preview response (the frontend renders it), so only density figures are
+# fetchable through this endpoint. Each density plot exists as PNG (display +
+# export) and PDF (export).
 _ALLOWED_PLOT_PREFIXES = ("density_",)
+_MEDIA_BY_SUFFIX = {".png": "image/png", ".pdf": "application/pdf"}
 
 
 def _load_pca_json(job_dir: Path, filename: str) -> dict:
@@ -93,11 +95,20 @@ async def get_plot_image(job_id: str, plot_name: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job nicht gefunden")
 
-    if not plot_name.startswith(_ALLOWED_PLOT_PREFIXES):
+    suffix = Path(plot_name).suffix.lower()
+    if (
+        not plot_name.startswith(_ALLOWED_PLOT_PREFIXES)
+        or suffix not in _MEDIA_BY_SUFFIX
+        or any(sep in plot_name for sep in ("/", "\\"))
+        or ".." in plot_name
+    ):
         raise HTTPException(status_code=400, detail="Ungültiger Plot-Name")
 
-    path = JOBS_DIR / job_id / plot_name
+    job_dir = (JOBS_DIR / job_id).resolve()
+    path = (job_dir / plot_name).resolve()
+    if job_dir not in path.parents:
+        raise HTTPException(status_code=400, detail="Ungültiger Plot-Name")
     if not path.exists():
         raise HTTPException(status_code=404, detail="Plot nicht gefunden")
 
-    return FileResponse(path, media_type="image/png")
+    return FileResponse(path, media_type=_MEDIA_BY_SUFFIX[suffix])
