@@ -12,6 +12,7 @@ import MethodCard from "./components/MethodCard.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 import HelpButton from "../analysis/components/HelpButton.tsx";
 import {helpTexts} from "../../shared/utils/help/helpTexts.ts";
+import ErrorMessage from "../../shared/error-handling/components/ErrorMessage.tsx";
 
 
 /**
@@ -30,7 +31,7 @@ export function NormalizationPage() {
   console.log("[NormalizationPage] job_id aus Params:", job_id);
   const navigate = useNavigate();
 
-  const { data, isLoading, error } = useNormalizationPreview(job_id ?? null);
+  const { data, isLoading, error, setError } = useNormalizationPreview(job_id ?? null);
   const [selected, setSelected] = useState<NormalizationMethod | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
@@ -70,18 +71,28 @@ export function NormalizationPage() {
         body: JSON.stringify({ method: selected }),
       });
 
-      if (!res.ok) throw new Error(`Error: ${res.status}`);
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => null);
+            setError(
+                errorData ?? {
+                    title: "Request failed",
+                    detail: `HTTP ${res.status}`,
+                    status: res.status,
+                }
+            );
+            return;
+        }
       setIsNormalising(true);
     } catch (e) {
       console.error(e);
+      setError(e instanceof Error ? e.message : "An unknown error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   if (isLoading) { return <LoadingScreen message="Loading normalization previews..." /> }
-  if (error) { return <LoadingScreen message={error} /> }
-  if (!data) return null;
+  if (!data && !error) return null;
 
   const handleDensityClick = (url: string, title: string) => {
     setPreviewImage({ url, title });
@@ -90,7 +101,18 @@ export function NormalizationPage() {
   const isDisabled : boolean = !selected || isSubmitting || isNormalising;
 
   return (
+
     <main className="min-h-screen bg-neutral-background px-6 py-10">
+
+        <ErrorMessage
+            open={Boolean(error)}
+            error={error}
+            vertical="top"
+            horizontal="center"
+            onClose={() => setError(null)}
+        />
+
+
       {/* MODAL für vergrößerten Density-Plot */}
       {previewImage && (
         <PlotModal
