@@ -26,7 +26,7 @@ export const useBatchCorrection = (
   const [isSubmitting, setIsSubmitting] =
       useState<boolean>(false);
 
-  const API_BASE = "http://localhost:8000/api/v1";
+  const API_BASE = "/api/v1";
 
   const fetchHistory = useCallback(async () => {
     if (!jobId) return;

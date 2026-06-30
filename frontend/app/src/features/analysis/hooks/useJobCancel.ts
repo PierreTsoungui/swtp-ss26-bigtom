@@ -28,7 +28,6 @@ export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
             onCancelSuccess();
         } catch {
             setError({
-                type: "http://localhost:3000/analysis/errors#connection-error",
                 title: "Verbindungsfehler",
                 status: 503,
                 detail: "Verbindung zum Server unterbrochen.",
