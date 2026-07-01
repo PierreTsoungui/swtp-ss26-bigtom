@@ -32,12 +32,10 @@
 
 
 # ── Environment setup ─────────────────────────────────────────────────────────
-# Pin numerical backends to a single thread (champ.DMP uses limma/BLAS).
-Sys.setenv(OMP_NUM_THREADS = "1")
-Sys.setenv(OPENBLAS_NUM_THREADS = "1")
-Sys.setenv(MKL_NUM_THREADS = "1")
-Sys.setenv(NUMEXPR_NUM_THREADS = "1")
-Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
+# Single-threaded, serial, reproducible execution (see utils/runtime.R);
+# champ.DMP uses limma/BLAS.
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
 
 suppressPackageStartupMessages({
   library(ChAMP)
@@ -45,173 +43,21 @@ suppressPackageStartupMessages({
   library(jsonlite)
 })
 
-# Shared progress contract and sample-sheet helpers.
+# Shared progress contract, sample-sheet and array-type helpers.
 source("/app/r_backend/utils/progress.R")
 source("/app/r_backend/utils/samplesheet.R")
-
-if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-  RhpcBLASctl::blas_set_num_threads(1)
-  RhpcBLASctl::omp_set_num_threads(1)
-}
+source("/app/r_backend/utils/arraytype.R")
+source("/app/r_backend/utils/columns.R")
+source("/app/r_backend/utils/beta.R")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+# normalize_arraytype() / read_array_type() are provided by utils/arraytype.R.
+# pick_col() (candidate-based, array-tolerant column access) by utils/columns.R.
+# load_beta_matrix() / clamp_beta() / drop_invariant_probes() by utils/beta.R.
 
-#' Normalize an array-type string to the canonical set.
-#'
-#' @param x Raw array-type argument.
-#' @return One of "450K", "EPICv1", "EPICv2"; emits a fatal error otherwise.
-normalize_arraytype <- function(x) {
-  x <- toupper(trimws(x))
-  if (x %in% c("EPIC", "850K", "EPICV1")) return("EPICv1")
-  if (x == "EPICV2") return("EPICv2")
-  if (x == "450K")   return("450K")
-  emit_error(sprintf("Invalid arraytype: '%s'. Allowed: 450K, EPICv1 (EPIC), EPICv2.", x))
-}
-
-#' Case-insensitive, candidate-based column accessor.
-#'
-#' ChAMP output column names vary slightly across array annotations; try several
-#' candidates so the script is robust for 450K/EPIC v1/EPIC v2.
-#'
-#' @param df A data.frame.
-#' @param candidates Candidate column names (in priority order).
-#' @param fallback Value returned when none match.
-#' @return The matching column, or \code{fallback}.
-get_col <- function(df, candidates, fallback = NA) {
-  hit <- candidates[candidates %in% colnames(df)]
-  if (length(hit) > 0) return(df[[hit[1]]])
-  ci <- match(tolower(candidates), tolower(colnames(df)))
-  ci <- ci[!is.na(ci)]
-  if (length(ci) > 0) return(df[[ci[1]]])
-  fallback
-}
-
-#' Load, validate and clean the beta matrix.
-#'
-#' Accepts a raw matrix or an S4 minfi object; clamps to [0, 1]; drops probes
-#' that are non-finite or invariant (no methylation variance carries no DM
-#' signal and would destabilise the model).
-#'
-#' @param beta_path Path to the beta \code{.rds} file.
-#' @return A cleaned numeric beta matrix (probes x samples).
-load_beta_matrix <- function(beta_path) {
-  if (!file.exists(beta_path)) {
-    emit_error(sprintf("Beta matrix file not found at path: %s", beta_path))
-  }
-  beta <- tryCatch(
-    readRDS(beta_path),
-    error = function(e) emit_error(sprintf("Failed to load beta matrix '%s': %s", beta_path, conditionMessage(e)))
-  )
-  if (isS4(beta)) {
-    suppressPackageStartupMessages(library(minfi))
-    beta <- minfi::getBeta(beta)
-  }
-  beta <- as.matrix(beta)
-  storage.mode(beta) <- "numeric"
-
-  if (nrow(beta) == 0L || ncol(beta) == 0L) {
-    emit_error("Loaded beta matrix is empty (0 features or 0 samples).")
-  }
-
-  # Clamp finite values into the valid methylation range.
-  beta[is.finite(beta) & beta < 0] <- 0
-  beta[is.finite(beta) & beta > 1] <- 1
-
-  # Keep only all-finite, variable probes (instead of failing on a single NA).
-  finite_rows <- rowSums(!is.finite(beta)) == 0L
-  row_sds <- if (requireNamespace("matrixStats", quietly = TRUE)) {
-    matrixStats::rowSds(beta)
-  } else {
-    apply(beta, 1, sd)
-  }
-  keep <- finite_rows & is.finite(row_sds) & row_sds > 1e-5
-  beta <- beta[keep, , drop = FALSE]
-
-  if (nrow(beta) == 0L) {
-    emit_error("No valid probes remain after removing non-finite and invariant rows.")
-  }
-  beta
-}
-
-#' Read the sample sheet and align it to the beta-matrix columns.
-#'
-#' @param sample_sheet_path Path to the sample sheet.
-#' @param beta Beta matrix (probes x samples).
-#' @param group_column Grouping column that must be present.
-#' @return A data.frame aligned 1:1 to \code{colnames(beta)}.
-load_aligned_samples <- function(sample_sheet_path, beta, group_column) {
-  if (!file.exists(sample_sheet_path)) {
-    emit_error(sprintf("Sample sheet file not found at path: %s", sample_sheet_path))
-  }
-  samples <- tryCatch(
-    read_sample_sheet_smart(sample_sheet_path),
-    error = function(e) emit_error(sprintf("Failed to parse sample sheet: %s", conditionMessage(e)))
-  )
-
-  if (!"Sample_Name" %in% colnames(samples)) {
-    emit_error("Sample sheet is missing the required 'Sample_Name' column.")
-  }
-  if (!group_column %in% colnames(samples)) {
-    emit_error(sprintf("Group column '%s' not found in sample sheet.", group_column))
-  }
-  if (anyDuplicated(samples$Sample_Name)) {
-    emit_error("Sample sheet contains duplicate Sample_Name values.")
-  }
-  if (any(is.na(samples[[group_column]]))) {
-    emit_error(sprintf("Group column '%s' contains missing values.", group_column))
-  }
-
-  if (all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(samples))) {
-    samples$Array_ID <- sample_sheet_array_id(samples)
-  } else {
-    samples$Array_ID <- NA_character_
-  }
-
-  beta_ids <- normalize_id(colnames(beta))
-  by_name  <- mean(beta_ids %in% normalize_id(samples$Sample_Name))
-  by_arr   <- mean(beta_ids %in% normalize_id(samples$Array_ID))
-  id_col   <- if (by_name >= by_arr && by_name > 0) "Sample_Name"
-              else if (by_arr > 0) "Array_ID"
-              else NULL
-  if (is.null(id_col)) {
-    emit_error("Sample alignment failed: no matching identifiers between beta columns and sample sheet.")
-  }
-
-  match_idx <- match(beta_ids, normalize_id(samples[[id_col]]))
-  if (any(is.na(match_idx))) {
-    emit_error("Sample alignment failed: some beta-matrix columns have no sample-sheet entry.")
-  }
-  aligned <- samples[match_idx, , drop = FALSE]
-  if (nrow(aligned) != ncol(beta)) {
-    emit_error("Sample alignment mismatch: aligned sample count does not match beta columns.")
-  }
-  aligned
-}
-
-#' Resolve the case and control group labels.
-#'
-#' @param group_vec Per-sample group labels.
-#' @param group_column Grouping column name (for messages).
-#' @param case_group,control_group Optional explicit labels.
-#' @return A list with \code{case} and \code{control}.
-resolve_groups <- function(group_vec, group_column, case_group, control_group) {
-  if (!nzchar(case_group) || !nzchar(control_group)) {
-    lv <- sort(unique(group_vec[!is.na(group_vec) & nzchar(group_vec)]))
-    if (length(lv) != 2L) {
-      emit_error(sprintf("Column '%s' has %d usable groups; specify a case and a control group.",
-                         group_column, length(lv)))
-    }
-    control_group <- lv[1]
-    case_group    <- lv[2]
-  }
-  if (case_group == control_group) emit_error("Case and control group must be different.")
-  if (!(case_group %in% group_vec) || !(control_group %in% group_vec)) {
-    emit_error(sprintf("Case ('%s') or control ('%s') not present in column '%s'.",
-                       case_group, control_group, group_column))
-  }
-  list(case = case_group, control = control_group)
-}
+# load_aligned_samples()/align_samples_to_matrix() and resolve_case_control()
+# are provided by utils/samplesheet.R.
 
 #' Assemble the standardized DMP result table.
 #'
@@ -224,7 +70,7 @@ resolve_groups <- function(group_vec, group_column, case_group, control_group) {
 #' @param case_group,control_group Group labels.
 #' @return A data.frame with the canonical DMP output columns.
 build_dmp_output <- function(dmp_table, beta, pheno, case_group, control_group) {
-  p_col <- get_col(dmp_table, c("adj.P.Val", "adj.p.val", "P.Value", "p.value"), fallback = NULL)
+  p_col <- pick_col(dmp_table, c("adj.P.Val", "adj.p.val", "P.Value", "p.value"), fallback = NULL)
   if (is.null(p_col)) {
     emit_error("DMP result table has no recognizable p-value column.")
   }
@@ -238,11 +84,11 @@ build_dmp_output <- function(dmp_table, beta, pheno, case_group, control_group) 
   eps <- 1e-8
   data.frame(
     ID         = ids,
-    CHR        = as.character(get_col(dmp_table, c("CHR", "chr"))),
-    POS        = get_col(dmp_table, c("MAPINFO", "pos", "POS")),
-    GENE       = as.character(get_col(dmp_table, c("gene", "Gene"), fallback = "")),
-    FEATURE    = as.character(get_col(dmp_table, c("feature", "Feature"), fallback = "")),
-    CGI        = as.character(get_col(dmp_table, c("cgi", "CGI"), fallback = "")),
+    CHR        = as.character(pick_col(dmp_table, c("CHR", "chr"))),
+    POS        = pick_col(dmp_table, c("MAPINFO", "pos", "POS")),
+    GENE       = as.character(pick_col(dmp_table, c("gene", "Gene"), fallback = "")),
+    FEATURE    = as.character(pick_col(dmp_table, c("feature", "Feature"), fallback = "")),
+    CGI        = as.character(pick_col(dmp_table, c("cgi", "CGI"), fallback = "")),
     ADJ_P      = p_col,
     GROUP1_AVG = g1,
     GROUP2_AVG = g2,
@@ -255,9 +101,13 @@ build_dmp_output <- function(dmp_table, beta, pheno, case_group, control_group) 
 
 #' Annotate each DMP with the DMR region it falls into (if any).
 #'
-#' Iterates over the (few) DMR regions and marks contained CpGs vectorially —
-#' O(#regions) rather than O(#CpGs x #regions), which matters because ALL probes
-#' are retained (TAB-01).
+#' Overlap-joins the DMP positions (single base points) against the DMR intervals
+#' with an interval index (\code{GenomicRanges::findOverlaps}), i.e.
+#' O((#CpGs + #regions) * log) instead of the naive O(#CpGs x #regions). This is
+#' essential: because ALL probes AND all regions are retained (adjPvalDmr = 1,
+#' TAB-01), the naive nested scan is ~#regions x ~1M probes and can run for many
+#' minutes on EPIC v2 — long enough to hit the executor's DMP timeout. When a CpG
+#' falls into several regions, the first hit wins (regions rarely overlap).
 #'
 #' @param dmp_df The DMP output data.frame (has CHR, POS, DMR_ID).
 #' @param job_dir Job directory (may contain \code{dmr_results.rds}).
@@ -272,14 +122,32 @@ link_dmrs <- function(dmp_df, job_dir) {
   )
   if (is.null(dmr_data) || nrow(dmr_data) == 0L) return(dmp_df)
 
-  chr_v <- as.character(dmp_df$CHR)
-  pos_v <- as.numeric(dmp_df$POS)
-  for (j in seq_len(nrow(dmr_data))) {
-    in_region <- chr_v == as.character(dmr_data$CHR[j]) &
-                 pos_v >= as.numeric(dmr_data$START[j]) &
-                 pos_v <= as.numeric(dmr_data$STOP[j])
-    in_region[is.na(in_region)] <- FALSE
-    dmp_df$DMR_ID[in_region] <- as.character(dmr_data$ID[j])
+  # Keep only probes / regions with usable coordinates; GRanges rejects NA/Inf.
+  chr <- as.character(dmp_df$CHR)
+  pos <- suppressWarnings(as.numeric(dmp_df$POS))
+  dmp_ok <- !is.na(chr) & nzchar(chr) & is.finite(pos)
+  if (!any(dmp_ok)) return(dmp_df)
+
+  d_chr   <- as.character(dmr_data$CHR)
+  d_start <- suppressWarnings(as.numeric(dmr_data$START))
+  d_stop  <- suppressWarnings(as.numeric(dmr_data$STOP))
+  dmr_ok  <- !is.na(d_chr) & nzchar(d_chr) & is.finite(d_start) & is.finite(d_stop)
+  if (!any(dmr_ok)) return(dmp_df)
+
+  dmp_gr <- GenomicRanges::GRanges(
+    seqnames = chr[dmp_ok],
+    ranges   = IRanges::IRanges(start = pos[dmp_ok], width = 1L)
+  )
+  dmr_gr <- GenomicRanges::GRanges(
+    seqnames = d_chr[dmr_ok],
+    ranges   = IRanges::IRanges(start = d_start[dmr_ok], end = d_stop[dmr_ok])
+  )
+  dmr_ids <- as.character(dmr_data$ID[dmr_ok])
+
+  hits    <- GenomicRanges::findOverlaps(dmp_gr, dmr_gr, select = "first")
+  matched <- !is.na(hits)
+  if (any(matched)) {
+    dmp_df$DMR_ID[which(dmp_ok)[matched]] <- dmr_ids[hits[matched]]
   }
   dmp_df
 }
@@ -298,7 +166,10 @@ beta_path         <- if (file.exists(beta_filename)) beta_filename else file.pat
 
 # Kept for compatibility/logging only; significance is a downstream table filter.
 adjPVal    <- if (length(args) >= 4) as.numeric(args[4]) else 1.0
-arraytype  <- normalize_arraytype(if (length(args) >= 5) args[5] else "EPICv2")
+# Array type: prefer the value minfi detected during filtering (array_type.txt);
+# the CLI argument is only a fallback. This prevents loading the wrong ChAMP
+# annotation (e.g. EPICv2 on 450K data -> "object 'probe.features' not found").
+arraytype  <- read_array_type(job_dir, fallback = if (length(args) >= 5) args[5] else "EPICv2")
 
 # Dynamic comparison: any grouping column, explicit case/control. Delta Beta is
 # then deterministic: mean(case) - mean(control) (TAB-02).
@@ -313,14 +184,35 @@ if (!dir.exists(job_dir)) dir.create(job_dir, recursive = TRUE)
 emit_progress(0, "Initializing Differential Methylation Probe (DMP) workflow")
 
 emit_progress(15, "Loading and validating methylation beta matrix")
+# Compose the cleaning steps: load -> clamp to [0,1] -> drop non-finite/invariant
+# probes (no methylation variance carries no DM signal and destabilises limma).
 beta <- load_beta_matrix(beta_path)
+beta <- clamp_beta(beta)
+beta <- drop_invariant_probes(beta, min_sd = 1e-5)
+if (nrow(beta) == 0L) {
+  emit_error("No valid probes remain after removing non-finite and invariant rows.")
+}
 
 emit_progress(35, "Loading and aligning sample sheet metadata")
-samples_aligned <- load_aligned_samples(sample_sheet_path, beta, group_column)
+if (!file.exists(sample_sheet_path)) {
+  emit_error(sprintf("Sample sheet file not found at path: %s", sample_sheet_path))
+}
+samples <- tryCatch(
+  read_sample_sheet_smart(sample_sheet_path),
+  error = function(e) emit_error(sprintf("Failed to parse sample sheet: %s", conditionMessage(e)))
+)
+if (!group_column %in% colnames(samples)) {
+  emit_error(sprintf("Group column '%s' not found in sample sheet.", group_column))
+}
+if (any(is.na(samples[[group_column]]))) {
+  emit_error(sprintf("Group column '%s' contains missing values.", group_column))
+}
+# Strict alignment: every beta column must map 1:1 to a sample-sheet row.
+samples_aligned <- align_samples_to_matrix(beta, samples, mode = "strict")$samples
 
 emit_progress(55, "Selecting case/control groups")
 group_vec <- as.character(samples_aligned[[group_column]])
-groups    <- resolve_groups(group_vec, group_column, case_group, control_group)
+groups    <- resolve_case_control(group_vec, group_column, case_group, control_group)
 case_group    <- groups$case
 control_group <- groups$control
 
@@ -340,10 +232,46 @@ if (any(group_sizes < 2L)) {
   ))
 }
 
+# limma (inside champ.DMP) estimates the moderated variance from the WITHIN-group
+# residuals. If a group's replicates are identical (e.g. duplicated arrays), that
+# residual variance is exactly zero for every probe and limma aborts with the
+# opaque "No sample variance". Detect this degenerate design up front and report
+# which samples are identical, so the cause is actionable.
+within_ss <- numeric(nrow(beta))
+for (g in levels(pheno)) {
+  cols <- which(pheno == g)
+  if (length(cols) >= 2L) {
+    sub       <- beta[, cols, drop = FALSE]
+    within_ss <- within_ss + rowSums((sub - rowMeans(sub))^2)
+  }
+}
+if (mean(within_ss < 1e-12) > 0.99) {
+  cn       <- colnames(beta)
+  dup_pairs <- character(0)
+  for (g in levels(pheno)) {
+    cols <- which(pheno == g)
+    for (i in seq_along(cols)) for (j in seq_len(i - 1L)) {
+      if (isTRUE(all.equal(beta[, cols[i]], beta[, cols[j]], tolerance = 1e-9))) {
+        dup_pairs <- c(dup_pairs, sprintf("%s = %s", cn[cols[j]], cn[cols[i]]))
+      }
+    }
+  }
+  emit_error(paste0(
+    "Differential analysis is not possible: the replicates within a group have zero ",
+    "variance, so the statistical model (limma) cannot estimate a residual variance. ",
+    "This happens when samples are identical duplicates rather than genuine replicates.",
+    if (length(dup_pairs)) paste0(" Identical samples: ", paste(dup_pairs, collapse = "; "), ".") else "",
+    " Please use biologically distinct replicates."
+  ))
+}
+
 emit_progress(75, "Executing statistical differential methylation test (champ.DMP)")
+# Bind the correct probe annotation globally as `probe.features` so ChAMP's
+# internals always find it (guards against "object 'probe.features' not found").
+ensure_probe_features(arraytype)
 # adjPVal = 1 keeps ALL probes; significance is applied downstream (TAB-01).
 dmp_raw <- tryCatch(
-  champ.DMP(beta = beta, pheno = pheno, adjPVal = 1, arraytype = arraytype),
+  champ.DMP(beta = beta, pheno = pheno, adjPVal = 1, arraytype = champ_arraytype(arraytype)),
   error = function(e) emit_error(sprintf("ChAMP DMP execution failed: %s", conditionMessage(e)))
 )
 if (is.null(dmp_raw) || length(dmp_raw) == 0L) {

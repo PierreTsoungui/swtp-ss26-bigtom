@@ -20,16 +20,20 @@
 # OUTPUTS (per method <m>, written to job_dir):
 #   density_<m>.png / density_<m>.pdf  – static density plot
 #   pca_<m>.json                       – PCA points for the interactive plotter
+#
+# TESTABILITY:
+#   All functions are defined at the top level; the pipeline itself only runs
+#   when the file is executed as a script (Rscript). When the file is sourced for
+#   unit testing, sys.nframe() > 0, so the run guard at the bottom is skipped and
+#   only the function definitions are loaded.
 # =============================================================================
 
 
-# ── Thread limiting (prevents pthread_create errors in the shared container) ──
-Sys.setenv(OMP_NUM_THREADS = "1")
-Sys.setenv(OPENBLAS_NUM_THREADS = "1")
-Sys.setenv(MKL_NUM_THREADS = "1")
-Sys.setenv(NUMEXPR_NUM_THREADS = "1")
-Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
-
+# ── Environment setup ─────────────────────────────────────────────────────────
+# Single-threaded, serial, reproducible execution (see utils/runtime.R);
+# normalization (e.g. preprocessFunnorm) dispatches to parallel backends.
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
 
 # ── Libraries ─────────────────────────────────────────────────────────────────
 suppressPackageStartupMessages({
@@ -40,51 +44,16 @@ suppressPackageStartupMessages({
 
 # Shared progress / error / done emitters.
 source("/app/r_backend/utils/progress.R")
-
-# ── Force serial execution ────────────────────────────────────────────────────
-# Normalization (e.g. preprocessFunnorm) can dispatch to parallel backends; pin
-# everything to a single worker so it stays deterministic and container-safe.
-BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
-options(mc.cores = 1)
-
-if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-  RhpcBLASctl::blas_set_num_threads(1)
-  RhpcBLASctl::omp_set_num_threads(1)
-}
+source("/app/r_backend/utils/beta.R")
+source("/app/r_backend/utils/plotting.R")
 
 
-# ── Input check ───────────────────────────────────────────────────────────────
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 3) {
-  emit_error("Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir> <sample_sheet.csv>")
-}
-rds_path          <- args[1]
-job_dir           <- args[2]
-sample_sheet_path <- args[3]
+# ── Constants ─────────────────────────────────────────────────────────────────
+# EPICv2 memory guard: cap the number of probes fed into PCA.
+MAX_PROBES_FOR_PCA <- 500000
 
 
-# ── Load filtered data ────────────────────────────────────────────────────────
-emit_progress(2, "Loading filtered data...")
-if (!file.exists(rds_path)) {
-  emit_error("The analysis data could not be found. Please ensure the previous filtering step completed successfully.")
-}
-filtered_rgset <- tryCatch(
-  readRDS(rds_path),
-  error = function(e) {
-    emit_error("The analysis data could not be read. Please ensure the file is not damaged.")
-  }
-)
-# All preview methods (NOOB/QUANTILE/SWAN/FUNNORM) require the raw channel data,
-# so reject anything that is not an RGChannelSet with a clear message instead of
-# letting every method fail downstream.
-if (!methods::is(filtered_rgset, "RGChannelSet")) {
-  emit_error("The filtered data has an unexpected format (expected an RGChannelSet). Please re-run the filtering step.")
-}
-emit_progress(4, "Filtered data loaded successfully")
-
-
-# ── Load sample sheet ─────────────────────────────────────────────────────────
-emit_progress(5, "Loading sample sheet...")
+# ── Sample sheet ──────────────────────────────────────────────────────────────
 
 #' Read a sample sheet (plain CSV or Illumina \[Data\] CSV).
 #'
@@ -111,74 +80,11 @@ read_sample_sheet <- function(path) {
   )
 }
 
-sample_sheet <- read_sample_sheet(sample_sheet_path)
-
-# Sentrix columns are required to build the Array_ID that links samples to the
-# beta-matrix columns; fail clearly if they are missing.
-missing_cols <- setdiff(c("Sentrix_ID", "Sentrix_Position"), colnames(sample_sheet))
-if (length(missing_cols) > 0) {
-  emit_error(paste("Sample sheet is missing required column(s):", paste(missing_cols, collapse = ", ")))
-}
-
-# Lookup tables: Array_ID -> Sample_Name and Array_ID -> Sample_Group. The group
-# (phenotype) is attached to every PCA point so the frontend can colour the
-# points dynamically by group (NRM-03).
-sample_sheet$Array_ID <- paste0(sample_sheet$Sentrix_ID, "_", sample_sheet$Sentrix_Position)
-id_to_name <- if ("Sample_Name" %in% colnames(sample_sheet)) {
-  setNames(as.character(sample_sheet$Sample_Name), sample_sheet$Array_ID)
-} else {
-  setNames(sample_sheet$Array_ID, sample_sheet$Array_ID)
-}
-id_to_group <- if ("Sample_Group" %in% colnames(sample_sheet)) {
-  setNames(as.character(sample_sheet$Sample_Group), sample_sheet$Array_ID)
-} else {
-  setNames(character(0), character(0))
-}
-
-
-# ── Data information ──────────────────────────────────────────────────────────
-n_samples <- ncol(filtered_rgset)
-n_probes  <- nrow(filtered_rgset)
-emit_progress(6, paste0("Data loaded - Samples: ", n_samples, ", Probes: ", n_probes))
-
-# EPICv2 memory guard: cap the number of probes fed into PCA.
-MAX_PROBES_FOR_PCA <- 500000
-
 
 # ── Plot rendering helpers ────────────────────────────────────────────────────
 
-#' Render the same drawing to a PNG and a PDF.
-#'
-#' Every static density plot is offered for download as PNG (inline display) and
-#' PDF (vector, for publication). The PDF path is derived from the PNG path
-#' (\code{density_<m>.png} -> \code{density_<m>.pdf}). A PDF failure is non-fatal:
-#' it only disables the PDF export button, while the PNG preview still works.
-#'
-#' @param png_path Output path for the PNG (must end in \code{.png}).
-#' @param draw Zero-argument function that performs the plotting.
-#' @param width_px,height_px Pixel dimensions of the PNG.
-#' @param res Resolution in DPI (also used to size the PDF in inches).
-#' @return Invisibly \code{NULL}.
-render_png_and_pdf <- function(png_path, draw, width_px, height_px, res) {
-  png(png_path, width = width_px, height = height_px, res = res, type = "cairo")
-  tryCatch(draw(), finally = dev.off())
-
-  pdf_path  <- sub("\\.png$", ".pdf", png_path)
-  width_in  <- width_px / res
-  height_in <- height_px / res
-  tryCatch({
-    # Prefer cairo_pdf (better font/anti-aliasing); fall back to the base device.
-    tryCatch(
-      grDevices::cairo_pdf(pdf_path, width = width_in, height = height_in),
-      error = function(e) grDevices::pdf(pdf_path, width = width_in, height = height_in)
-    )
-    tryCatch(draw(), finally = dev.off())
-  }, error = function(e) {
-    message("PDF export failed for ", pdf_path, ": ", conditionMessage(e))
-  })
-
-  invisible(NULL)
-}
+# render_png_and_pdf() (safe PNG + vector-PDF output) is provided by
+# utils/plotting.R.
 
 #' Render an error placeholder (as PNG + PDF) for a failed density plot.
 #'
@@ -190,13 +96,13 @@ render_png_and_pdf <- function(png_path, draw, width_px, height_px, res) {
 create_error_png <- function(filename, message, method, plot_kind) {
   render_png_and_pdf(
     filename,
-    draw = function() {
+    draw_fn = function() {
       plot.new()
       text(0.5, 0.5, paste("ERROR:\n", message), cex = 1.3, col = "red")
     },
-    width_px = 800,
-    height_px = 500,
-    res = 96
+    width  = 800,
+    height = 500,
+    res    = 96
   )
 }
 
@@ -213,7 +119,7 @@ create_error_png <- function(filename, message, method, plot_kind) {
 make_density_plot <- function(beta_values, filename, title) {
   render_png_and_pdf(
     filename,
-    draw = function() {
+    draw_fn = function() {
       par(mar = c(5, 5, 4, 2))
       densityPlot(
         beta_values,
@@ -226,9 +132,9 @@ make_density_plot <- function(beta_values, filename, title) {
         lwd      = 2.5
       )
     },
-    width_px  = 1000,
-    height_px = 650,
-    res       = 120
+    width  = 1000,
+    height = 650,
+    res    = 120
   )
 }
 
@@ -258,17 +164,8 @@ write_pca_json <- function(beta_values, filename, method_name,
     stop("PCA requires at least 3 samples")
   }
 
-  beta_values[!is.finite(beta_values)] <- NA
-  beta_values <- beta_values[complete.cases(beta_values), , drop = FALSE]
-
-  # Drop (near-)constant probes. matrixStats::rowVars is C-level and far faster
-  # than apply() on the ~900k EPICv2 probes; fall back if it is unavailable.
-  row_var <- if (requireNamespace("matrixStats", quietly = TRUE)) {
-    matrixStats::rowVars(beta_values)
-  } else {
-    apply(beta_values, 1, var)
-  }
-  beta_values <- beta_values[row_var > 1e-6, , drop = FALSE]
+  # Drop non-finite and (near-)constant probes (var > 1e-6 <=> sd > 1e-3).
+  beta_values <- drop_invariant_probes(beta_values, min_sd = 1e-3, require_finite = TRUE)
 
   if (nrow(beta_values) < 10) stop("Not enough valid CpGs remaining for PCA")
   if (ncol(beta_values) < 2)  stop("Not enough samples for PCA")
@@ -345,6 +242,9 @@ write_pca_error_json <- function(filename, method_name, message) {
 #' the PCA points (JSON). Every stage is wrapped defensively: a failure in one
 #' method writes an error placeholder and never aborts the whole preview.
 #'
+#' Reads \code{job_dir}, \code{id_to_name} and \code{id_to_group} from the calling
+#' (global) scope, which the run guard populates before invoking this function.
+#'
 #' @param method_name Display name of the method (also used for file names).
 #' @param normalization_expr A quoted expression returning a normalized object.
 #' @param base_pct Starting progress percentage for this method.
@@ -361,7 +261,7 @@ run_method <- function(method_name, normalization_expr, base_pct) {
   tryCatch({
     # Normalization + beta extraction.
     normalized <- eval(normalization_expr)
-    beta       <- as.matrix(getBeta(normalized))
+    beta       <- extract_beta(normalized)
 
     # Map array ids to sample names and groups for the PCA payload.
     array_ids     <- colnames(beta)
@@ -405,26 +305,88 @@ run_method <- function(method_name, normalization_expr, base_pct) {
 }
 
 
-# ── Execute all normalization methods ─────────────────────────────────────────
-# RAW is included as an unnormalized baseline for comparison (NRM-01).
-run_method("RAW",      quote(preprocessRaw(filtered_rgset)),      base_pct = 10)
-run_method("NOOB",     quote(preprocessNoob(filtered_rgset)),     base_pct = 28)
-run_method("QUANTILE", quote(preprocessQuantile(filtered_rgset)), base_pct = 46)
+# ── Main pipeline (run only as a script, not when sourced for tests) ───────────
+if (sys.nframe() == 0L) {
 
-run_method("SWAN", quote({
-  # preprocessSWAN randomly subsets probes — seed it for a reproducible preview.
-  set.seed(42)
-  mset_raw <- preprocessRaw(filtered_rgset)
-  preprocessSWAN(filtered_rgset, mset_raw)
-}), base_pct = 64)
+  # ── Input check ─────────────────────────────────────────────────────────────
+  args <- commandArgs(trailingOnly = TRUE)
+  if (length(args) < 3) {
+    emit_error("Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir> <sample_sheet.csv>")
+  }
+  rds_path          <- args[1]
+  job_dir           <- args[2]
+  sample_sheet_path <- args[3]
 
-run_method("FUNNORM", quote({
-  # nPCs must stay below the sample count; clamp for small cohorts.
-  n_pcs <- min(2, max(1, ncol(filtered_rgset) - 1))
-  preprocessFunnorm(filtered_rgset, nPCs = n_pcs)
-}), base_pct = 82)
+  # ── Load filtered data ──────────────────────────────────────────────────────
+  emit_progress(2, "Loading filtered data...")
+  if (!file.exists(rds_path)) {
+    emit_error("The analysis data could not be found. Please ensure the previous filtering step completed successfully.")
+  }
+  filtered_rgset <- tryCatch(
+    readRDS(rds_path),
+    error = function(e) {
+      emit_error("The analysis data could not be read. Please ensure the file is not damaged.")
+    }
+  )
+  # All preview methods (NOOB/QUANTILE/SWAN/FUNNORM) require the raw channel data,
+  # so reject anything that is not an RGChannelSet with a clear message instead of
+  # letting every method fail downstream.
+  if (!methods::is(filtered_rgset, "RGChannelSet")) {
+    emit_error("The filtered data has an unexpected format (expected an RGChannelSet). Please re-run the filtering step.")
+  }
+  emit_progress(4, "Filtered data loaded successfully")
 
+  # ── Load sample sheet ───────────────────────────────────────────────────────
+  emit_progress(5, "Loading sample sheet...")
+  sample_sheet <- read_sample_sheet(sample_sheet_path)
 
-# ── Done ──────────────────────────────────────────────────────────────────────
-emit_progress(100, "Normalization preview completed successfully")
-emit_done()
+  # Sentrix columns are required to build the Array_ID that links samples to the
+  # beta-matrix columns; fail clearly if they are missing.
+  missing_cols <- setdiff(c("Sentrix_ID", "Sentrix_Position"), colnames(sample_sheet))
+  if (length(missing_cols) > 0) {
+    emit_error(paste("Sample sheet is missing required column(s):", paste(missing_cols, collapse = ", ")))
+  }
+
+  # Lookup tables: Array_ID -> Sample_Name and Array_ID -> Sample_Group. The group
+  # (phenotype) is attached to every PCA point so the frontend can colour the
+  # points dynamically by group (NRM-03).
+  sample_sheet$Array_ID <- paste0(sample_sheet$Sentrix_ID, "_", sample_sheet$Sentrix_Position)
+  id_to_name <- if ("Sample_Name" %in% colnames(sample_sheet)) {
+    setNames(as.character(sample_sheet$Sample_Name), sample_sheet$Array_ID)
+  } else {
+    setNames(sample_sheet$Array_ID, sample_sheet$Array_ID)
+  }
+  id_to_group <- if ("Sample_Group" %in% colnames(sample_sheet)) {
+    setNames(as.character(sample_sheet$Sample_Group), sample_sheet$Array_ID)
+  } else {
+    setNames(character(0), character(0))
+  }
+
+  # ── Data information ────────────────────────────────────────────────────────
+  n_samples <- ncol(filtered_rgset)
+  n_probes  <- nrow(filtered_rgset)
+  emit_progress(6, paste0("Data loaded - Samples: ", n_samples, ", Probes: ", n_probes))
+
+  # ── Execute all normalization methods ───────────────────────────────────────
+  # RAW is included as an unnormalized baseline for comparison (NRM-01).
+  run_method("RAW",      quote(preprocessRaw(filtered_rgset)),      base_pct = 10)
+  run_method("NOOB",     quote(preprocessNoob(filtered_rgset)),     base_pct = 28)
+  run_method("QUANTILE", quote(preprocessQuantile(filtered_rgset)), base_pct = 46)
+
+  run_method("SWAN", quote({
+    # preprocessSWAN randomly subsets probes — seed it for a reproducible preview.
+    set.seed(42)
+    mset_raw <- preprocessRaw(filtered_rgset)
+    preprocessSWAN(filtered_rgset, mset_raw)
+  }), base_pct = 64)
+
+  run_method("FUNNORM", quote({
+    # nPCs must stay below the sample count; clamp for small cohorts.
+    n_pcs <- min(2, max(1, ncol(filtered_rgset) - 1))
+    preprocessFunnorm(filtered_rgset, nPCs = n_pcs)
+  }), base_pct = 82)
+
+  # ── Done ──────────────────────────────────────────────────────────────────
+  emit_progress(100, "Normalization preview completed successfully")
+  emit_done()
+}

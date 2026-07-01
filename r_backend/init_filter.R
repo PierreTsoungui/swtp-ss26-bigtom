@@ -41,19 +41,21 @@
 
 
 # ── Environment setup ─────────────────────────────────────────────────────────
-# Pin BLAS/OpenMP to a single thread: the R worker shares a container and nested
-# parallelism causes pthread_create failures and non-deterministic results.
-Sys.setenv(OMP_NUM_THREADS = "1")
-Sys.setenv(OPENBLAS_NUM_THREADS = "1")
-Sys.setenv(MKL_NUM_THREADS = "1")
+# Single-threaded, serial, reproducible execution (see utils/runtime.R): the R
+# worker shares a container and nested parallelism causes pthread_create failures
+# and non-deterministic results.
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
 
 suppressPackageStartupMessages({
   library(minfi)
   library(jsonlite)
 })
 
-# Shared progress / error / done emitters.
+# Shared progress emitters, array-type and beta helpers.
 source("/app/r_backend/utils/progress.R")
+source("/app/r_backend/utils/arraytype.R")
+source("/app/r_backend/utils/beta.R")
 
 
 # ── Small assertions ──────────────────────────────────────────────────────────
@@ -266,8 +268,12 @@ validate_sample_sheet <- function(sheet) {
   } else {
     as.character(sheet$Sample_ID)
   }
-  if (any(duplicated(ids))) {
-    emit_error("Duplicate sample IDs found in sample sheet")
+  dup_ids <- unique(ids[duplicated(ids)])
+  if (length(dup_ids) > 0L) {
+    emit_error(sprintf(
+      "Duplicate sample IDs found in sample sheet: %s. Each physical array (Sentrix_ID + Sentrix_Position) must appear only once.",
+      paste(dup_ids, collapse = ", ")
+    ))
   }
 
   invisible(TRUE)
@@ -523,11 +529,11 @@ filter_sample_quality <- function(rgset, cfg_sq, det_p = NULL) {
     }
   }
 
-  # PCA-based outlier detection on beta values (needs a MethylSet; an
-  # RGChannelSet has no getBeta method, so preprocessRaw first).
+  # PCA-based outlier detection on beta values (extract_beta preprocesses the
+  # RGChannelSet, which has no direct getBeta method).
   if (isTRUE(cfg_sq$enable_pca_outlier_detection)) {
     tryCatch({
-      beta_mat  <- getBeta(preprocessRaw(rgset))
+      beta_mat  <- extract_beta(rgset)
       keep_cols <- setdiff(colnames(beta_mat), removed_samples)
 
       if (length(keep_cols) >= 3L) {
@@ -707,8 +713,8 @@ run_biological_qc <- function(filtered_rgset, job_dir) {
   emit_progress(92, "Performing biological QC...")
 
   tryCatch({
-    # getBeta needs a MethylSet; an RGChannelSet must be preprocessed first.
-    beta <- getBeta(preprocessRaw(filtered_rgset))
+    # extract_beta preprocesses the RGChannelSet (no direct getBeta method).
+    beta <- extract_beta(filtered_rgset)
 
     beta_mean <- mean(beta, na.rm = TRUE)
     beta_sd   <- sd(beta, na.rm = TRUE)
@@ -747,73 +753,108 @@ run_biological_qc <- function(filtered_rgset, job_dir) {
 }
 
 
+# detect_array_type() / write_array_type() are provided by utils/arraytype.R.
+
+
 # ── Main execution ────────────────────────────────────────────────────────────
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2L) {
-  emit_error("Usage: Rscript init_filter.R <sample_sheet_path> <job_dir>")
+
+#' Run the end-to-end filtering pipeline for a single job.
+#'
+#' Wires the stages together: parse config -> read & validate the sample sheet ->
+#' prepare IDAT targets -> load the raw \code{RGChannelSet} -> persist the
+#' detected array type -> filter -> biological QC -> persist outputs. Every fatal
+#' problem is reported through \code{emit_error()} (which aborts the process).
+#'
+#' Kept as a function so the file can be \code{source()}d for unit testing without
+#' executing the pipeline (see the run guard below).
+#'
+#' @param sample_sheet_path Path to the sample sheet (CSV or Illumina \[Data\] CSV).
+#' @param job_dir Directory holding the IDAT files and \code{filter_settings.json};
+#'   also the destination for all outputs.
+#' @return Invisibly \code{TRUE} on success.
+main <- function(sample_sheet_path, job_dir) {
+  emit_progress(1, "Starting methylation data processing...")
+
+  # Read configuration (defaults when absent).
+  filter_path <- file.path(job_dir, "filter_settings.json")
+  if (file.exists(filter_path)) {
+    emit_progress(2, "[CONFIG] Loading filter settings...")
+    filter_json <- paste(readLines(filter_path, warn = FALSE), collapse = "\n")
+    emit_progress(3, "[CONFIG] Filter settings loaded successfully")
+  } else {
+    emit_progress(2, "[CONFIG] No custom filter settings found. Using default values.")
+    filter_json <- NULL
+  }
+  cfg <- parse_filter_config(filter_json)
+
+  # Read & validate the sample sheet (read once, validate the data frame).
+  emit_progress(5, "Reading sample sheet")
+  sheet <- tryCatch(
+    read_samplesheet(sample_sheet_path),
+    error = function(e) emit_error("The sample sheet could not be read. Please check the file format and content.")
+  )
+  validate_sample_sheet(sheet)
+  emit_progress(6, paste("Columns:", paste(colnames(sheet), collapse = ", ")))
+
+  # Prepare IDAT targets.
+  emit_progress(8, "Preparing targets")
+  targets <- tryCatch(
+    prepare_targets(sheet, job_dir),
+    error = function(e) emit_error(conditionMessage(e))
+  )
+  emit_progress(9, paste("Basename example:", targets$Basename[1]))
+
+  # Load IDAT files into a raw RGChannelSet.
+  emit_progress(10, "Loading IDAT files")
+  raw_data <- tryCatch(
+    read.metharray.exp(targets = targets, force = TRUE),
+    error = function(e) emit_error("Could not read IDAT files. The files may be corrupted or in an unsupported format.")
+  )
+  emit_progress(20, "IDAT files loaded")
+  emit_progress(21, paste("Probes:", nrow(raw_data), "| Samples:", ncol(raw_data)))
+
+  # Persist the minfi-detected array type so downstream DMP/DMR use the correct
+  # ChAMP annotation (450K vs EPIC v1 vs EPIC v2) instead of a fixed default.
+  detected_array_type <- detect_array_type(raw_data)
+  if (write_array_type(job_dir, detected_array_type)) {
+    emit_progress(21, paste("Detected array type:", detected_array_type))
+  } else {
+    emit_progress(21, "Array type could not be detected; downstream steps will use their default.")
+  }
+
+  # Run the filtering pipeline.
+  result <- tryCatch(
+    run_filtering(raw_data, job_dir, cfg),
+    error = function(e) emit_error(conditionMessage(e))
+  )
+  filtered_rgset <- result$filtered_rgset
+  filter_stats   <- result$filter_stats
+
+  # Biological QC (non-fatal).
+  run_biological_qc(filtered_rgset, job_dir)
+
+  # Persist results.
+  emit_progress(96, "Saving results")
+  saveRDS(filtered_rgset, file.path(job_dir, "filtered_data.rds"))
+  write(
+    toJSON(filter_stats, auto_unbox = TRUE, pretty = TRUE),
+    file.path(job_dir, "filter_stats.json")
+  )
+  emit_progress(98, paste("Saved to:", job_dir))
+  emit_progress(100, "Filtering complete")
+
+  emit_done()
+  invisible(TRUE)
 }
-sample_sheet_path <- args[1]
-job_dir           <- args[2]
 
-emit_progress(1, "Starting methylation data processing...")
-
-# Read configuration (defaults when absent).
-filter_path <- file.path(job_dir, "filter_settings.json")
-if (file.exists(filter_path)) {
-  emit_progress(2, "[CONFIG] Loading filter settings...")
-  filter_json <- paste(readLines(filter_path, warn = FALSE), collapse = "\n")
-  emit_progress(3, "[CONFIG] Filter settings loaded successfully")
-} else {
-  emit_progress(2, "[CONFIG] No custom filter settings found. Using default values.")
-  filter_json <- NULL
+# Execute only when run as a script (Rscript init_filter.R ...). When the file is
+# source()d/sys.source()d for unit testing, frames remain on the call stack so
+# sys.nframe() > 0 and the pipeline does NOT auto-run — tests can load and call
+# the individual functions in isolation.
+if (sys.nframe() == 0L) {
+  args <- commandArgs(trailingOnly = TRUE)
+  if (length(args) < 2L) {
+    emit_error("Usage: Rscript init_filter.R <sample_sheet_path> <job_dir>")
+  }
+  main(args[1], args[2])
 }
-cfg <- parse_filter_config(filter_json)
-
-# Read & validate the sample sheet (read once, validate the data frame).
-emit_progress(5, "Reading sample sheet")
-sheet <- tryCatch(
-  read_samplesheet(sample_sheet_path),
-  error = function(e) emit_error("The sample sheet could not be read. Please check the file format and content.")
-)
-validate_sample_sheet(sheet)
-emit_progress(6, paste("Columns:", paste(colnames(sheet), collapse = ", ")))
-
-# Prepare IDAT targets.
-emit_progress(8, "Preparing targets")
-targets <- tryCatch(
-  prepare_targets(sheet, job_dir),
-  error = function(e) emit_error(conditionMessage(e))
-)
-emit_progress(9, paste("Basename example:", targets$Basename[1]))
-
-# Load IDAT files into a raw RGChannelSet.
-emit_progress(10, "Loading IDAT files")
-raw_data <- tryCatch(
-  read.metharray.exp(targets = targets, force = TRUE),
-  error = function(e) emit_error("Could not read IDAT files. The files may be corrupted or in an unsupported format.")
-)
-emit_progress(20, "IDAT files loaded")
-emit_progress(21, paste("Probes:", nrow(raw_data), "| Samples:", ncol(raw_data)))
-
-# Run the filtering pipeline.
-result <- tryCatch(
-  run_filtering(raw_data, job_dir, cfg),
-  error = function(e) emit_error(conditionMessage(e))
-)
-filtered_rgset <- result$filtered_rgset
-filter_stats   <- result$filter_stats
-
-# Biological QC (non-fatal).
-run_biological_qc(filtered_rgset, job_dir)
-
-# Persist results.
-emit_progress(96, "Saving results")
-saveRDS(filtered_rgset, file.path(job_dir, "filtered_data.rds"))
-write(
-  toJSON(filter_stats, auto_unbox = TRUE, pretty = TRUE),
-  file.path(job_dir, "filter_stats.json")
-)
-emit_progress(98, paste("Saved to:", job_dir))
-emit_progress(100, "Filtering complete")
-
-emit_done()

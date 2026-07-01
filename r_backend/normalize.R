@@ -36,31 +36,19 @@
 
 
 # ── Environment setup ─────────────────────────────────────────────────────────
-# Pin every numerical backend to a single thread. The container ships a
-# single-threaded preprocessCore (see r_backend/Dockerfile) precisely because
-# multi-threaded normalization (QUANTILE/FUNNORM) can core-dump here; mirror that
-# constraint at runtime so the behaviour is deterministic and crash-free.
-Sys.setenv(OMP_NUM_THREADS = "1")
-Sys.setenv(OPENBLAS_NUM_THREADS = "1")
-Sys.setenv(MKL_NUM_THREADS = "1")
-Sys.setenv(NUMEXPR_NUM_THREADS = "1")
-Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
+# Single-threaded, serial, reproducible execution (see utils/runtime.R). The
+# container ships a single-threaded preprocessCore because multi-threaded
+# normalization (QUANTILE/FUNNORM) can core-dump here.
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
 
 suppressPackageStartupMessages({
   library(minfi)
 })
 
-# Shared progress / error / done emitters.
+# Shared progress emitters and beta helpers (extract_beta).
 source("/app/r_backend/utils/progress.R")
-
-# Force serial execution: some normalizations dispatch to parallel backends.
-BiocParallel::register(BiocParallel::SerialParam(), default = TRUE)
-options(mc.cores = 1)
-
-if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-  RhpcBLASctl::blas_set_num_threads(1)
-  RhpcBLASctl::omp_set_num_threads(1)
-}
+source("/app/r_backend/utils/beta.R")
 
 
 # ── Normalization method registry ─────────────────────────────────────────────
@@ -160,7 +148,7 @@ normalize_rgset <- function(rgset, method) {
 #' @return Invisibly \code{TRUE}; emits a fatal error if beta values are invalid.
 assert_valid_beta <- function(normalized) {
   beta <- tryCatch(
-    getBeta(normalized),
+    extract_beta(normalized),
     error = function(e) emit_error(paste("Could not extract beta values:", conditionMessage(e)))
   )
 
@@ -180,49 +168,70 @@ assert_valid_beta <- function(normalized) {
 
 
 # ── Main execution ────────────────────────────────────────────────────────────
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2L) {
-  emit_error("Too few arguments. Expected: <job_dir> <method>")
+
+#' Run the normalization step for one job.
+#'
+#' Parses the CLI arguments, loads and validates the filtered data, applies the
+#' chosen method, validates the beta range, and persists the full normalized
+#' object. Fatal problems abort via \code{emit_error()}.
+#'
+#' Kept as a function so the file can be \code{source()}d for unit testing without
+#' executing the pipeline (see the run guard below).
+#'
+#' @param args Character vector \code{c(job_dir, method)} (defaults to the CLI).
+#' @return Invisibly \code{TRUE} on success.
+main <- function(args = commandArgs(trailingOnly = TRUE)) {
+  if (length(args) < 2L) {
+    emit_error("Too few arguments. Expected: <job_dir> <method>")
+  }
+  job_dir <- args[1]
+  method  <- tolower(args[2])
+
+  if (!method %in% names(NORMALIZATION_METHODS)) {
+    emit_error(sprintf(
+      "Invalid method: %s. Allowed: %s",
+      method, paste(names(NORMALIZATION_METHODS), collapse = ", ")
+    ))
+  }
+
+  emit_progress(0, "Starting normalization")
+
+  # Load the filtered data.
+  emit_progress(10, "Loading filtered data")
+  rgset <- load_filtered_rgset(job_dir)
+
+  # Log the auto-detected array type for traceability (450K / EPIC / EPIC v2).
+  array_info <- tryCatch(paste(annotation(rgset), collapse = " / "), error = function(e) "unknown")
+  emit_progress(15, sprintf("Data loaded - Samples: %d, Probes: %d, Array: %s",
+                            ncol(rgset), nrow(rgset), array_info))
+
+  # Normalize.
+  emit_progress(30, paste("Normalizing with method:", method))
+  normalized <- normalize_rgset(rgset, method)
+
+  # Validate.
+  emit_progress(70, "Validating data quality")
+  assert_valid_beta(normalized)
+
+  # Persist the full normalized object (keeps annotations + metadata downstream).
+  emit_progress(85, "Saving normalized object")
+  output_rds <- file.path(job_dir, "normalized_data.rds")
+  tryCatch(
+    saveRDS(normalized, output_rds),
+    error = function(e) emit_error(paste("Could not save normalized data:", conditionMessage(e)))
+  )
+  if (!file.exists(output_rds)) {
+    emit_error("Normalized data file was not created.")
+  }
+
+  emit_progress(100, "Normalization complete")
+  emit_done(method = method, output = output_rds)
+  invisible(TRUE)
 }
-job_dir <- args[1]
-method  <- tolower(args[2])
 
-if (!method %in% names(NORMALIZATION_METHODS)) {
-  emit_error(sprintf(
-    "Invalid method: %s. Allowed: %s",
-    method, paste(names(NORMALIZATION_METHODS), collapse = ", ")
-  ))
+# Run only when executed as a script (Rscript). When source()d/sys.source()d for
+# unit testing, sys.nframe() > 0, so the pipeline does not auto-run and the
+# functions above can be tested in isolation.
+if (sys.nframe() == 0L) {
+  main()
 }
-
-emit_progress(0, "Starting normalization")
-
-# Load the filtered data.
-emit_progress(10, "Loading filtered data")
-rgset <- load_filtered_rgset(job_dir)
-
-# Log the auto-detected array type for traceability (450K / EPIC / EPIC v2).
-array_info <- tryCatch(paste(annotation(rgset), collapse = " / "), error = function(e) "unknown")
-emit_progress(15, sprintf("Data loaded - Samples: %d, Probes: %d, Array: %s",
-                          ncol(rgset), nrow(rgset), array_info))
-
-# Normalize.
-emit_progress(30, paste("Normalizing with method:", method))
-normalized <- normalize_rgset(rgset, method)
-
-# Validate.
-emit_progress(70, "Validating data quality")
-assert_valid_beta(normalized)
-
-# Persist the full normalized object (keeps annotations + metadata downstream).
-emit_progress(85, "Saving normalized object")
-output_rds <- file.path(job_dir, "normalized_data.rds")
-tryCatch(
-  saveRDS(normalized, output_rds),
-  error = function(e) emit_error(paste("Could not save normalized data:", conditionMessage(e)))
-)
-if (!file.exists(output_rds)) {
-  emit_error("Normalized data file was not created.")
-}
-
-emit_progress(100, "Normalization complete")
-emit_done(method = method, output = output_rds)

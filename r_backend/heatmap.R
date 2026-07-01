@@ -1,10 +1,46 @@
 #!/usr/bin/env Rscript
-# heatmap.R
-# Generates a heatmap PNG from DMP/DMR results.
-# Part of the swtp-ss26-bigtom DNA Methylation Analysis Platform.
+# r_backend/heatmap.R
 #
-# Usage:
-#   Rscript heatmap.R <result.rds> <sample_sheet.csv> <job_dir>
+#' Heatmap rendering for DMP/DMR results.
+#'
+#' Renders a methylation heatmap (PNG for inline display + vector PDF for
+#' download) from a DMP/DMR result table, restricted to the CpGs the user
+#' selected in the table (single filter source). Samples are annotated by one or
+#' two grouping columns and the figure is auto-sized so labels, dendrograms and
+#' legends are never clipped.
+#'
+#' @section Array support:
+#' Array-agnostic. It operates purely on a numeric beta matrix (taken from
+#' \code{beta.rds} or from group-average columns of the result table) plus the
+#' sample sheet, so 450K, EPIC v1 and EPIC v2 data are all supported without any
+#' array-specific handling.
+#'
+#' @section Usage:
+#' \code{Rscript heatmap.R <result.rds> <sample_sheet.csv> <job_dir>}
+#'
+#' @section Configuration (environment variables):
+#' \describe{
+#'   \item{HEATMAP_GROUP1}{Primary annotation column (auto-selected if empty).}
+#'   \item{HEATMAP_GROUP2}{Optional secondary annotation column.}
+#'   \item{HEATMAP_MAX_ROWS}{Hard row limit (default 1000).}
+#'   \item{HEATMAP_OUTPUT}{Output PNG name (default \code{heatmap.png}); the PDF
+#'     is derived from it.}
+#'   \item{HEATMAP_INPUT}{CSV of selected CpG ids written by the backend
+#'     (default \code{heatmap_input.csv}).}
+#' }
+#'
+#' @section Output:
+#' \code{<job_dir>/<HEATMAP_OUTPUT>} (PNG) and the matching \code{.pdf}.
+#'
+#' @section Progress protocol:
+#' Progress/errors are emitted via \code{utils/progress.R} as single-line JSON.
+
+
+# ── Environment setup ─────────────────────────────────────────────────────────
+# Single-threaded, serial, reproducible execution (see utils/runtime.R);
+# clustering (dist/hclust) can use BLAS.
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
 
 # ── Packages ──────────────────────────────────────────────────────────────────
 suppressPackageStartupMessages({
@@ -15,11 +51,15 @@ suppressPackageStartupMessages({
   library(grid)
 })
 
-# Use shared progress & logging utilities
+# Shared progress emitters, column helpers (get_col_ci / has_col_ci) and beta
+# helpers (extract_beta).
 source("/app/r_backend/utils/progress.R")
+source("/app/r_backend/utils/columns.R")
+source("/app/r_backend/utils/beta.R")
+source("/app/r_backend/utils/plotting.R")
 
 TOTAL_STEPS <- 8L
-curr_pct    <- 0L  # Hält den aktuellen globalen Prozentwert für Sub-Meldungen
+curr_pct    <- 0L  # Tracks the current global percentage for sub-step messages.
 
 # ── Arguments ─────────────────────────────────────────────────────────────────
 args <- commandArgs(trailingOnly = TRUE)
@@ -85,12 +125,7 @@ if (nrow(dmp) == 0L)
 colnames(dmp) <- trimws(colnames(dmp))
 col_upper      <- toupper(colnames(dmp))
 
-# Helpers
-get_col_ci <- function(df, name) {
-  idx <- match(toupper(name), toupper(colnames(df)))
-  if (is.na(idx)) NULL else df[[idx]]
-}
-has_col_ci <- function(df, name) !is.na(match(toupper(name), toupper(colnames(df))))
+# Helpers get_col_ci() / has_col_ci() are provided by utils/columns.R.
 
 # Promote "ID" column to rownames if numeric indices
 cpg_ids <- rownames(dmp)
@@ -188,7 +223,12 @@ group_avg_mode     <- FALSE
 
 if (file.exists(beta_file_fallback)) {
   emit_progress(curr_pct, "Found beta.rds in job directory. Direct sample matrix extraction initiated.")
-  beta_obj    <- readRDS(beta_file_fallback)
+  # beta.rds is normally a plain matrix, but extract_beta() also handles an S4
+  # minfi object robustly (and preprocesses an RGChannelSet if ever passed).
+  beta_obj <- tryCatch(
+    extract_beta(readRDS(beta_file_fallback)),
+    error = function(e) emit_error(paste("Failed to read beta.rds:", conditionMessage(e)))
+  )
   common_rows <- intersect(rownames(dmp), rownames(beta_obj))
 
   if (length(common_rows) > 0L) {
@@ -373,7 +413,12 @@ if (has_col_ci(dmp, "chr") && has_col_ci(dmp, "pos")) {
   emit_progress(curr_pct, "chr/pos columns absent – keeping original row order")
 }
 
-# ── Build annotations (type-aware: categorical → discrete, continuous → gradient)
+# ── Build annotations (type-aware: categorical -> discrete, continuous -> gradient)
+
+#' Assign a distinct colour to each level of a categorical variable.
+#'
+#' @param values A vector of category values.
+#' @return A named character vector mapping each level to a hex colour.
 build_colours <- function(values) {
   lvls    <- unique(as.character(values))
   palette <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2",
@@ -382,8 +427,15 @@ build_colours <- function(values) {
   setNames(rep_len(palette, length(lvls)), lvls)
 }
 
-# Decide per annotation column whether it is continuous (numeric, many distinct
-# values → gradient, e.g. "age") or categorical (discrete colours).
+#' Build an annotation specification for one column.
+#'
+#' Decides whether the column is continuous (numeric with many distinct values,
+#' e.g. "age" -> colour gradient) or categorical (discrete swatches).
+#'
+#' @param name Annotation display name.
+#' @param raw_values The column values.
+#' @return A list with \code{name}, \code{kind} ("continuous"/"discrete"),
+#'   \code{values} and \code{col} (a colour map or colour function).
 make_anno_spec <- function(name, raw_values) {
   vals_chr <- as.character(raw_values)
   nonempty <- vals_chr[nzchar(trimws(vals_chr))]
@@ -538,9 +590,14 @@ ht <- Heatmap(
 
 OUTER_MM <- 12
 
-# Single draw routine for both measuring and output. ComplexHeatmap lays out the
-# body, labels, dendrograms and the supplied legends together and reserves space
-# for each — so nothing is ever clipped once the device matches its size.
+#' Draw the heatmap with its legends.
+#'
+#' Single draw routine used for both measuring and final output. ComplexHeatmap
+#' lays out the body, labels, dendrograms and supplied legends together and
+#' reserves space for each, so nothing is clipped once the device matches the
+#' measured size.
+#'
+#' @return The drawn \code{HeatmapList} object (invisibly via \code{draw}).
 draw_all <- function() {
   draw(ht,
        heatmap_legend_list    = list(lgd_beta),
@@ -551,9 +608,15 @@ draw_all <- function() {
        padding                = unit(rep(OUTER_MM, 4L), "mm"))
 }
 
-# Measure the FULL drawn layout (body + labels + dendrograms + legends) on a null
-# device, then size the real devices to it. Measuring the real object — instead
-# of estimating padding by hand — is what guarantees the legend is never cut off.
+#' Measure the full drawn layout (body + labels + dendrograms + legends).
+#'
+#' Draws once on a null device and reads back the real layout size, so the
+#' output devices can be sized exactly to the content (rather than estimating
+#' padding by hand, which is what previously clipped the legend). Uses an
+#' internal ComplexHeatmap accessor; the caller wraps this in a tryCatch with a
+#' size estimate as a fallback.
+#'
+#' @return A named numeric vector \code{c(w, h)} in millimetres.
 measure_layout <- function() {
   grDevices::pdf(NULL, width = 300, height = 300)
   on.exit(grDevices::dev.off(), add = TRUE)
@@ -577,28 +640,16 @@ png_height_px <- mm_to_px(canvas_h_mm)
 
 emit_progress(curr_pct, paste0("Canvas: ", round(canvas_w_mm), " x ", round(canvas_h_mm), " mm | ", png_width_px, " x ", png_height_px, " px @ ", DPI, " dpi | grid: ", n_samp, "c x ", n_cpg, "r | cell: ", round(cell_w_mm,1), "x", round(cell_h_mm,1), " mm"))
 
-# PNG (primary; shown in the UI)
-tryCatch({
-  png(output_path, width = png_width_px, height = png_height_px, res = DPI)
-  draw_all()
-  dev.off()
-}, error = function(e) {
-  try(dev.off(), silent = TRUE)
-  emit_error(paste("Failed to save PNG:", conditionMessage(e)))
-})
-
-if (!file.exists(output_path))
-  emit_error(paste("PNG not created at expected path:", output_path))
-
-# PDF (publication / download). Non-fatal: a missing PDF must not fail the job.
-tryCatch({
-  pdf(pdf_path, width = canvas_w_mm / MM_PER_INCH, height = canvas_h_mm / MM_PER_INCH)
-  draw_all()
-  dev.off()
-}, error = function(e) {
-  try(dev.off(), silent = TRUE)
-  emit_progress(curr_pct, paste("Warning: failed to save PDF:", conditionMessage(e)))
-})
+# Write PNG (mandatory) + vector PDF (best-effort) from the single draw routine.
+tryCatch(
+  render_png_and_pdf(
+    output_path, draw_fn = draw_all,
+    width = png_width_px, height = png_height_px, res = DPI, units = "px",
+    pdf_path = pdf_path,
+    on_pdf_error = function(msg) emit_progress(curr_pct, paste("Warning: failed to save PDF:", msg))
+  ),
+  error = function(e) emit_error(paste("Failed to save PNG:", conditionMessage(e)))
+)
 
 emit_progress(100L, paste("Heatmap saved:", output_path))
 emit_done(output = output_path)

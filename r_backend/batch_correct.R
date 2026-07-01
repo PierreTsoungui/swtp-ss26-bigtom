@@ -36,67 +36,21 @@
 options(digits = 4)
 
 # ── Environment setup ─────────────────────────────────────────────────────────
-# Pin numerical backends to a single thread (removeBatchEffect uses BLAS via
-# lm.fit); consistent with the other pipeline scripts and crash-safe.
-Sys.setenv(OMP_NUM_THREADS = "1")
-Sys.setenv(OPENBLAS_NUM_THREADS = "1")
-Sys.setenv(MKL_NUM_THREADS = "1")
-Sys.setenv(NUMEXPR_NUM_THREADS = "1")
-Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
+# Single-threaded, serial, reproducible execution (see utils/runtime.R);
+# removeBatchEffect uses BLAS via lm.fit.
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
 
 # Shared progress contract and sample-sheet helpers. Must read the sheet the same
 # way every other component does (raw [Data] column names) so the batch variable
 # the API offers is exactly the one validated here.
 source("/app/r_backend/utils/progress.R")
 source("/app/r_backend/utils/samplesheet.R")
-
-if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-  RhpcBLASctl::blas_set_num_threads(1)
-  RhpcBLASctl::omp_set_num_threads(1)
-}
+source("/app/r_backend/utils/beta.R")
 
 
-# ── Sample-sheet synchronization ──────────────────────────────────────────────
-
-#' Align sample-sheet rows to the beta-matrix columns.
-#'
-#' Matches by the combined array id (Sentrix_ID_Sentrix_Position); if that fails,
-#' falls back to \code{Sample_Name}; if that also fails, to positional order (with
-#' a warning). Always returns exactly \code{ncol(mat)} rows in matrix order.
-#'
-#' @param mat A numeric beta matrix (probes x samples).
-#' @param targets A data.frame from \code{read_sample_sheet_smart()}.
-#' @return A data.frame of metadata aligned to \code{colnames(mat)}.
-sync_samplesheet <- function(mat, targets) {
-  mat_ids <- normalize_id(gsub("_Grn.*|_Red.*|\\.idat.*", "", basename(colnames(mat))))
-
-  # Attempt 1: combined array id.
-  if (all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(targets))) {
-    target_ids <- normalize_id(gsub("_Grn.*|_Red.*|\\.idat.*", "", sample_sheet_array_id(targets)))
-    matches    <- match(mat_ids, target_ids)
-    if (!any(is.na(matches)) && length(matches) == ncol(mat)) {
-      return(targets[matches, , drop = FALSE])
-    }
-  }
-
-  # Attempt 2: Sample_Name.
-  if ("Sample_Name" %in% colnames(targets)) {
-    matches <- match(mat_ids, normalize_id(targets$Sample_Name))
-    if (!any(is.na(matches)) && length(matches) == ncol(mat)) {
-      return(targets[matches, , drop = FALSE])
-    }
-  }
-
-  # Fallback: positional order (assumes the sheet is in matrix-column order).
-  if (nrow(targets) < ncol(mat)) {
-    emit_error(sprintf(
-      "Sample sheet has fewer rows (%d) than the data has samples (%d); cannot align.",
-      nrow(targets), ncol(mat)
-    ))
-  }
-  warning("Could not match sample ids; falling back to positional sample alignment.")
-  targets[seq_len(ncol(mat)), , drop = FALSE]
-}
+# Sample/matrix alignment is provided by utils/samplesheet.R
+# (align_samples_to_matrix, mode = "positional", strip_idat = TRUE).
 
 
 # ── Column sanitation & model building ────────────────────────────────────────
@@ -262,34 +216,27 @@ run_batch_correction <- function(job_dir, batch_vars_str, covariates_str = "") {
     error = function(e) emit_error(paste("Could not read normalized_data.rds:", conditionMessage(e)))
   )
 
-  if (is(data_obj, "RGChannelSet") || is(data_obj, "RGChannelSetExtended")) {
-    emit_progress(30, "Raw data object detected. Extracting methylation channels...")
-    data_obj <- minfi::preprocessRaw(data_obj)
-  }
-  if (is(data_obj, "MethylSet") || is(data_obj, "GenomicMethylSet") ||
-      is(data_obj, "RatioSet")  || is(data_obj, "GenomicRatioSet")) {
-    mat <- minfi::getBeta(data_obj)
-  } else {
-    mat <- as.matrix(data_obj)
-  }
-  storage.mode(mat) <- "numeric"
+  # extract_beta() handles every shape uniformly (RGChannelSet -> preprocessRaw,
+  # MethylSet/RatioSet -> getBeta, plain matrix -> as-is).
+  emit_progress(30, "Extracting beta values...")
+  mat <- tryCatch(
+    extract_beta(data_obj),
+    error = function(e) emit_error(paste("Could not extract beta values:", conditionMessage(e)))
+  )
 
   # ── Condition the matrix ────────────────────────────────────────────────────
+  # Drop incomplete and zero-variance probes (require finite rows + any variance).
   emit_progress(40, "Conditioning data matrix (removing NA and zero-variance probes)...")
-  mat <- mat[stats::complete.cases(mat), , drop = FALSE]
-  row_var <- if (requireNamespace("matrixStats", quietly = TRUE)) {
-    matrixStats::rowVars(mat)
-  } else {
-    apply(mat, 1, var)
-  }
-  mat <- mat[is.finite(row_var) & row_var > 0, , drop = FALSE]
+  mat <- drop_invariant_probes(mat, min_sd = 0, require_finite = TRUE)
   if (nrow(mat) == 0L || ncol(mat) < 2L) {
     emit_error("Not enough informative probes/samples remain for batch correction.")
   }
 
   # ── Align sample sheet ──────────────────────────────────────────────────────
   emit_progress(45, "Synchronizing sample sheet with data columns...")
-  targets   <- sync_samplesheet(mat, targets)
+  # Positional-fallback alignment (full id match if possible, else assume the
+  # sheet is in matrix-column order); strip IDAT suffixes from the data columns.
+  targets   <- align_samples_to_matrix(mat, targets, mode = "positional", strip_idat = TRUE)$samples
   n_samples <- ncol(mat)
 
   # ── Biological covariates (protected via the design) ────────────────────────

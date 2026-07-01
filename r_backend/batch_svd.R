@@ -27,27 +27,21 @@
 
 
 # ── Environment setup ─────────────────────────────────────────────────────────
-# Pin numerical backends to a single thread for deterministic, container-safe
-# execution (consistent with the other pipeline scripts).
-Sys.setenv(OMP_NUM_THREADS = "1")
-Sys.setenv(OPENBLAS_NUM_THREADS = "1")
-Sys.setenv(MKL_NUM_THREADS = "1")
-Sys.setenv(NUMEXPR_NUM_THREADS = "1")
-Sys.setenv(VECLIB_MAXIMUM_THREADS = "1")
+# Single-threaded, serial, reproducible execution (see utils/runtime.R).
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
 
 suppressPackageStartupMessages({
   library(readr)
   library(minfi)
 })
 
-# Shared progress contract and sample-sheet helpers.
+# Shared progress contract, sample-sheet and beta helpers.
 source("/app/r_backend/utils/progress.R")
 source("/app/r_backend/utils/samplesheet.R")
-
-if (requireNamespace("RhpcBLASctl", quietly = TRUE)) {
-  RhpcBLASctl::blas_set_num_threads(1)
-  RhpcBLASctl::omp_set_num_threads(1)
-}
+source("/app/r_backend/utils/beta.R")
+source("/app/r_backend/utils/plotting.R")
+source("/app/r_backend/utils/stats.R")
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -67,93 +61,12 @@ PVAL_NA_COLOR   <- "#dddddd"
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
+# load_beta_matrix() / impute_row_means() are provided by utils/beta.R. PCA needs
+# a complete matrix, so the caller composes load + impute (all-NA rows dropped,
+# remaining NAs mean-imputed).
 
-#' Load, coerce and clean the beta matrix.
-#'
-#' Accepts either a raw matrix or an S4 minfi object (\code{getBeta} is applied).
-#' Probes that are entirely NA are dropped; remaining NAs are mean-imputed per
-#' probe so the PCA has a complete matrix.
-#'
-#' @param beta_path Path to the beta \code{.rds} file.
-#' @return A numeric beta matrix (probes x samples) with no NAs.
-load_beta_matrix <- function(beta_path) {
-  if (!file.exists(beta_path)) {
-    emit_error(sprintf("Beta matrix file not found at path: %s", beta_path))
-  }
-
-  beta <- tryCatch(
-    readRDS(beta_path),
-    error = function(e) emit_error(paste("Could not read beta matrix:", conditionMessage(e)))
-  )
-  if (isS4(beta)) {
-    beta <- tryCatch(
-      minfi::getBeta(beta),
-      error = function(e) emit_error(paste("Could not extract beta values:", conditionMessage(e)))
-    )
-  }
-  beta <- as.matrix(beta)
-  storage.mode(beta) <- "numeric"
-
-  if (nrow(beta) == 0L || ncol(beta) == 0L) {
-    emit_error("Loaded beta matrix contains no features or samples (empty matrix)")
-  }
-
-  # Drop all-NA probes (cannot be imputed), then mean-impute remaining NAs.
-  all_na <- rowSums(is.na(beta)) == ncol(beta)
-  if (any(all_na)) beta <- beta[!all_na, , drop = FALSE]
-  if (nrow(beta) == 0L) {
-    emit_error("Beta matrix is empty after removing all-NA probes.")
-  }
-  na_idx <- which(is.na(beta), arr.ind = TRUE)
-  if (nrow(na_idx) > 0L) {
-    row_means      <- rowMeans(beta, na.rm = TRUE)
-    beta[na_idx]   <- row_means[na_idx[, 1L]]
-  }
-
-  beta
-}
-
-#' Read the sample sheet and align it to the beta-matrix columns.
-#'
-#' Builds an \code{Array_ID} (from Sentrix columns when present, else positional
-#' fallback), intersects it with the beta columns, and reorders both so the
-#' samples line up. Requires at least two matching samples.
-#'
-#' @param sample_sheet_path Path to the sample-sheet CSV.
-#' @param beta Beta matrix (probes x samples).
-#' @return List with the aligned \code{beta} and \code{samples} data frame.
-load_aligned_samples <- function(sample_sheet_path, beta) {
-  if (!file.exists(sample_sheet_path)) {
-    emit_error(sprintf("Sample sheet file not found at path: %s", sample_sheet_path))
-  }
-
-  samples <- tryCatch(
-    read_sample_sheet_smart(sample_sheet_path),
-    error = function(e) emit_error(sprintf("Failed to parse sample sheet CSV: %s", conditionMessage(e)))
-  )
-
-  if (all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(samples))) {
-    samples$Array_ID <- paste0(samples$Sentrix_ID, "_", samples$Sentrix_Position)
-  } else {
-    warning("Sentrix columns absent; falling back to positional sample matching.")
-    samples$Array_ID <- colnames(beta)[seq_len(min(nrow(samples), ncol(beta)))]
-  }
-
-  common <- intersect(normalize_id(colnames(beta)), normalize_id(samples$Array_ID))
-  if (length(common) < 2L) {
-    emit_error(sprintf(
-      "Sample ID mismatch: only %d matching samples between dataset and sample sheet (minimum 2).",
-      length(common)
-    ))
-  }
-
-  beta      <- beta[, normalize_id(colnames(beta)) %in% common, drop = FALSE]
-  samples   <- samples[normalize_id(samples$Array_ID) %in% common, , drop = FALSE]
-  order_idx <- match(normalize_id(samples$Array_ID), normalize_id(colnames(beta)))
-  beta      <- beta[, order_idx, drop = FALSE]
-
-  list(beta = beta, samples = samples)
-}
+# Sample/matrix alignment is provided by utils/samplesheet.R
+# (align_samples_to_matrix, mode = "intersect").
 
 
 # ── PCA & association testing ─────────────────────────────────────────────────
@@ -165,12 +78,7 @@ load_aligned_samples <- function(sample_sheet_path, beta) {
 #'   \code{n_pcs}.
 compute_principal_components <- function(beta) {
   if (nrow(beta) > MAX_PROBES_FOR_PCA) {
-    row_var <- if (requireNamespace("matrixStats", quietly = TRUE)) {
-      matrixStats::rowVars(beta)
-    } else {
-      rowMeans(beta^2) - rowMeans(beta)^2
-    }
-    top <- order(row_var, decreasing = TRUE)[seq_len(MAX_PROBES_FOR_PCA)]
+    top  <- order(row_variance(beta), decreasing = TRUE)[seq_len(MAX_PROBES_FOR_PCA)]
     beta <- beta[top, , drop = FALSE]
   }
 
@@ -335,77 +243,97 @@ render_svd_heatmap <- function(pval_mat, var_explained, n_pcs, n_vars, png_path,
            fill = PVAL_BIN_COLORS, border = "white")
   }
 
-  # PNG (primary, shown in the UI) — fatal if it cannot be written.
-  ok <- tryCatch({
-    png(png_path, width = W, height = H, units = "in", res = 200, type = "cairo")
-    tryCatch(draw(), finally = dev.off())
-    TRUE
-  }, error = function(e) {
-    try(dev.off(), silent = TRUE)
-    emit_error(paste("Failed to render SVD heatmap PNG:", conditionMessage(e)))
-    FALSE
-  })
-  if (!isTRUE(ok) || !file.exists(png_path)) {
-    emit_error("SVD heatmap PNG was not created.")
-  }
-
-  # PDF (publication) — non-fatal: a missing PDF only disables the download.
-  tryCatch({
-    if (capabilities("cairo")) cairo_pdf(pdf_path, width = W, height = H)
-    else pdf(pdf_path, width = W, height = H)
-    tryCatch(draw(), finally = dev.off())
-  }, error = function(e) {
-    try(dev.off(), silent = TRUE)
-    emit_progress(96, paste0("PDF export skipped: ", conditionMessage(e)))
-  })
+  # Write PNG (mandatory) + vector PDF (best-effort) from the single draw routine.
+  # A PNG failure is fatal for this step; a PDF failure only disables the download.
+  tryCatch(
+    render_png_and_pdf(
+      png_path, draw_fn = draw, width = W, height = H, res = 200, units = "in",
+      pdf_path = pdf_path,
+      on_pdf_error = function(msg) emit_progress(96, paste0("PDF export skipped: ", msg))
+    ),
+    error = function(e) emit_error(paste("Failed to render SVD heatmap PNG:", conditionMessage(e)))
+  )
 
   invisible(TRUE)
 }
 
 
 # ── Main execution ────────────────────────────────────────────────────────────
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 3L) {
-  emit_error("Insufficient arguments. Usage: Rscript batch_svd.R <beta_path> <sample_sheet_path> <job_dir> [<png_name>]")
+
+#' Orchestrate the SVD batch-association diagnostic for one job.
+#'
+#' Loads and imputes the beta matrix, aligns it to the sample sheet, computes the
+#' principal components, tests every grouping variable against each PC, and
+#' renders the association heatmap (PNG + PDF). Fatal problems abort via
+#' \code{emit_error()}.
+#'
+#' Kept as a function so the file can be \code{source()}d for unit testing without
+#' executing the pipeline (see the run guard below).
+#'
+#' @param args Character vector \code{c(beta_path, sample_sheet_path, job_dir,
+#'   [png_name])} (defaults to the CLI arguments).
+#' @return Invisibly \code{TRUE} on success.
+main <- function(args = commandArgs(trailingOnly = TRUE)) {
+  if (length(args) < 3L) {
+    emit_error("Insufficient arguments. Usage: Rscript batch_svd.R <beta_path> <sample_sheet_path> <job_dir> [<png_name>]")
+  }
+
+  beta_path         <- normalizePath(args[1], mustWork = FALSE)
+  sample_sheet_path <- normalizePath(args[2], mustWork = FALSE)
+  job_dir           <- normalizePath(args[3], mustWork = FALSE)
+  png_name          <- if (length(args) >= 4L) args[4] else "svd_plot.png"
+  pdf_name          <- sub("\\.png$", ".pdf", png_name, ignore.case = TRUE)
+
+  dir.create(job_dir, showWarnings = FALSE, recursive = TRUE)
+
+  emit_progress(0, "Initializing SVD analysis workflow")
+
+  emit_progress(15, "Loading and validating methylation beta matrix")
+  # PCA needs a complete matrix: load, then drop all-NA probes and mean-impute.
+  beta <- load_beta_matrix(beta_path)
+  beta <- impute_row_means(beta)
+  if (nrow(beta) == 0L) emit_error("Beta matrix is empty after removing all-NA probes.")
+
+  emit_progress(35, "Loading and verifying sample sheet metadata")
+  if (!file.exists(sample_sheet_path)) {
+    emit_error(sprintf("Sample sheet file not found at path: %s", sample_sheet_path))
+  }
+  samples_raw <- tryCatch(
+    read_sample_sheet_smart(sample_sheet_path),
+    error = function(e) emit_error(sprintf("Failed to parse sample sheet CSV: %s", conditionMessage(e)))
+  )
+  # Intersect alignment: keep only samples present in both, reordering together.
+  aligned <- align_samples_to_matrix(beta, samples_raw, mode = "intersect", min_common = 2L)
+  beta    <- aligned$beta
+  samples <- aligned$samples
+  n_samples <- ncol(beta)
+  emit_progress(50, sprintf("Aligned %d samples between dataset and sample sheet", n_samples))
+
+  emit_progress(70, "Computing Singular Value Decomposition (SVD) principal components")
+  pca_res       <- compute_principal_components(beta)
+  pcs           <- pca_res$pcs
+  var_explained <- pca_res$var_explained
+  n_pcs         <- pca_res$n_pcs
+
+  emit_progress(85, "Selecting grouping variables and testing associations")
+  var_factors <- select_grouping_variables(samples, n_samples)
+  n_vars      <- length(var_factors)
+  pval_mat    <- compute_pvalue_matrix(var_factors, pcs, n_pcs)
+
+  emit_progress(95, "Rendering SVD heatmap (PNG + PDF)")
+  png_path <- file.path(job_dir, png_name)
+  pdf_path <- file.path(job_dir, pdf_name)
+  render_svd_heatmap(pval_mat, var_explained, n_pcs, n_vars, png_path, pdf_path)
+
+  emit_progress(100, "SVD heatmap complete")
+  emit_done(plot_file = png_name)
+  invisible(TRUE)
 }
 
-beta_path         <- normalizePath(args[1], mustWork = FALSE)
-sample_sheet_path <- normalizePath(args[2], mustWork = FALSE)
-job_dir           <- normalizePath(args[3], mustWork = FALSE)
-png_name          <- if (length(args) >= 4L) args[4] else "svd_plot.png"
-pdf_name          <- sub("\\.png$", ".pdf", png_name, ignore.case = TRUE)
-
-dir.create(job_dir, showWarnings = FALSE, recursive = TRUE)
-
-emit_progress(0, "Initializing SVD analysis workflow")
-
-emit_progress(15, "Loading and validating methylation beta matrix")
-beta <- load_beta_matrix(beta_path)
-
-emit_progress(35, "Loading and verifying sample sheet metadata")
-aligned <- load_aligned_samples(sample_sheet_path, beta)
-beta    <- aligned$beta
-samples <- aligned$samples
-n_samples <- ncol(beta)
-emit_progress(50, sprintf("Aligned %d samples between dataset and sample sheet", n_samples))
-
-emit_progress(70, "Computing Singular Value Decomposition (SVD) principal components")
-pca_res       <- compute_principal_components(beta)
-pcs           <- pca_res$pcs
-var_explained <- pca_res$var_explained
-n_pcs         <- pca_res$n_pcs
-
-emit_progress(85, "Selecting grouping variables and testing associations")
-var_factors <- select_grouping_variables(samples, n_samples)
-n_vars      <- length(var_factors)
-pval_mat    <- compute_pvalue_matrix(var_factors, pcs, n_pcs)
-
-emit_progress(95, "Rendering SVD heatmap (PNG + PDF)")
-png_path <- file.path(job_dir, png_name)
-pdf_path <- file.path(job_dir, pdf_name)
-render_svd_heatmap(pval_mat, var_explained, n_pcs, n_vars, png_path, pdf_path)
-
-emit_progress(100, "SVD heatmap complete")
-emit_done(plot_file = png_name)
-
-quit(save = "no", status = 0)
+# Run only when executed as a script (Rscript). When source()d/sys.source()d for
+# unit testing, sys.nframe() > 0, so the pipeline does not auto-run and the
+# functions above can be tested in isolation.
+if (sys.nframe() == 0L) {
+  main()
+  quit(save = "no", status = 0)
+}
