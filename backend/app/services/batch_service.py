@@ -30,8 +30,19 @@ def _failure_detail(result: ExecutionResult, fallback: str) -> str:
     Prefer the structured message the R script emitted via {"type":"error"}
     (captured in extra["r_error"]) over the raw stderr dump, which is full of
     package-loading noise and would otherwise be shown to the user verbatim.
-    Falls back to a generic message (e.g. on timeout, where neither is set).
+
+    A timeout is a special case: the R process is SIGKILLed mid-run, so it never
+    emits an error message and its stderr is just the (successful-looking)
+    package/analysis log up to the kill. Dumping that as the "error" is
+    misleading (it looks like a harmless warning). Report the timeout explicitly
+    instead.
     """
+    if result.is_timeout:
+        return (
+            f"{fallback} Zeitlimit der Analyse überschritten – das R-Skript "
+            "wurde abgebrochen. Bitte mit weniger Proben erneut versuchen oder "
+            "das Zeitlimit erhöhen."
+        )
     return result.extra.get("r_error") or (result.stderr or "").strip() or fallback
 
 JOBS_DIR = Path("jobs").resolve()
