@@ -13,30 +13,50 @@ import { Link } from "react-router";
 import { LandingLogo } from "./LandingLogo";
 
 
-// BIOLOGICAL & TECHNICAL DICTIONARY
-
+/**
+ * A single entry in the glossary of terms.
+ */
 interface DictionaryItem {
+  /** The technical or biological term. */
   term: string;
+  /** A concise, human-readable definition of the term. */
   definition: string;
 }
 
-// COMPONENT INTERFACES
+/**
+ * Data structure for informational tiles displayed on the landing page.
+ */
 interface InformationCard {
   title: string;
   description: string;
+  /** Visual representation, typically an icon from Material-UI. */
   icon: ReactNode;
 }
 
+/**
+ * A single question and answer pair for the FAQ section.
+ */
 interface FaqItem {
   question: string;
   answer: string;
 }
 
+/**
+ * A grouped collection of FAQ items, categorized by topic.
+ */
 interface FaqCategory {
+  /** The name of the category (e.g., "Upload & Files"). */
   title: string;
+  /** List of questions belonging to this category. */
   questions: FaqItem[];
 }
 
+
+
+/**
+ * Glossary of biological and technical terminology used within the platform.
+ * Provides concise definitions for epigenetic and bioinformatics concepts.
+ */
 const biologyDictionary: DictionaryItem[] = [
   {
     term: "DNA Methylation",
@@ -96,6 +116,10 @@ const biologyDictionary: DictionaryItem[] = [
   },
 ];
 
+/**
+ * High-level overview of the analysis pipeline.
+ * Used to visualize the sequential stages from data ingestion to result exploration.
+ */
 const workflowSteps: InformationCard[] = [
   {
     title: "Select Files",
@@ -129,6 +153,10 @@ const workflowSteps: InformationCard[] = [
   },
 ];
 
+/**
+ * Simplified topic summaries designed for new users.
+ * Focuses on the "What and Why" of major analysis phases.
+ */
 const beginnerTopics: InformationCard[] = [
   {
     title: "Filtering",
@@ -153,6 +181,10 @@ const beginnerTopics: InformationCard[] = [
   },
 ];
 
+/**
+ * Frequently Asked Questions grouped by functional categories.
+ * Addresses common hurdles in data preparation and analysis interpretation.
+ */
 const faqCategories: FaqCategory[] = [
   {
     title: "Upload & Files",
@@ -310,6 +342,13 @@ const faqCategories: FaqCategory[] = [
     ],
   },
 ];
+
+/**
+ * Main landing page component.
+ *
+ * Serves as the entry point of the application, providing educational resources,
+ * a technical dictionary, and a step-by-step guide to the methylation workflow.
+ */
 export function LandingPage() {
   return (
     <div className="bg-neutral-background text-neutral-textPrimary">
