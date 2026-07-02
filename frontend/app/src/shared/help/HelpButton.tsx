@@ -130,7 +130,7 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-6 py-4">
                             <div>
                                 <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                                    Kontextuelle Hilfe
+                                    Contextual Help
                                 </p>
                                 <h2 id={titleId} className="mt-1 text-xl font-semibold">
                                     {title}
