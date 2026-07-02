@@ -10,19 +10,26 @@ import {
 } from "@mui/material";
 
 /**
- * Props, die an die SkeletonTable-Komponente übergeben werden
+ * Props for the SkeletonTable component.
  */
 type SkeletonProps = {
+    /**
+     * Number of placeholder rows to display.
+     * @default 10
+     */
     rows?: number;
+
+    /** Number of placeholder columns to display.
+     * @default 6
+     */
     columns?: number;
 }
 
 /**
- * Komponent, die eine Skelett-Tabelle anzeigt, um den Ladezustand zu visualisieren.
- * @note Verbesserung der UX, da das Layout nicht verschoben wird, wenn Tabelle neu geladen wird
- * @param rows - Anzahl der Zeilen, die in der Skelett-Tabelle angezeigt werden sollen (Standard: 10)
- * @param columns - Anzahl der Spalten, die in der Skelett-Tabelle angezeigt werden sollen (Standard: 6)
- * @constructor
+ * A placeholder component that renders a skeleton UI for tables.
+ *
+ * It improves user experience by maintaining layout stability and preventing
+ * cumulative layout shifts (CLS) while table data is being fetched.
  */
 function SkeletonTable({ rows = 10, columns = 6 }: SkeletonProps) {
     return (

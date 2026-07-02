@@ -1,17 +1,35 @@
+/**
+ * Props for the TablePagination component.
+ */
 type Props = {
+  /** Current active page (1-indexed). */
   page: number;
+  /** Total number of available pages. */
   totalPages: number;
+  /** Number of records displayed per page. */
   pageSize: number;
+  /** Callback fired when a new page is selected. */
   onPageChange: (page: number) => void;
 };
 
+/**
+ * A navigation control for paginated data tables.
+ *
+ * It implements a "sliding window" algorithm to display a maximum of 5 page
+ * buttons at once, ensuring the current page remains centered where possible.
+ * Includes quick-jump actions for the first and last pages.
+ */
 export function TablePagination({
   page,
   totalPages,
   pageSize,
   onPageChange,
 }: Props) {
-  // Zeige maximal 5 Seitenzahlen an
+
+  /**
+   * Calculates the subset of page numbers to display.
+   * Ensures the UI remains clean even with thousands of pages.
+   */
   const getPageNumbers = () => {
     const maxVisible = 5;
     const pages = [];
@@ -32,31 +50,31 @@ export function TablePagination({
   return (
     <div className="flex items-center justify-between mt-4">
       <div className="text-sm text-neutral-textSecondary">
-        {pageSize} Einträge pro Seite
+        {pageSize} records per page
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Erste Seite */}
+        {/* First page */}
         <button
           onClick={() => onPageChange(1)}
           disabled={page === 1}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Erste Seite"
+          title="First page"
         >
           «
         </button>
 
-        {/* Vorherige Seite */}
+        {/* Previous page */}
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Vorherige Seite"
+          title="Previous page"
         >
           ‹
         </button>
 
-        {/* Seitenzahlen */}
+        {/* Page numbers */}
         {getPageNumbers().map((pageNumber) => (
           <button
             key={pageNumber}
@@ -73,29 +91,29 @@ export function TablePagination({
           </button>
         ))}
 
-        {/* Nächste Seite */}
+        {/* Next page */}
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Nächste Seite"
+          title="Next page"
         >
           ›
         </button>
 
-        {/* Letzte Seite */}
+        {/* Last page */}
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={page === totalPages}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Letzte Seite"
+          title="Last page"
         >
           »
         </button>
       </div>
 
       <div className="text-sm text-neutral-textSecondary">
-        Seite {page} von {totalPages}
+        Page {page} of {totalPages}
       </div>
     </div>
   );

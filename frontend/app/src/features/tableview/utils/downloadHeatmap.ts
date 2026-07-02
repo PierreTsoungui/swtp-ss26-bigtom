@@ -1,10 +1,12 @@
 /**
- * Downloads the generated heatmap as PNG or PDF.
- * Requires the heatmap to have been generated for the given job id.
- * Fetches the file as a blob and triggers a browser download.
+ * Triggers a browser download for the generated heatmap.
  *
- * @param jobId  the job id
- * @param format "png" (default) or "pdf"
+ * Fetches the heatmap file from the server as a binary blob and uses
+ * a temporary anchor element to initiate the download.
+ *
+ * @param jobId - The unique identifier of the analysis job.
+ * @param format - The file format to request: 'png' for images or 'pdf' for vector graphics.
+ * @throws Error if the server response is not successful.
  */
 async function downloadHeatmap(jobId: string, format: "png" | "pdf" = "png") {
     const response = await fetch(`/api/v1/heatmap/${jobId}?format=${format}`);

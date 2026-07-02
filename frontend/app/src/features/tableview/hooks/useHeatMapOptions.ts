@@ -3,9 +3,12 @@ import type {HeatMapOptionsResponse} from "../utils/types.ts";
 
 
 /**
- * Hook zum Abrufen der verfügbaren Optionen für die Heatmap-Generierung, basierend auf der Job-ID.
- * Diese Optionen umfassen die Spalten, die für die Gruppierung in der Heatmap verwendet werden können.
- * @param jobId
+ * Fetches available metadata columns for heatmap grouping and annotation.
+ *
+ * Provides the necessary options to populate selection dropdowns for
+ * primary and secondary grouping variables in the heatmap view.
+ *
+ * @param jobId - The unique identifier of the analysis job.
  */
 export const useHeatMapOptions = (jobId: string | null) => {
     const [data, setData] = useState<HeatMapOptionsResponse | null>(null);
