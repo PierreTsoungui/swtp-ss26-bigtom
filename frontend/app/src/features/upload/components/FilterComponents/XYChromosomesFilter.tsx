@@ -1,13 +1,23 @@
-import type {MultiHitFilterType} from "../utils/types.ts";
+import type {XYChromosomesFilterType} from "../../utils/types.ts";
 import {Accordion, AccordionSummary, Switch, Typography} from "@mui/material";
 import * as React from "react";
 
-type MultiHitFilterProps = {
-    value: MultiHitFilterType;
-    onChange: (updated: MultiHitFilterType) => void;
+/**
+ * Props for the XYChromosomesFilter component.
+ */
+type XYChromosomesFilterProps = {
+    /** The current configuration for sex chromosome filtering. */
+    value: XYChromosomesFilterType;
+    /** Callback fired when the filter is enabled or disabled. */
+    onChange: (updated: XYChromosomesFilterType) => void;
 }
-
-function MultiHitFilter({value, onChange} : MultiHitFilterProps) {
+/**
+ * UI toggle for the Sex Chromosome (XY) Filter.
+ *
+ * Removes probes located on chromosomes X and Y to prevent sex-specific bias.
+ * Rendered as a static Accordion for layout consistency.
+ */
+function XYChromosomesFilter({value, onChange} : XYChromosomesFilterProps) {
     return (
         <Accordion expanded={false} slots={{ transition: React.Fragment}}>
             <AccordionSummary expandIcon={<div style={{ width: 24, height: 24}}> </div>}>
@@ -15,7 +25,7 @@ function MultiHitFilter({value, onChange} : MultiHitFilterProps) {
 
                     <div>
                         <Typography sx={{ fontWeight: 600 }}>
-                            Multi-Hit Filter
+                            XY-Chromosomes Filter
                         </Typography>
                     </div>
 
@@ -30,4 +40,4 @@ function MultiHitFilter({value, onChange} : MultiHitFilterProps) {
     );
 }
 
-export default MultiHitFilter;
+export default XYChromosomesFilter;

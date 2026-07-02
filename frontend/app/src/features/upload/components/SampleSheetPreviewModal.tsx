@@ -1,14 +1,27 @@
 import { useEffect, useState } from "react";
 import { previewSheet, type SheetPreview } from "../utils/uploadApi";
 
+/**
+ * Props for the SampleSheetPreviewModal component.
+ */
 interface Props {
+  /** The current staging session ID. */
   sessionId: string;
+  /** The unique identifier of the sample sheet to preview. */
   sheetId: string;
+  /** The filename or display name of the sheet. */
   sheetName: string;
+  /** Callback to close the modal. */
   onClose: () => void;
 }
 
-/** Lazy, simple tabular preview of a candidate sample sheet (on-click). */
+/**
+ * An overlay component that displays a tabular preview of a sample sheet's content.
+ *
+ * It fetches data on-demand and handles large files by showing a truncated
+ * view if necessary. The modal includes a backdrop blur and handles click
+ * events to support closing on outside interaction.
+ */
 function SampleSheetPreviewModal({ sessionId, sheetId, sheetName, onClose }: Props) {
   const [preview, setPreview] = useState<SheetPreview | null>(null);
   const [error, setError] = useState<string | null>(null);

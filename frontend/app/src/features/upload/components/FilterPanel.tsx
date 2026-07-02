@@ -11,24 +11,38 @@ import {
     Typography
 } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import {DetPValueFilter} from "./DetPValueFilter.tsx";
-import {BeadCountFilter} from "./BeadCountFilter.tsx";
-import NonCpgFilter from "./NonCpgFilter.tsx";
-import SnpFilter from "./SnpFilter.tsx";
-import MultiHitFilter from "./MultiHitFilter.tsx";
-import XYChromosomesFilter from "./XYChromosomesFilter.tsx";
-import {SampleQuality} from "./SampleQuality.tsx";
+import {DetPValueFilter} from "./FilterComponents/DetPValueFilter.tsx";
+import {BeadCountFilter} from "./FilterComponents/BeadCountFilter.tsx";
+import NonCpgFilter from "./FilterComponents/NonCpgFilter.tsx";
+import SnpFilter from "./FilterComponents/SnpFilter.tsx";
+import MultiHitFilter from "./FilterComponents/MultiHitFilter.tsx";
+import XYChromosomesFilter from "./FilterComponents/XYChromosomesFilter.tsx";
+import {SampleQuality} from "./FilterComponents/SampleQuality.tsx";
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import HelpButton from "../../analysis/components/HelpButton.tsx";
 import { helpTexts } from "../../../shared/utils/help/helpTexts.ts";
 
+/**
+ * Props for the FilterPanel component.
+ */
 type FilterPanelProps = {
+    /** The current configuration for all analysis filters. */
     filterSettings: FilterSettings;
+    /** Callback fired when any individual filter setting is updated. */
     onFilterSettingsChange: (settings: FilterSettings) => void;
 }
 
+/**
+ * A centralized control panel for configuring preprocessing and quality control filters.
+ *
+ * It provides a grouped accordion interface to toggle and fine-tune specific
+ * bioinformatics filters (e.g., P-Value, SNP, Sample Quality).
+ *
+ * @remarks
+ * All state updates are handled immutably to ensure compatibility with
+ * React's rendering cycle and the `useUploadFlow` state machine.
+ */
 function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProps) {
-
 
     const handleDetPChange = (updated: DetPFilterType) => {
         onFilterSettingsChange({
