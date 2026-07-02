@@ -10,12 +10,13 @@ import CheckIcon from "@mui/icons-material/Check";
 import {Alert, AlertTitle} from "@mui/material";
 
 /**
- * Hauptseite für die Analyse eines Jobs.
- * Zeigt abhängig vom Status:
- * - Fortschrittsbalken
- * - Filterstatistiken
- * - Fehlerhinweise
- * - Navigation zur Normalisierungsvorschau
+ * Main view for the filtering and analysis phase.
+ *
+ * Responsibilities:
+ * - Polls for {@link JobStatus} updates using `useJobPolling`.
+ * - Orchestrates conditional fetching of {@link FilteringStatsType}.
+ * - Manages transitions between the filtering and normalization-preview stages.
+ * - Displays progress via {@link Progressbar} and success/error states using Alerts.
  */
 export function AnalysisPage() {
     const { job_id } = useParams<{ job_id: string }>();
@@ -23,7 +24,10 @@ export function AnalysisPage() {
     const navigate: NavigateFunction = useNavigate();
     const hasTriggeredFetch = useRef(false);
 
-    // Eigentlich alle nachfolgenden States
+    /**
+     * Determines if filtering statistics should be fetched.
+     * True if the filtering phase is complete or the next phase has already started.
+     */
     const shouldGetFilterStats = job_id && !hasTriggeredFetch.current &&
         ((jobStatus?.phase === JobPhase.FILTERING && jobStatus?.status === JobStatusValue.COMPLETED) ||
         (jobStatus?.phase === JobPhase.NORMALIZATION_PREVIEW && jobStatus?.status === JobStatusValue.RUNNING));

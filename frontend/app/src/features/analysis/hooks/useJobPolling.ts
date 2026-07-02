@@ -2,17 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../../shared/utils/JobTypes.ts";
 
-/** Das Intervall für das Polling in Millisekunden. */
-const POLLING_INTERVAL = 3000; // 3 Sekunden
+/**
+ * Interval for status polling in milliseconds.
+ */
+const POLLING_INTERVAL = 3000; // 3 seconds
 
 /**
- * Hilfsfunktion, die überprüft, ob sich ein Job in einem terminalen Zustand befindet.
- * Ein Job gilt als terminal, wenn er entweder fehlgeschlagen ist oder sich in einem der folgenden Phasen befindet und auf eine Benutzeraktion wartet:
- * - Normalization (Warten auf Normalisierungsvorschau)
- * - Batch (Warten auf Batch-Parameter)
- * - Results (Warten auf Ergebnisanzeige)
- * @param phase
- * @param status
+ * Determines if a job has reached a state that requires no further polling.
+ * A state is terminal if the job failed or is waiting for user input
+ * in specific phases (Normalization, Batch, Results, Heatmap).
  */
 export const isTerminalState = (
     phase: JobPhase,
@@ -30,13 +28,16 @@ export const isTerminalState = (
       (phase === JobPhase.HEATMAP && status == JobStatusValue.COMPLETED)
   );
 };
-// TODO: Prüfen, wie das Pollingverhalten stattfinden soll, wenn Filterstats und NormalizationPreview geladen ist (Next Button)
 
 /**
- * Custom Hook, der den Status eines Jobs überwacht, indem er regelmäßig die API abfragt.
- * @param jobId Die ID des Jobs, dessen Status überwacht werden soll. Wenn `null`, wird kein Polling durchgeführt.
- * @param resetKey Ein optionaler Schlüssel, der das Polling zurücksetzt, wenn er sich ändert.
- * @returns Den aktuellen Status des Jobs oder `null`, wenn kein Job überwacht wird.
+ * Monitors a job's status by polling the API at regular intervals.
+ *
+ * Implements exponential backoff on network failures and stops polling
+ * when reaching a terminal state or a maximum failure threshold.
+ *
+ * @param jobId - The ID of the job to monitor. Polling is disabled if null.
+ * @param resetKey - Optional key to force-reset the polling state and failure count.
+ * @returns The current {@link JobStatus} or null.
  */
 export function useJobPolling(jobId: string | null, resetKey? : number): JobStatus | null {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
@@ -111,6 +112,10 @@ export function useJobPolling(jobId: string | null, resetKey? : number): JobStat
   return jobStatus;
 }
 
+/**
+ * Validates and transforms a raw API response into a {@link JobStatus} object.
+ * @throws Error if the response structure or required fields are invalid.
+ */
 function parseJobStatus(value: unknown): JobStatus {
   if (!isRecord(value)) {
     console.error("[PARSING ERROR] Expected an object but got:", value);
@@ -155,6 +160,7 @@ function parseJobStatus(value: unknown): JobStatus {
   };
 }
 
+/** Type guard for the {@link JobStatusValue} union. */
 function isJobStatusValue(value: unknown): value is JobStatusValue {
   return (
       value === "running" ||
@@ -164,6 +170,7 @@ function isJobStatusValue(value: unknown): value is JobStatusValue {
   );
 }
 
+/** Type guard for the {@link JobPhase} union. */
 function isJobPhase(value: unknown): value is JobPhase {
   return (
       value === "upload" ||
@@ -178,7 +185,7 @@ function isJobPhase(value: unknown): value is JobPhase {
   );
 }
 
-
+/** Type guard for {@link ProblemDetail} conforming to RFC 7807. */
 function isProblemDetail(value: unknown): value is ProblemDetail {
   if (!isRecord(value)) return false;
 
@@ -191,6 +198,7 @@ function isProblemDetail(value: unknown): value is ProblemDetail {
   );
 }
 
+/** Type guard for error details conforming to RFC 7807. */
 function isProblemDetailErrors(value: unknown): value is Record<string, string[]> {
   return (
     isRecord(value) &&
@@ -202,10 +210,12 @@ function isProblemDetailErrors(value: unknown): value is Record<string, string[]
   );
 }
 
+/** Internal helper to check for non-array objects. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Type guard to check if a value is a finite number. */
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }

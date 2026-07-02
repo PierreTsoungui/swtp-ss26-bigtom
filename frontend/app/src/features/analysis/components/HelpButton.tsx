@@ -1,26 +1,30 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 /**
- * Props für den HelpButton.
+ * Props for the HelpButton component.
  */
 interface HelpButtonProps {
-    /**
-     * Der Text, der im Dialog angezeigt wird.
-     */
+    /** The content to be displayed within the help dialog. Supports multiline text. */
     helpText: string;
 
     /**
-     * Optionales ARIA-Label für den Button.
-     * @default "Hilfe öffnen"
+     * Accessibility label for the trigger button.
+     * @default "Open help"
      */
     ariaLabel?: string;
 
     /**
-     * Optionaler Titel für den Dialog.
-     * @default "Hilfe"
+     * Title displayed in the dialog header.
+     * @default "Help"
      */
     dialogTitle?: string;
 }
 
+/**
+ * A contextual help button that opens a modal dialog.
+ *
+ * It implements full accessibility features including focus trapping,
+ * ARIA roles, and keyboard navigation (ESC to close, Tab to cycle focus).
+ */
 function HelpButton({
                         helpText,
                         ariaLabel = "Hilfe öffnen",

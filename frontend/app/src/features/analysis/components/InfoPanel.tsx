@@ -1,16 +1,18 @@
 /**
- * Props für die InfoPanel-Komponente
- * @property title - Titel der Information,
- * @property message - Detaillierte Nachricht oder Beschreibung der Information
+ * Props for the InfoPanel component.
  */
 interface InfoPanelProps {
+    /** Heading of the information block. */
     title: string;
+    /** Descriptive message or status details. */
     message: string;
 }
 
 /**
- * Hilfskomponente zum Anzeigen von Informationen
- * Wird in der AnalysisPage verwendet, um den Nutzer über den aktuellen Status der Analyse zu informieren, z.B. wenn die Analyse abgeschlossen ist oder wenn ein Fehler aufgetreten ist.
+ * A reusable container for displaying status updates, placeholders, or informational messages.
+ *
+ * Commonly used within page layouts to inform the user about ongoing processes
+ * or missing data states
  */
 function InfoPanel({ title, message }: InfoPanelProps) {
     return (
