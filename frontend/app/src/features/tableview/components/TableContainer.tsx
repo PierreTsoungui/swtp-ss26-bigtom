@@ -12,10 +12,23 @@ import HeatMap from "./heatmap/HeatMap.tsx";
 import SkeletonTable from "./SkeletonTable.tsx";
 import { TableExportButton } from "./TableExportButton";
 
+/**
+ * Central orchestrator for the results view, managing the lifecycle of data tables and exports.
+ *
+ * Responsibilities:
+ * - Coordinates state between {@link TableTabs}, {@link TableFilters}, and the {@link AnalysisTable}.
+ * - Synchronizes active filters, server-side sorting, and pagination logic.
+ * - Handles high-level data actions such as CSV exporting and heatmap integration.
+ *
+ * @remarks
+ * This component acts as the "Single Source of Truth" for the analysis results UI,
+ * ensuring that filters applied to the table are correctly forwarded to both
+ * the export utility and the {@link HeatMap} component.
+ */
 export function TableContainer() {
   const { job_id } = useParams();
-  
-  
+
+  /** Independent UI state for sorting, pagination, and active tab. */
   const { 
     activeTab, 
     setActiveTab, 
@@ -28,8 +41,8 @@ export function TableContainer() {
   const currentSort = sorting[activeTab];
   const currentPage = pagination[activeTab].page;
   const pageSize = pagination[activeTab].pageSize;
-  
-  // Filter-State
+
+  /** Management of draft (user input) vs. applied filter states. */
   const {
     draftFilters,
     appliedFilters,
@@ -39,6 +52,7 @@ export function TableContainer() {
     hasFilters,
   } = useTableFilters();
 
+  /** Main data fetching hook, triggered by jobId, sorting, filtering, or pagination changes. */
   const { data, loading, error } = useTableData(
     job_id ?? null,
     activeTab,
@@ -49,31 +63,27 @@ export function TableContainer() {
     pageSize
   );
 
-  /*const handleApplyFilters = () => {
-    applyFilters(activeTab);
-    // Seite zurücksetzen auf 1 (Filter ändert Ergebnismenge)
-    updatePage(activeTab, 1);
-  };
-
-  const handleResetFilters = () => {
-    resetFilters(activeTab);
-    updatePage(activeTab, 1);
-  };*/
-
+  /** Switches the active analysis context (DMP or DMR). */
   const handleTabChange = (tab: "dmp" | "dmr") => {
     setActiveTab(tab);
  
   };
 
+  /** Triggers server-side sorting for the current table. */
   const handleSort = (column: string) => {
     updateSorting(activeTab, column);
    
   };
 
+  /** Updates the pagination state and triggers a new data fetch. */
   const handlePageChange = (newPage: number) => {
     updatePage(activeTab, newPage);
   };
 
+  /**
+   * Generates and downloads a CSV export of the currently filtered and sorted view.
+   * Uses a generic parameter mapping to ensure consistency with the on-screen table.
+   */
   const handleDownload = async () => {
     if (!job_id) return;
 
@@ -94,6 +104,7 @@ export function TableContainer() {
       }
     });
 
+    // TODO: Diesen API Call auf eine Hook-Datei auslagern!
     try {
       const response = await fetch(
           `/api/v1/table/${job_id}/${activeTab}/export?${params.toString()}`
@@ -126,16 +137,6 @@ export function TableContainer() {
       {/* Tabs */}
       <TableTabs activeTab={activeTab} onChange={handleTabChange} />
 
-      {/* Filter */}
-      {/*<div className="mt-4">
-        <TableFilters
-          table={activeTab}
-          filters={draftFilters[activeTab]}
-          onChange={(field, value) => updateDraftFilter(activeTab, field, value)}
-          onApply={handleApplyFilters}
-          onReset={handleResetFilters}
-        />
-      </div>*/}
       {activeTab === "dmp" && (
           <TableFilters<DmpFilters>
               table="dmp"
@@ -172,7 +173,7 @@ export function TableContainer() {
       {/* Filter-Status */}
       {hasFilters(activeTab) && (
         <div className="mt-2 text-sm text-primary">
-          Gefiltert – {data?.pagination?.total_rows || 0} Einträge
+          Filtered – {data?.pagination?.total_rows || 0} Entries
         </div>
       )}
 
@@ -184,7 +185,7 @@ export function TableContainer() {
       {/* Error */}
       {error && (
         <div className="mt-4 p-4 bg-danger-badgeBackground border border-danger rounded-md text-danger-badgeText">
-          Fehler: {error}
+          Error: {error}
         </div>
       )}
 

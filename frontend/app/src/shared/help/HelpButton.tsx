@@ -13,8 +13,8 @@ interface HelpButtonProps {
     topic: HelpTopicId;
 
     /**
-     * Optional ARIA label for the trigger button.
-     * @default "Hilfe öffnen"
+     * Accessibility label for the trigger button.
+     * @default "Open help"
      */
     ariaLabel?: string;
 }
@@ -23,7 +23,7 @@ interface HelpButtonProps {
  * A small "?" button that opens an accessible modal dialog with contextual,
  * Markdown-formatted help for the given {@link HelpButtonProps.topic}.
  */
-function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
+function HelpButton({ topic, ariaLabel = "Open help" }: HelpButtonProps) {
     const { title, body } = helpTopics[topic];
 
     const [open, setOpen] = useState(false);

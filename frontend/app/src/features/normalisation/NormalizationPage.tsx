@@ -14,19 +14,20 @@ import ErrorMessage from "../../shared/error-handling/components/ErrorMessage.ts
 
 
 /**
- * Page zur Auswahl der Normalisierungsmethode.
- * Zeigt für jede Methode zwei Plots (Dichte und PCA) als Vorschau an.
- * Der Nutzer kann eine Methode auswählen und bestätigen, um die Normalisierung zu starten.
- * Während der Normalisierung wird ein Fortschrittsbalken angezeigt, bis die Batch-Seite geladen wird.
+ * Page for selecting and initiating the data normalization method.
  *
- * @note Die Plots werden als URLs vom Backend geliefert und direkt eingebunden.
- *       Für eine bessere UX können die Plots angeklickt werden, um sie in einem Modal zu vergrößern.
+ * Responsibilities:
+ * - Displays comparative visualizations (Density and PCA plots) for each method.
+ * - Manages method selection and triggers the server-side normalization process.
+ * - Synchronizes with {@link useJobPolling} to monitor progress until the
+ *   batch correction phase is reached.
  *
- * @returns JSX.Element
+ * @remarks
+ * Methods are displayed in a fixed order (defined in {@link METHOD_ORDER}),
+ * ensuring the 'RAW' unnormalized data is always shown as the baseline on the left.
  */
 export function NormalizationPage() {
   const { job_id } = useParams<{ job_id: string }>();
-  console.log("[NormalizationPage] job_id aus Params:", job_id);
   const navigate = useNavigate();
 
   const { data, isLoading, error, setError } = useNormalizationPreview(job_id ?? null);
@@ -35,8 +36,10 @@ export function NormalizationPage() {
   const [pcaMethod, setPcaMethod] = useState<MethodPreview | null>(null);
   const [isNormalising, setIsNormalising] = useState(false);
 
-  // Feste Spaltenreihenfolge mit RAW ganz links (NRM-01); unbekannte Methoden
-  // werden hinten angehängt, damit nichts verloren geht.
+  /**
+   * Computes a sorted list of methods.
+   * Ensures 'RAW' is first, followed by algorithms in their canonical order.
+  */
   const orderedMethods = useMemo(() => {
     const methods = data?.methods ?? [];
     return [...methods].sort(
@@ -49,14 +52,16 @@ export function NormalizationPage() {
   const jobStatus : JobStatus | null  = useJobPolling(isNormalising ? (job_id ?? null) : null);
 
   useEffect(() => {
-      console.log("[NormalizationPage] useEffect - jobStatus:", jobStatus?.status, "job_id:", job_id);
       if (!jobStatus) return;
       if (jobStatus.status === JobStatusValue.WAITING && jobStatus.phase === JobPhase.BATCH) {
-        console.log("Navigiere zu /batch/", job_id, "aktueller jobStatus:", jobStatus);
         navigate(`/batch/${job_id}`);
       }
   }, [jobStatus?.status, job_id, navigate]);
 
+  /**
+   * Submits the selected method to the backend.
+   * Transitions the UI into a polling/progress state upon success.
+   */
   const handleConfirm = async () => {
     if (!selected || !job_id) return;
     setIsSubmitting(true);

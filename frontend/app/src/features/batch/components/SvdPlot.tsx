@@ -2,12 +2,17 @@ import React from "react";
 import type { BatchRound } from "../utils/types";
 import { PlotView, type PlotSource } from "../../../shared/plots";
 
+/**
+ * Props for the SvdPlot component.
+ */
 export interface SvdPlotProps {
-  rounds: BatchRound[];
+    /** Array of correction rounds, each containing a diagnostic heatmap. */
+    rounds: BatchRound[];
 }
 
+
 /**
- * Static SVD diagnostic heatmaps across all correction rounds.
+ * Visualizes SVD (Singular Value Decomposition) diagnostic heatmaps for all correction rounds.
  *
  * Each plot is a server-rendered figure (PNG for display, vector PDF for
  * publication) shown through the shared {@link PlotView}, so display, zoom and

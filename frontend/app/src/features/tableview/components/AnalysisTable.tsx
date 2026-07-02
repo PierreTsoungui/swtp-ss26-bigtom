@@ -11,15 +11,32 @@ import {
   Box,
 } from "@mui/material";
 
-type Props = {
+/**
+ * Props for the AnalysisTable component.
+ */
+interface AnalysisTableProps {
+  /** The dataset containing row data, column definitions, and pagination metadata. */
   data: any;
+  /** Current active sorting criteria. */
   sorting?: {
     sort_by: string | null;
     sort_order: "asc" | "desc" | null;
   };
+  /** Callback fired when a sortable column header is clicked. */
   onSort?: (columnKey: string) => void;
+  /** Callback fired when the active page changes. */
   onPageChange?: (page: number) => void;
-};
+}
+/**
+ * Formats raw cell values based on their data type.
+ *
+ * Special handling for 'float' types:
+ * - Uses **exponential notation** for very small values (< 0.0001) to ensure scientific readability.
+ * - Trims unnecessary trailing zeros for cleaner presentation.
+ *
+ * @param value - The raw value to format.
+ * @param type - The expected data type (e.g., 'float', 'string').
+ */
 function formatCellValue(value: any, type: string): string {
   if (value === null || value === undefined) {
     return '—';
@@ -39,7 +56,13 @@ function formatCellValue(value: any, type: string): string {
   return String(value);
 }
 
-export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {}  }: Props) {
+/**
+ * A data table component optimized for displaying genomic analysis results (DMPs/DMRs).
+ *
+ * It supports dynamic column rendering, server-side sorting via {@link TableSortLabel},
+ * and dual-position pagination for better navigation in long datasets.
+ */
+export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {}  }: AnalysisTableProps) {
   if (!data || !data.columns || !data.data) {
     return (
       <div className="text-center py-12 bg-neutral-background rounded-md border border-neutral-borderDefault">
@@ -47,8 +70,6 @@ export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {} 
       </div>
     );
   }
-
-  
 
   return (
     <div className={"space-y-4"}>

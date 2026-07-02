@@ -1,9 +1,23 @@
 import { workflowSteps } from "./workflowSteps";
 
+
+/**
+ * Props for the StepIndicator component.
+ */
 interface StepIndicatorProps {
-  currentStepId?: number;
+    /**
+     * The ID of the currently active step.
+     * Used to highlight the current position in the sequence.
+     */
+    currentStepId?: number;
 }
 
+/**
+ * A visual progress tracker that displays the sequential steps of the analysis.
+ *
+ * It maps the static {@link workflowSteps} configuration to a breadcrumb-like
+ * navigation bar, highlighting the active step based on its ID.
+ */
 export function StepIndicator({ currentStepId }: StepIndicatorProps) {
   return (
     <nav aria-label="Schrittanzeige" className="w-full">

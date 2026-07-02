@@ -1,54 +1,38 @@
 /**
- * Interface, das die Statistiken der verschiedenen Filterungsschritte
- * während der Analyse beschreibt.
- *
- * @remarks
- * Die 3 Felder bilden die Basisstatistiken für jeden Filterungsschritt ab,
- * die in allen Schritten gleich sind. Sie können erweitert werden, um
- * spezifische Informationen für jeden Schritt zu speichern (z.B. die
- * verwendeten Cutoff-Werte).
+ * Common statistics for a single filtering step.
  */
 export interface BaseFilterStats {
-  /** Gibt an, ob der Filterungsschritt aktiviert war. */
+  /** Whether this filtering stage was active. */
   enabled: boolean;
-
-  /** Die Anzahl der Datensätze, die in diesem Schritt entfernt wurden. */
+  /** Number of probes removed during this step. */
   removed: number;
-
-  /** Die Anzahl der Datensätze, die nach diesem Schritt noch übrig sind. */
+  /** Number of probes remaining after this step. */
   after: number;
 }
 
 /**
- * Statistiken für den Bead-Count-Filterungsschritt.
- *
- * @remarks
- * Dieser Schritt filtert Sonden (Probes) heraus, die in zu vielen Proben
- * nicht die minimale Anzahl an physischen Kügelchen (Beads) erreicht haben.
- *
- * @see {@link BaseFilterStats} für die gemeinsamen Basis-Statistikfelder.
+ * Statistics for the Bead Count filtering stage.
  */
 export interface BeadCountStats extends BaseFilterStats {
-  /**
-   * Der maximale Prozentsatz erlaubter fehlerhafter Proben pro Sonde.
-   *
-   * @remarks
-   * Wert zwischen 0 und 1 (z. B. `0.05` für 5%). Eine Sonde fliegt aus der
-   * Analyse, wenn sie bei mehr als diesem Anteil aller Proben zu wenige Beads besitzt.
-   */
+  /** Maximum allowed fraction of failed samples per probe (0.0 - 1.0). */
   bead_cutoff: number;
 }
 
 export interface DetPStats extends BaseFilterStats {
+  /** Significance threshold used for detection p-values. */
   cutoff: number;
 }
 export interface MultiHitStats extends BaseFilterStats {}
 export interface NonCpgStats extends BaseFilterStats {}
 export interface SnpStats extends BaseFilterStats {
+  /** Minor Allele Frequency (MAF) threshold used for exclusion. */
   maf_cutoff: number
 }
 export interface XyChromosomeStats extends BaseFilterStats {}
 
+/**
+ * Quality control statistics evaluated at the sample level.
+ */
 export interface SampleQualityStats {
   enabled: boolean;
 
@@ -63,6 +47,9 @@ export interface SampleQualityStats {
   samples_removed: number;
 }
 
+/**
+ * Container for the complete filtering results and audit trail.
+ */
 export interface FilteringStatsType {
   total_start: number;
   total_end: number;
@@ -79,12 +66,13 @@ export interface FilteringStatsType {
 }
 
 /**
- * Interface, das die Informationen zu einem einzelnen Filterungsschritt beschreibt,
- * die in der {@link FilteringStats}-Komponente angezeigt werden.
+ * UI representation of a filtering step used in the results display.
  */
 export interface FilterStep {
   name: string;
+  /** Optional descriptive label for the filter's primary parameter. */
   label?: string;
+  /** The value associated with the label (e.g., the cutoff used). */
   labelValue?: number;
   removed: number;
   after: number;

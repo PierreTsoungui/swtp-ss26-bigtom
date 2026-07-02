@@ -5,27 +5,29 @@ import { defaultGroupColors } from "../utils/pcaColors";
 import { PlotView, type PlotSource } from "../../../shared/plots";
 
 /**
- * Props of the MethodCard component.
- * @property method      Preview of a method (density URL + PCA data).
- * @property isSelected  Whether this method is selected.
- * @property onSelect    Selection callback.
- * @property onPcaClick      Opens the interactive PCA viewer.
+ * Props for the MethodCard component.
  */
 interface MethodCardProps {
+  /** The preview data (Density URL and PCA dataset) for a specific normalization algorithm. */
   method: MethodPreview;
+  /** Indicates if this specific method is currently selected by the user. */
   isSelected: boolean;
+  /** Callback fired when the card or its select button is clicked. */
   onSelect: (method: NormalizationMethod) => void;
+  /** Callback to trigger the interactive PCA viewer overlay. */
   onPcaClick: (method: MethodPreview) => void;
 }
 
 /**
- * Card for one normalization method.
+ * A card component representing a single normalization method.
  *
- * UX: the whole card is clickable to select the method (so a click anywhere –
- * not just a tiny radio – selects it), and an explicit "Select" button at the
- * bottom makes the action unmistakable and keyboard-accessible. The two plots
- * stay independently interactive (enlarge / open the PCA viewer) by stopping
- * click propagation, so they never trigger an accidental selection.
+ * It provides a comparative overview through:
+ * 1. A static **Density Plot** (enlargeable on click).
+ * 2. A mini **PCA Plot** (opens the interactive viewer on click).
+ *
+ * To ensure a smooth UX, clicking the card body selects the method, while clicks
+ * on individual plots are intercepted (propagation stopped) to trigger their
+ * respective diagnostic tools.
  */
 function MethodCard({
   method,

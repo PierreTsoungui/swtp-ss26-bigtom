@@ -1,5 +1,8 @@
 import logo from "../../assets/logo.svg";
 
+/**
+ * Displays the platform's primary branding logo.
+ */
 export function LandingLogo() {
   return (
     <div className="flex w-full max-w-xl items-center justify-center">

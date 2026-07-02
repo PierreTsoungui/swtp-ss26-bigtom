@@ -11,6 +11,10 @@ import {
 import type { RoleSelection } from "../components/ColumnRoleMapper";
 import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from "../utils/types";
 
+
+/**
+ * Current operational state of the upload process.
+ */
 export type UploadStatus = "idle" | "inspecting" | "review" | "committing";
 
 const EMPTY_MAPPING: RoleSelection = {
@@ -22,7 +26,9 @@ const EMPTY_MAPPING: RoleSelection = {
 
 const ROLE_KEYS: RoleKey[] = ["sentrix_id", "sentrix_position", "sample_group", "sample_name"];
 
-/** Initial role selection for a sheet: the backend suggestion, else all empty. */
+/**
+ * Initial role selection for a sheet: uses backend suggestions or defaults to empty.
+ */
 function prefillMapping(sheet: SampleSheetCandidate | null): RoleSelection {
   if (!sheet) return EMPTY_MAPPING;
   const sm = sheet.suggested_mapping;
@@ -34,13 +40,15 @@ function prefillMapping(sheet: SampleSheetCandidate | null): RoleSelection {
   };
 }
 
+
 /**
- * Orchestrates the inspect → review → commit upload flow (UPL-01).
+ * Orchestrates the "Inspect → Review → Commit" upload workflow.
  *
- * Removal of a wrong IDAT pair or an extra sample sheet is a client-side
- * exclusion (no re-inspect); adding files re-inspects the combined set. The
- * start action is only allowed once exactly one sample sheet and at least one
- * complete IDAT pair remain — the backend enforces the same on commit.
+ * This hook manages the lifecycle of a staging session, including file validation,
+ * metadata role assignment, and final analysis submission.
+ *
+ * @param onStarted - Callback triggered with the new `jobId` after a successful commit.
+ * @returns An object containing the current workflow state and action handlers.
  */
 export function useUploadFlow(onStarted: (jobId: string) => void) {
   const [status, setStatus] = useState<UploadStatus>("idle");

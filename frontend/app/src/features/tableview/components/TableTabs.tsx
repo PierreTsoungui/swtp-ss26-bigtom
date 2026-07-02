@@ -1,9 +1,22 @@
 import HelpButton from "../../../shared/help/HelpButton";
 
+/**
+ * Props for the TableTabs component.
+ */
 type Props = {
+  /** The currently active results view. */
   activeTab: "dmp" | "dmr";
+  /** Callback fired when the user switches between DMP and DMR views. */
   onChange: (tab: "dmp" | "dmr") => void;
 };
+
+/**
+ * A navigation header to toggle between Differentially Methylated Position (DMP)
+ * and Region (DMR) result tables.
+ *
+ * It synchronizes the {@link HelpButton} content based on the selected tab
+ * to provide context-specific biological and technical information.
+ */
 export function TableTabs({ activeTab, onChange }: Props) {
   return (
     <div className="flex items-end justify-between gap-4 border-b border-neutral-borderDefault">
