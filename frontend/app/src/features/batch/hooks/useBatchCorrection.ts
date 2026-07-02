@@ -5,6 +5,15 @@ import type {
   BatchErrorDetail,
 } from "../utils/types";
 
+/**
+ * Orchestrates the batch effect correction workflow.
+ *
+ * Manages the retrieval of the SVD history, execution of new correction
+ * rounds, and the transition to final analysis by skipping further corrections.
+ *
+ * @param jobId - The unique identifier of the analysis job.
+ * @param onSkipSuccess - Callback triggered after successfully finalizing/skipping corrections.
+ */
 export const useBatchCorrection = (
     jobId: string | undefined,
     onSkipSuccess: () => void
@@ -28,6 +37,9 @@ export const useBatchCorrection = (
 
   const API_BASE = "/api/v1";
 
+  /**
+   * Refreshes the batch history and SVD plot list from the server.
+   */
   const fetchHistory = useCallback(async () => {
     if (!jobId) return;
 

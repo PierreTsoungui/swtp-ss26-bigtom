@@ -1,32 +1,37 @@
 import { useParams } from "react-router-dom";
 import React, { useEffect, useState } from "react";
-
 import { BatchForm } from "./components/BatchForm";
 import { SvdPlot } from "./components/SvdPlot";
-
 import { useBatchParameters } from "./hooks/useBatchParameters";
 import { useBatchCorrection } from "./hooks/useBatchCorrection";
 import { useJobPolling } from "../analysis/hooks/useJobPolling";
-
 import Progressbar from "../../shared/components/Progressbar";
 import { colors } from "../../shared/theme/colors";
-
 import type { BatchFormData, GroupSelection } from "./utils/types";
 import {useNavigate} from "react-router";
 import {JobPhase, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 
+/**
+ * Main view for identifying and mitigating technical batch effects.
+ *
+ * Responsibilities:
+ * - Visualizes variance components via {@link SvdPlot} based on the analysis history.
+ * - Collects user configuration for batch variables and covariates via {@link BatchForm}.
+ * - Manages the transition to downstream differential methylation analysis (DMP/DMR).
+ * - Monitors long-running server-side corrections using {@link useJobPolling}.
+ */
 const BatchPage: React.FC = () => {
   const { job_id } = useParams<{ job_id: string }>();
   const [showProgressBar, setShowProgressBar] = useState(false);
   const navigate = useNavigate();
 
-  // Dropdown Werte
+  /** Fetches available metadata columns for the dropdown selections. */
   const {
     parameters,
     isLoading: parametersLoading,
   } = useBatchParameters(job_id ?? null);
 
-  // Batch Workflow
+  /** Logic for submitting batch correction or skipping to final analysis. */
   const {
     history,
     loading: historyLoading,
@@ -39,12 +44,11 @@ const BatchPage: React.FC = () => {
 
   const [pollingKey, setPollingKey] = useState(0);
 
-  // Status Polling
+  /** Polls the backend when a correction or downstream analysis is active. */
   const jobStatus = useJobPolling(
       showProgressBar && job_id ? job_id : null,
       pollingKey
   );
-  // TODO: Prüfen, wo SVD + RUNNING eingesetzt werden muss
   const batchRunning = isSubmitting && jobStatus?.status === JobStatusValue.RUNNING;
 
   // Erfolgreich beendet
@@ -71,7 +75,7 @@ const BatchPage: React.FC = () => {
     if (batchFinished && showProgressBar) {
       setShowProgressBar(false);
       fetchHistory();
-      // TODO: Prüfen, ob hier ein return hin muss?
+      return;
     }
 
   }, [jobStatus, showProgressBar, fetchHistory, navigate , job_id ]);

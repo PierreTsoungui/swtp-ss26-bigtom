@@ -1,15 +1,21 @@
 import { useEffect, useState } from "react";
 import type { SampleSheetPreview } from "../utils/types";
 
+/**
+ * Props for the SampleSheetPreviewModal component.
+ */
 interface Props {
+  /** Unique identifier for the analysis job. */
   jobId: string;
+  /** Callback to close the modal. */
   onClose: () => void;
 }
 
 /**
- * Read-only preview of the job's sample sheet. Because a column carrying the
- * biological group can have ANY name, the biologist uses this table to identify
- * which column to protect and which to remove.
+ * A read-only tabular preview of the job's sample sheet.
+ *
+ * This table helps users identify which metadata columns to protect (biological signal)
+ * and which to remove (technical batch effects) during the correction phase.
  */
 function SampleSheetPreviewModal({ jobId, onClose }: Props) {
   const [preview, setPreview] = useState<SampleSheetPreview | null>(null);

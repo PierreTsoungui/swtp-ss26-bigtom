@@ -1,17 +1,24 @@
 import React, { useState } from "react";
 import type { BatchRound } from "../utils/types";
 
+/**
+ * Props for the SvdPlot component.
+ */
 export interface SvdPlotProps {
-  rounds: BatchRound[];
+    /** Array of correction rounds, each containing a diagnostic heatmap. */
+    rounds: BatchRound[];
 }
 
+
 /**
- * Static SVD diagnostic heatmaps across all correction rounds.
+ * Visualizes SVD (Singular Value Decomposition) diagnostic heatmaps for all correction rounds.
  *
- * Each plot is a server-rendered figure (PNG for display, vector PDF for
- * publication). Reading aid: a strong colour in a *technical* row = batch
- * effect; after correction it should fade, while the *biological* row you
- * protected should stay coloured (signal preserved).
+ * **Interpretation Guide:**
+ * - **Strong color in a technical row**: Indicates a batch effect.
+ * - **After correction**: Technical associations should fade.
+ * - **Protected biological rows**: Should retain color (signal preservation).
+ *
+ * Supports full-screen enlargement and vector PDF downloads for publications.
  */
 export const SvdPlot: React.FC<SvdPlotProps> = ({ rounds }) => {
   const [enlarged, setEnlarged] = useState<BatchRound | null>(null);

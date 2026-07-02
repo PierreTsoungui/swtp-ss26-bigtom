@@ -15,31 +15,27 @@ import { colors } from "../../../shared/theme/colors";
 import SampleSheetPreviewModal from "./SampleSheetPreviewModal.tsx";
 
 /**
- * Props für die {@link BatchForm} Komponente.
+ * Props for the {@link BatchForm} component.
  */
 interface BatchFormProps {
-    /** Die vom Server oder der API bereitgestellten Parameter und verfügbaren Spalten. */
+    /** Available metadata columns and group values provided by the API. */
     parameters: BatchParametersResponse;
-    /** Callback-Funktion, die beim erfolgreichen Absenden des Formulars aufgerufen wird. */
+    /** Callback to trigger a new batch correction round. */
     onSubmit: (data: BatchFormData) => void;
-    /** Zeigt an, ob die Batch-Korrektur aktuell verarbeitet wird (deaktiviert Interaktionen). */
+    /** Disables interactions while a correction is in progress. */
     isLoading?: boolean;
-    /** Proceed to the DMP/DMR analysis with the chosen comparison (case/control). */
+    /** Finalizes the workflow and proceeds to DMP/DMR analysis with the chosen comparison. */
     onSkip?: (selection?: GroupSelection) => void;
-
-    // isSkipping?: boolean;
 }
 
+
 /**
- * Ein Formular zur Konfiguration und Durchführung einer Batch-Effekt-Korrektur.
+ * A configuration interface for identifying and correcting technical batch effects.
  *
- * Erlaubt die Auswahl einer primären Batch-Variable (technischer Faktor) sowie optionaler
- * Covariates (biologische Gruppen), die während der Korrektur geschützt werden sollen.
- * Stellt sicher, dass die Batch-Variable nicht gleichzeitig als Covariate ausgewählt wird.
- *
- * @component
- * @param props - Die Props der Komponente gemäß {@link BatchFormProps}.
- * @returns Das gerenderte Batch-Korrektur-Formular als React-Element.
+ * It allows the user to:
+ * 1. Select a **Batch Variable** (technical noise) to be removed.
+ * 2. Define **Covariates** (biological signal) to be protected.
+ * 3. Configure the **Case vs. Control** groups for final differential analysis.
  */
 export function BatchForm({
                               parameters,
