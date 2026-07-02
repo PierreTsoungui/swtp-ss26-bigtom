@@ -93,6 +93,8 @@ frontend/app/.vite/
 *.key
 *.cert
 *.crt
+certs/*
+!certs/.gitkeep
 secrets/
 
 

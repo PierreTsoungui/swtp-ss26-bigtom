@@ -82,7 +82,7 @@ Important limitations:
 - Some frontend batch/SVD code still references `http://localhost:8000`, which matters for non-local deployments.
 - Integration workflows require valid biological test data and prepared job state; they are not guaranteed to run from an empty checkout.
 
-## System Architecture
+Aktuell ist der Upload ausschließlich über **https://localhost:3000/upload** verfügbar.
 
 ```mermaid
 flowchart LR
@@ -404,29 +404,29 @@ Create `.env` from `.env.example` for Docker Compose:
 cp .env.example .env
 ```
 
-| Variable | Purpose | Default in repository | Required | Notes |
-| --- | --- | --- | --- | --- |
-| `JOB_BASE_DIR` | Base directory for uploaded job files and generated outputs | `/app/jobs` in `.env.example` and Docker Compose; `./jobs` in backend code if unset | Yes for predictable operation | Must match the mounted job directory in Docker. |
-| `JOB_RETENTION_HOURS` | Age threshold for automatic job directory cleanup | `24` | Yes | Must be a positive number. Also used to calculate job expiration timestamps. |
-| `JOB_CLEANUP_INTERVAL_SECONDS` | Interval between cleanup scans | `86400` | Yes | Must be a positive integer. |
-| `PYTHONUNBUFFERED` | Forces unbuffered Python output in the backend container | `1` in `docker-compose.yml` | No | Useful for real-time Docker logs. |
-| `OMP_NUM_THREADS` | Limits OpenMP thread count in R worker | `1` in `docker-compose.yml` | No | Reduces resource contention. |
-| `OPENBLAS_NUM_THREADS` | Limits OpenBLAS thread count in R worker | `1` in `docker-compose.yml` | No | Reduces resource contention. |
-| `MKL_NUM_THREADS` | Limits MKL thread count in R worker | `1` in `docker-compose.yml` | No | Reduces resource contention. |
-| `BLAS_NUM_THREADS` | Limits BLAS thread count in R worker | `1` in `docker-compose.yml` | No | Reduces resource contention. |
-| `BIOCPARALLEL_WORKER_NUMBER` | Limits Bioconductor parallel workers | `1` in `docker-compose.yml` | No | Reduces memory pressure. |
-| `R_BIOC_PARALLEL_WORKERS` | Limits R/Bioconductor parallel workers | `1` in `docker-compose.yml` | No | Reduces memory pressure. |
+| Variable                       | Purpose                                                     | Default in repository                                                               | Required                      | Notes                                                                        |
+|--------------------------------|-------------------------------------------------------------|-------------------------------------------------------------------------------------|-------------------------------|------------------------------------------------------------------------------|
+| `JOB_BASE_DIR`                 | Base directory for uploaded job files and generated outputs | `/app/jobs` in `.env.example` and Docker Compose; `./jobs` in backend code if unset | Yes for predictable operation | Must match the mounted job directory in Docker.                              |
+| `JOB_RETENTION_HOURS`          | Age threshold for automatic job directory cleanup           | `24`                                                                                | Yes                           | Must be a positive number. Also used to calculate job expiration timestamps. |
+| `JOB_CLEANUP_INTERVAL_SECONDS` | Interval between cleanup scans                              | `86400`                                                                             | Yes                           | Must be a positive integer.                                                  |
+| `PYTHONUNBUFFERED`             | Forces unbuffered Python output in the backend container    | `1` in `docker-compose.yml`                                                         | No                            | Useful for real-time Docker logs.                                            |
+| `OMP_NUM_THREADS`              | Limits OpenMP thread count in R worker                      | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
+| `OPENBLAS_NUM_THREADS`         | Limits OpenBLAS thread count in R worker                    | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
+| `MKL_NUM_THREADS`              | Limits MKL thread count in R worker                         | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
+| `BLAS_NUM_THREADS`             | Limits BLAS thread count in R worker                        | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
+| `BIOCPARALLEL_WORKER_NUMBER`   | Limits Bioconductor parallel workers                        | `1` in `docker-compose.yml`                                                         | No                            | Reduces memory pressure.                                                     |
+| `R_BIOC_PARALLEL_WORKERS`      | Limits R/Bioconductor parallel workers                      | `1` in `docker-compose.yml`                                                         | No                            | Reduces memory pressure.                                                     |
 
 No real secrets are defined in `.env.example`.
 
 ## Application URLs and API Documentation
 
-| Target | URL |
-| --- | --- |
-| Frontend | <http://localhost:3000> |
-| Upload page | <http://localhost:3000/upload> |
-| Backend root | <http://localhost:8000/> |
-| Swagger UI | <http://localhost:8000/docs> |
+| Target       | URL                                  |
+|--------------|--------------------------------------|
+| Frontend     | <http://localhost:3000>              |
+| Upload page  | <http://localhost:3000/upload>       |
+| Backend root | <http://localhost:8000/>             |
+| Swagger UI   | <http://localhost:8000/docs>         |
 | OpenAPI JSON | <http://localhost:8000/openapi.json> |
 
 Frontend routes implemented in `frontend/app/src/App.tsx`:
@@ -443,26 +443,26 @@ Main API endpoints implemented by FastAPI:
 
 Swagger UI at `/docs` is the authoritative complete API reference for a running backend. The table below lists the verified primary routes from the current FastAPI routers.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/` | Backend root message and API version. |
-| `POST` | `/api/v1/upload` | Upload IDAT files, Sample Sheet, and filter settings. |
-| `GET` | `/api/v1/status/{job_id}` | Read in-memory job status. |
-| `GET` | `/api/v1/filter/{job_id}/stats` | Read filtering statistics after filtering output is available. |
-| `GET` | `/api/v1/preview/normalization/{job_id}` | Read normalization preview metadata. |
-| `GET` | `/api/v1/preview/normalization/{job_id}/{plot_name}` | Download normalization preview PNG files. |
-| `POST` | `/api/v1/normalize/{job_id}` | Start normalization. |
-| `POST` | `/api/v1/reset/{job_id}` | Cancel/reset a cancelable job. |
-| `GET` | `/api/v1/batch/{job_id}/batch-options` | Read eligible Sample Sheet columns for batch correction. |
-| `GET` | `/api/v1/batch/{job_id}/history` | Read batch correction history. |
-| `POST` | `/api/v1/batch/{job_id}` | Start batch correction. |
-| `POST` | `/api/v1/batch/{job_id}/skip` | Skip batch correction and start downstream analysis. |
-| `GET` | `/api/v1/batch/{job_id}/svd-plot/{round_id}` | Download an SVD plot. |
-| `GET` | `/api/v1/table/{job_id}/{table}` | Read paginated `dmp` or `dmr` results. |
-| `GET` | `/api/v1/table/{job_id}/{table}/export` | Export `dmp` or `dmr` results as CSV. |
-| `GET` | `/api/v1/heatmap/{job_id}/options` | Read eligible Sample Sheet columns for heatmaps. |
-| `POST` | `/api/v1/heatmap/{job_id}` | Start heatmap generation. |
-| `GET` | `/api/v1/heatmap/{job_id}` | Download `heatmap.png`. |
+| Method | Path                                                 | Purpose                                                        |
+|--------|------------------------------------------------------|----------------------------------------------------------------|
+| `GET`  | `/`                                                  | Backend root message and API version.                          |
+| `POST` | `/api/v1/upload`                                     | Upload IDAT files, Sample Sheet, and filter settings.          |
+| `GET`  | `/api/v1/status/{job_id}`                            | Read in-memory job status.                                     |
+| `GET`  | `/api/v1/filter/{job_id}/stats`                      | Read filtering statistics after filtering output is available. |
+| `GET`  | `/api/v1/preview/normalization/{job_id}`             | Read normalization preview metadata.                           |
+| `GET`  | `/api/v1/preview/normalization/{job_id}/{plot_name}` | Download normalization preview PNG files.                      |
+| `POST` | `/api/v1/normalize/{job_id}`                         | Start normalization.                                           |
+| `POST` | `/api/v1/reset/{job_id}`                             | Cancel/reset a cancelable job.                                 |
+| `GET`  | `/api/v1/batch/{job_id}/batch-options`               | Read eligible Sample Sheet columns for batch correction.       |
+| `GET`  | `/api/v1/batch/{job_id}/history`                     | Read batch correction history.                                 |
+| `POST` | `/api/v1/batch/{job_id}`                             | Start batch correction.                                        |
+| `POST` | `/api/v1/batch/{job_id}/skip`                        | Skip batch correction and start downstream analysis.           |
+| `GET`  | `/api/v1/batch/{job_id}/svd-plot/{round_id}`         | Download an SVD plot.                                          |
+| `GET`  | `/api/v1/table/{job_id}/{table}`                     | Read paginated `dmp` or `dmr` results.                         |
+| `GET`  | `/api/v1/table/{job_id}/{table}/export`              | Export `dmp` or `dmr` results as CSV.                          |
+| `GET`  | `/api/v1/heatmap/{job_id}/options`                   | Read eligible Sample Sheet columns for heatmaps.               |
+| `POST` | `/api/v1/heatmap/{job_id}`                           | Start heatmap generation.                                      |
+| `GET`  | `/api/v1/heatmap/{job_id}`                           | Download `heatmap.png`.                                        |
 
 ## Testing
 
@@ -553,7 +553,7 @@ For a Compose-based deployment:
 
 Deployment considerations:
 
-- Exposed host ports are `3000` for the frontend and `8000` for the backend.
+- Exposed host ports are `80` and `443` for the frontend and `8000` for the backend.
 - The frontend nginx config proxies `/api/` to the backend service inside the Compose network.
 - TLS termination and public reverse proxy rules must be provided outside this repository.
 - `./jobs` is bind-mounted host storage and may contain sensitive biological data.
