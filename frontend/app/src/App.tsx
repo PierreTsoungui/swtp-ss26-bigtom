@@ -11,11 +11,10 @@ import { LandingPage } from "./features/landing/LandingPage.tsx";
 
 
 /**
- * Diese Komponente nur nutzen, um die Navigierung der Pages mittels
- * React-Router zu managen und zu den entsprechenden Komponenten zu leiten,
- * die im features-Ordner liegen. Alle globalen Provider oder Kontext-Wrapper können hier hinzugefügt werden,
- * um sie in der gesamten App verfügbar zu machen.
- * @returns 
+ * The main application component that manages routing and navigation.
+ *
+ * Maps URL paths to feature-based views and serves as the container
+ * for global layout structures and application-wide context providers.
  */
 function App() {
   return (

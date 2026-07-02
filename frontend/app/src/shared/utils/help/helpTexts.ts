@@ -1,3 +1,10 @@
+/**
+ * A collection of educational and instructional help texts for the application.
+ *
+ * These strings are formatted in Markdown and provide users with detailed
+ * guidance on technical requirements, data processing methodologies,
+ * and interpretation of results.
+ */
 export const helpTexts = {
   upload: `What files are required for the analysis?
 

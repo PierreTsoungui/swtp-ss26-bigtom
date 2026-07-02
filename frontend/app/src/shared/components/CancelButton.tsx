@@ -1,19 +1,23 @@
+import type {JSX} from "react";
+
 /**
- * Props für die Abbruch Button
- * @property onCancel - Funktion, die aufgerufen wird, wenn der Button geklickt wird
- * @property disabled - Optionales Flag, das angibt, ob der Button deaktiviert sein soll (Standard: false)
+ * Props for the CancelButton component.
  */
 type CancelButtonProps = {
+    /** Callback function called when the button is clicked. */
     onCancel: () => void;
+
+    /**
+     * Indicates whether the button is disabled.
+     * @default false
+     */
     disabled?: boolean;
 }
 
 /**
- * Komponente, die einen Button zum Abbrechen der Analyse anzeigt.
- * @param props - Props der CancelButton-Komponente
- * @constructor
+ * A button component that allows the user to cancel an action.
  */
-function CancelButton({ onCancel, disabled = false, }: CancelButtonProps) {
+function CancelButton({ onCancel, disabled = false, }: CancelButtonProps) : JSX.Element {
     return (
         <div className="flex justify-center">
             <button

@@ -1,5 +1,11 @@
 import { Link } from "react-router";
 
+/**
+ * The global application footer.
+ *
+ * Displays the project branding, attribution to the Software Engineering Project
+ * at Technische Hochschule Mittelhessen, and links to legal information.
+ */
 export function AppFooter() {
   return (
     <footer className="border-t border-neutral-borderDefault bg-neutral-card px-6 py-6 text-sm text-neutral-textSecondary">
