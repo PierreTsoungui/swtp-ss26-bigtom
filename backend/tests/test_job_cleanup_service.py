@@ -1,8 +1,8 @@
-"""Prüft die automatische Bereinigung abgelaufener Job-Daten.
+"""Tests for the automatic cleanup of expired job data.
 
-Dieses Testmodul stellt sicher, dass der Cleanup-Service alte Job-Ordner
-korrekt löscht, aktuelle Job-Ordner beibehält, Fehler robust behandelt
-und automatisch über den FastAPI-Lifespan gestartet wird.
+This test module ensures that the cleanup service correctly deletes old job
+directories, keeps recent job directories, handles errors robustly, and is
+automatically started via the FastAPI lifespan.
 """
 
 import asyncio
@@ -21,28 +21,28 @@ from app.services.job_cleanup_service import (
 
 
 def set_age(path, age_seconds):
-    """Setzt das Änderungsdatum einer Datei oder eines Ordners künstlich zurück.
+    """Artificially set the modification time of a file or directory.
 
-    Warum?
-    Für die Cleanup-Tests müssen Job-Ordner simuliert werden, die bereits
-    älter als die konfigurierte Aufbewahrungsdauer sind.
+    Why?
+    For cleanup tests, job directories need to be simulated as older than
+    the configured retention period.
     """
     timestamp = time.time() - age_seconds
     os.utime(path, (timestamp, timestamp))
 
 
 def test_expired_job_directory_is_deleted(tmp_path):
-    """Prüft, dass ein abgelaufener Job-Ordner gelöscht wird.
+    """Test that an expired job directory is deleted.
 
-    Der Test erstellt einen Job-Ordner, setzt sein Änderungsdatum auf zwei
-    Stunden in der Vergangenheit und verwendet eine Aufbewahrungsdauer von
-    einer Stunde. Dadurch muss der Ordner als abgelaufen gelten.
+    Creates a job directory, sets its modification time to two hours ago,
+    and uses a retention period of one hour. The directory should be
+    considered expired and deleted.
     """
     job_dir = tmp_path / "expired-job"
     job_dir.mkdir()
     (job_dir / "result.csv").write_text("result", encoding="utf-8")
 
-    # Der Ordner wird künstlich älter gemacht als die erlaubte Retention.
+    # Artificially age the directory beyond the retention period
     set_age(job_dir, age_seconds=2 * 3600)
 
     deleted_count = cleanup_expired_jobs(tmp_path, retention_hours=1)
@@ -52,15 +52,15 @@ def test_expired_job_directory_is_deleted(tmp_path):
 
 
 def test_recent_job_directory_is_kept(tmp_path):
-    """Prüft, dass ein noch nicht abgelaufener Job-Ordner erhalten bleibt.
+    """Test that a recent job directory is preserved.
 
-    Der Job-Ordner ist nur 30 Minuten alt. Bei einer Aufbewahrungsdauer von
-    einer Stunde darf er deshalb nicht gelöscht werden.
+    The job directory is only 30 minutes old. With a retention period of
+    one hour, it should not be deleted.
     """
     job_dir = tmp_path / "recent-job"
     job_dir.mkdir()
 
-    # Der Ordner ist jünger als die konfigurierte Aufbewahrungsdauer.
+    # Directory is younger than the configured retention period
     set_age(job_dir, age_seconds=30 * 60)
 
     deleted_count = cleanup_expired_jobs(tmp_path, retention_hours=1)
@@ -70,12 +70,11 @@ def test_recent_job_directory_is_kept(tmp_path):
 
 
 def test_missing_jobs_directory_does_not_fail(tmp_path):
-    """Prüft, dass ein fehlendes Job-Verzeichnis keinen Fehler verursacht.
+    """Test that a missing job directory does not cause an error.
 
-    Warum?
-    Beim ersten Start des Backends oder in bestimmten Testumgebungen kann es
-    sein, dass das Job-Verzeichnis noch nicht existiert. Der Cleanup darf dann
-    nicht abstürzen.
+    Why?
+    When the backend starts for the first time or in certain test environments,
+    the job directory may not exist yet. The cleanup must not crash.
     """
     missing_dir = tmp_path / "missing"
 
@@ -85,16 +84,16 @@ def test_missing_jobs_directory_does_not_fail(tmp_path):
 
 
 def test_regular_files_are_ignored(tmp_path):
-    """Prüft, dass normale Dateien im Job-Verzeichnis ignoriert werden.
+    """Test that regular files in the job directory are ignored.
 
-    Der Cleanup-Service soll nur Job-Ordner löschen. Einzelne Dateien im
-    Basisverzeichnis dürfen nicht entfernt werden.
+    The cleanup service should only delete job directories. Individual files
+    in the base directory must not be removed.
     """
     regular_file = tmp_path / "keep-me.txt"
     regular_file.write_text("not a job", encoding="utf-8")
 
-    # Auch wenn die Datei alt ist, darf sie nicht gelöscht werden,
-    # weil der Cleanup nur Verzeichnisse entfernt.
+    # Even if the file is old, it must not be deleted because the cleanup
+    # only removes directories.
     set_age(regular_file, age_seconds=2 * 3600)
 
     deleted_count = cleanup_expired_jobs(tmp_path, retention_hours=1)
@@ -104,14 +103,14 @@ def test_regular_files_are_ignored(tmp_path):
 
 
 def test_cleanup_logs_deleted_directory(tmp_path, caplog):
-    """Prüft, dass das Löschen eines Job-Ordners protokolliert wird.
+    """Test that deleting a job directory is logged.
 
-    Das ist wichtig, damit Löschvorgänge später nachvollziehbar sind.
+    This is important so that deletion operations are traceable later.
     """
     job_dir = tmp_path / "expired-job"
     job_dir.mkdir()
 
-    # Der Ordner ist älter als die erlaubte Retention und muss gelöscht werden.
+    # Directory is older than the retention period and must be deleted
     set_age(job_dir, age_seconds=2 * 3600)
 
     with caplog.at_level("INFO"):
@@ -123,28 +122,27 @@ def test_cleanup_logs_deleted_directory(tmp_path, caplog):
 
 
 def test_cleanup_loop_continues_after_unexpected_error(monkeypatch, caplog):
-    """Prüft, dass unerwartete Fehler im Cleanup geloggt werden.
+    """Test that unexpected errors in cleanup are logged.
 
-    Die Cleanup-Schleife darf nicht stillschweigend abbrechen, wenn beim
-    Bereinigen ein Fehler auftritt. Deshalb wird hier ein Fehler simuliert
-    und anschließend geprüft, ob er korrekt protokolliert wurde.
+    The cleanup loop must not silently stop when an error occurs during
+    cleanup. An error is simulated and then checked for proper logging.
     """
     cleanup_calls = 0
 
     def failing_cleanup(*args):
-        """Simuliert einen Fehler während der Bereinigung."""
+        """Simulate an error during cleanup."""
         nonlocal cleanup_calls
         cleanup_calls += 1
         raise RuntimeError("cleanup failed")
 
     async def stop_after_first_iteration(_interval):
-        """Beendet die Schleife nach der ersten Iteration kontrolliert für den Test."""
+        """Stop the loop after the first iteration for controlled testing."""
         raise asyncio.CancelledError
 
-    # Die echte Cleanup-Funktion wird durch eine fehlerwerfende Funktion ersetzt.
+    # Replace the real cleanup function with a failing one
     monkeypatch.setattr(job_cleanup_service, "cleanup_expired_jobs", failing_cleanup)
 
-    # asyncio.sleep wird ersetzt, damit der Test nicht wirklich warten muss.
+    # Replace asyncio.sleep so the test doesn't actually wait
     monkeypatch.setattr(
         job_cleanup_service.asyncio,
         "sleep",
@@ -160,24 +158,24 @@ def test_cleanup_loop_continues_after_unexpected_error(monkeypatch, caplog):
 
 
 def test_lifespan_starts_cleanup_task(monkeypatch):
-    """Prüft, dass der Cleanup-Dienst beim FastAPI-Start automatisch startet.
+    """Test that the cleanup service starts automatically with FastAPI.
 
-    Der echte Cleanup-Loop wird durch eine kontrollierte Testfunktion ersetzt.
-    Dadurch kann geprüft werden, ob FastAPI beim Start eine Hintergrundaufgabe
-    für den Cleanup erstellt und diese beim Shutdown wieder beendet.
+    The real cleanup loop is replaced with a controlled test function.
+    This verifies that FastAPI creates a background task for cleanup on
+    startup and stops it on shutdown.
     """
 
     async def exercise_lifespan():
-        """Führt den FastAPI-Lifespan im Test aus."""
+        """Execute the FastAPI lifespan within the test."""
         started = asyncio.Event()
         keep_running = asyncio.Event()
 
         async def fake_cleanup_loop():
-            """Simuliert einen dauerhaft laufenden Cleanup-Dienst."""
+            """Simulate a continuously running cleanup service."""
             started.set()
             await keep_running.wait()
 
-        # Der echte Cleanup-Loop wird ersetzt, damit der Test kontrollierbar bleibt.
+        # Replace the real cleanup loop to keep the test controllable
         monkeypatch.setattr(
             main_module,
             "run_job_cleanup_loop",
@@ -188,10 +186,10 @@ def test_lifespan_starts_cleanup_task(monkeypatch):
             await asyncio.wait_for(started.wait(), timeout=1)
             cleanup_task = main_module.app.state.job_cleanup_task
 
-            # Während der Anwendungslaufzeit muss die Cleanup-Task aktiv sein.
+            # During application runtime, the cleanup task must be active
             assert not cleanup_task.done()
 
-        # Nach dem Verlassen des Lifespans muss die Task sauber abgebrochen sein.
+        # After exiting the lifespan, the task must be properly cancelled
         assert cleanup_task.cancelled()
 
     asyncio.run(exercise_lifespan())
