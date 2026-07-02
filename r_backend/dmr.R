@@ -283,7 +283,16 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
       maxGap     = max_gap,
       B          = n_bootstraps
     ),
-    error = function(e) emit_error(sprintf("ChAMP DMR execution failed: %s", conditionMessage(e)))
+    error = function(e) {
+      msg <- conditionMessage(e)
+      # champ.DMR aborts with "No DMR detected." when Bumphunter finds zero
+      # regions. Finding no DMRs is a valid scientific outcome, not a failure, so
+      # route it to the empty-result path (status 0, empty table) instead of
+      # failing the whole job — otherwise the downstream steps are blocked by a
+      # result that simply says "no regions".
+      if (grepl("No DMR detected", msg, ignore.case = TRUE)) return(list(BumphunterDMR = NULL))
+      emit_error(sprintf("ChAMP DMR execution failed: %s", msg))
+    }
   )
   if (is.null(dmr_raw)) emit_error("Analysis anomaly: champ.DMR returned NULL.")
 

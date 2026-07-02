@@ -1,32 +1,42 @@
 #!/usr/bin/env Rscript
-
-# =============================================================================
-# NORMALIZATION PREVIEW
+# r_backend/normalization_preview.R
 #
-# DESCRIPTION:
-#   - Loads the filtered RGChannelSet produced by init_filter.R
-#   - Runs several normalization methods (RAW, NOOB, QUANTILE, SWAN, FUNNORM)
-#   - Per method, writes a density plot as PNG (inline display) AND PDF (export)
-#   - Per method, writes the PCA point coordinates (sample, group, PC1/PC2) as
-#     JSON so the frontend can render an INTERACTIVE plot (dynamic colouring by
-#     group, label toggle, client-side export) — see NRM-03/NRM-04.
-#
-# CUSTOMER REQUIREMENTS:
-#   1. Density plot per method (PNG + PDF)
-#   2. PCA as JSON points: each sample = one point, PC1 vs PC2, outliers visible
-#   3. EPICv2 support
-#   4. No automatic recommendation
-#
-# OUTPUTS (per method <m>, written to job_dir):
-#   density_<m>.png / density_<m>.pdf  – static density plot
-#   pca_<m>.json                       – PCA points for the interactive plotter
-#
-# TESTABILITY:
-#   All functions are defined at the top level; the pipeline itself only runs
-#   when the file is executed as a script (Rscript). When the file is sourced for
-#   unit testing, sys.nframe() > 0, so the run guard at the bottom is skipped and
-#   only the function definitions are loaded.
-# =============================================================================
+#' Normalization preview for the methylation-analysis pipeline.
+#'
+#' Loads the filtered \code{RGChannelSet} produced by \code{init_filter.R}, runs
+#' several normalization methods (RAW, NOOB, QUANTILE, SWAN, FUNNORM) and, per
+#' method, writes a density plot (PNG for inline display + vector PDF for export)
+#' and the PCA point coordinates (sample, group, PC1/PC2) as JSON, from which the
+#' frontend renders an INTERACTIVE plot (dynamic colouring by group, label
+#' toggle, client-side export) — see NRM-03/NRM-04.
+#'
+#' @section Array support:
+#' Array-agnostic: minfi detects the platform from the data, so 450K, EPIC v1 and
+#' EPIC v2 are all supported without special handling.
+#'
+#' @section Customer requirements:
+#' \enumerate{
+#'   \item Density plot per method (PNG + PDF).
+#'   \item PCA as JSON points: each sample one point, PC1 vs PC2, outliers visible.
+#'   \item EPIC v2 support.
+#'   \item No automatic recommendation.
+#' }
+#'
+#' @section Usage:
+#' \code{Rscript normalization_preview.R <filtered_data.rds> <job_dir> <sample_sheet.csv>}
+#'
+#' @section Output (per method \code{<m>}, written to \code{job_dir}):
+#' \code{density_<m>.png} / \code{density_<m>.pdf} (static density plot) and
+#' \code{pca_<m>.json} (PCA points for the interactive plotter).
+#'
+#' @section Progress protocol:
+#' Progress/errors are emitted via \code{utils/progress.R} as single-line JSON.
+#'
+#' @section Testability:
+#' All functions are defined at the top level; the pipeline runs only when the
+#' file is executed as a script (Rscript). When sourced for unit testing,
+#' \code{sys.nframe() > 0}, so the run guard at the bottom is skipped and only the
+#' function definitions are loaded.
 
 
 # ── Environment setup ─────────────────────────────────────────────────────────

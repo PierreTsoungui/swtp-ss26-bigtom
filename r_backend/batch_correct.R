@@ -320,10 +320,12 @@ run_batch_correction <- function(job_dir, batch_vars_str, covariates_str = "") {
 
 
 # ── CLI execution block ───────────────────────────────────────────────────────
-# Guarded so the functions can be sourced (e.g. in tests) without side effects.
-is_main_script <- any(grepl("--file=.*batch_correct\\.R", commandArgs(trailingOnly = FALSE)))
-
-if (is_main_script) {
+# Run only when executed as a script (Rscript). When source()d/sys.source()d for
+# unit testing, sys.nframe() > 0, so the pipeline does not auto-run and the
+# functions above can be tested in isolation. (This is the same run guard used by
+# every other pipeline script, and is more robust than matching --file, which
+# also matches a file named test_batch_correct.R.)
+if (sys.nframe() == 0L) {
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 2L) {
     emit_error("Missing required CLI arguments: job_dir and batch_vars (comma-separated)")
