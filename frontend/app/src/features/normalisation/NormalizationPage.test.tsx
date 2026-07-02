@@ -6,8 +6,8 @@ import { NormalizationPage } from "./NormalizationPage";
 vi.mock("./hooks/useNormalizationPreview", () => ({
   useNormalizationPreview: () => ({
     data: {
-      plots: [],
-      recommendation: "noob",
+      job_id: "test-job",
+      methods: [],
     },
     isLoading: false,
     error: null,
@@ -36,12 +36,12 @@ describe("NormalizationPage HelpButton", () => {
       </MemoryRouter>,
     );
 
-    const heading = screen.getByRole("heading", { name: "Normalisierungsmethode auswählen" });
+    const heading = screen.getByRole("heading", { name: "Choose a normalization method" });
     expect(heading.parentElement).toContainElement(
-      screen.getByRole("button", { name: "Hilfe zur Normalisierung öffnen" }),
+      screen.getByRole("button", { name: "Open Help with normalization" }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe zur Normalisierung öffnen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Help with normalization" }));
 
     expect(screen.getByText(/Why is normalization necessary/i)).toBeInTheDocument();
     expect(screen.getByText(/For most studies, NOOB provides/i)).toBeInTheDocument();

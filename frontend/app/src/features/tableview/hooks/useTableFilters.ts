@@ -5,15 +5,18 @@ export type DmpFilters = {
   start: string;
   stop: string;
   gene: string;
+  feature: string;
+  cgi: string;
   adj_p_value: string;
   delta_beta: string;
+  delta_direction: string;
   group2_avg_min: string;
   group2_avg_max: string;
   group1_avg_min: string;
   group1_avg_max: string;
   log_fc_min: string;
   log_fc_max: string;
-  sample_group: string;
+  dmr_id: string;
 };
 
 export type DmrFilters = {
@@ -37,15 +40,18 @@ const EMPTY_DMP_FILTERS: DmpFilters = {
   start: "",
   stop: "",
   gene: "",
+  feature: "",
+  cgi: "",
   adj_p_value: "",
   delta_beta: "",
+  delta_direction: "",
   group2_avg_min: "",
   group2_avg_max: "",
   group1_avg_min: "",
   group1_avg_max: "",
   log_fc_min: "",
   log_fc_max: "",
-  sample_group: "",
+  dmr_id: "",
 };
 
 const EMPTY_DMR_FILTERS: DmrFilters = {

@@ -28,11 +28,18 @@ RUN R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')" 
 # WICHTIGER BUGFIX: Verhindert Core-Dumps/Abstürze bei der Normalisierung im Docker-Container
 RUN R -e "BiocManager::install('preprocessCore', configure.args = '--disable-threading', force = TRUE, ask = FALSE)"
 
-# EPICv2 Annotationsdaten vorab installieren
+# Array-Annotationen (Manifest + Annotation) für ALLE unterstützten Plattformen
+# explizit vorab installieren: 450K, EPIC v1 und EPIC v2. minfi erkennt den
+# Array-Typ automatisch aus den IDATs und lädt das passende Paket nach — daher
+# müssen alle drei deterministisch vorhanden sein (nicht nur transitiv via ChAMP).
 RUN R -e "BiocManager::install(c( \
+    'IlluminaHumanMethylation450kmanifest', \
+    'IlluminaHumanMethylation450kanno.ilmn12.hg19', \
+    'IlluminaHumanMethylationEPICmanifest', \
+    'IlluminaHumanMethylationEPICanno.ilm10b4.hg19', \
     'IlluminaHumanMethylationEPICv2manifest', \
     'IlluminaHumanMethylationEPICv2anno.20a1.hg38' \
-    ), ask=FALSE)"
+    ), update=FALSE, ask=FALSE)"
 
 # ChAMP installieren (installiert minfi, limma, sva, DMRcate automatisch mit)
 RUN R -e "BiocManager::install('ChAMP', dependencies=TRUE, ask=FALSE)"
@@ -50,9 +57,22 @@ RUN R -e "remotes::install_github('YuanTian1991/ChAMPdata', upgrade='never')" \
 
 WORKDIR /app
 
-# Automatischer Funktionstest JETZT ganz am Ende (prüft die gepatchte GitHub-Version!)
+# Automatischer Funktionstest JETZT ganz am Ende (prüft die gepatchte GitHub-Version!).
+# Schlägt der Build fehl, wenn auch nur ein Plattform-Paket fehlt — so kann das
+# Image niemals unbemerkt ohne 450K-/EPICv1-/EPICv2-Support ausgeliefert werden.
 RUN R -e " \
     library(ChAMP);          cat('ChAMP (GitHub-Patch): OK\n'); \
     library(minfi);          cat('minfi: OK\n'); \
-    library(IlluminaHumanMethylationEPICv2manifest); cat('EPICv2 Manifest: OK\n'); \
-    cat('--- ALLE PAKETE ERFOLGREICH INSTALLIERT & GEPRÜFT ---\n')"
+    pkgs <- c( \
+      'IlluminaHumanMethylation450kmanifest', \
+      'IlluminaHumanMethylation450kanno.ilmn12.hg19', \
+      'IlluminaHumanMethylationEPICmanifest', \
+      'IlluminaHumanMethylationEPICanno.ilm10b4.hg19', \
+      'IlluminaHumanMethylationEPICv2manifest', \
+      'IlluminaHumanMethylationEPICv2anno.20a1.hg38' \
+    ); \
+    for (p in pkgs) { \
+      if (!requireNamespace(p, quietly = TRUE)) stop(paste('MISSING annotation package:', p)); \
+      cat(p, ': OK\n'); \
+    }; \
+    cat('--- ALLE PAKETE (450K + EPICv1 + EPICv2) ERFOLGREICH INSTALLIERT & GEPRÜFT ---\n')"

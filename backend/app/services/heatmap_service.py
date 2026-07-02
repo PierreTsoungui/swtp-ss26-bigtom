@@ -8,9 +8,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+import pandas as pd
+
 from app.core.error_types import AppException, ErrorTypes
-from app.models.heatmap import DmpFilterPayload, GroupingPayload
+from app.models.heatmap import GroupingPayload
 from app.services import job_manager
+from app.services.table_filter import apply_filters
 from app.services.r_executor import run_r_script, HeatmapCommand
 from app.services.batch_service import find_sample_sheet_name
 from app.services.job_manager import transition_job, set_progress, get_job, JobPhase, JobStatusValue
@@ -20,6 +23,7 @@ logger = logging.getLogger(__name__)
 JOBS_DIR         = Path("jobs").resolve()
 MAX_CPGS         = 500
 HEATMAP_FILENAME = "heatmap.png"
+HEATMAP_INPUT_CSV = "heatmap_input.csv"   # filtered CpG IDs handed to R (single filter source)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -53,38 +57,65 @@ def _find_dmp_rds(job_dir: Path) -> Path:
     )
 
 
-def _build_r_env(
-    grouping:   GroupingPayload,
-    dmp_filter: Optional[DmpFilterPayload],
-) -> dict:
+def _build_r_env(grouping: GroupingPayload) -> dict:
+    """
+    Environment for heatmap.R. Filtering is NOT passed here anymore — the CpG
+    selection is decided once in the backend (``prepare_heatmap_input``) and
+    handed to R as ``heatmap_input.csv``. R only renders.
+    """
     env: dict = {
         "HEATMAP_GROUP1":   grouping.primary,
         "HEATMAP_MAX_ROWS": str(MAX_CPGS),
         "HEATMAP_OUTPUT":   HEATMAP_FILENAME,
+        "HEATMAP_INPUT":    HEATMAP_INPUT_CSV,
     }
-
     if grouping.secondary:
         env["HEATMAP_GROUP2"] = grouping.secondary
-
-    if dmp_filter:
-        if dmp_filter.chromosome:
-            env["HEATMAP_CHR"] = dmp_filter.chromosome
-        if dmp_filter.start is not None:
-            env["HEATMAP_START"] = str(dmp_filter.start)
-        if dmp_filter.stop is not None:
-            env["HEATMAP_STOP"] = str(dmp_filter.stop)
-        if dmp_filter.p_value_max is not None:
-            env["HEATMAP_PVAL_MAX"] = str(dmp_filter.p_value_max)
-        if dmp_filter.adj_p_value_max is not None:
-            env["HEATMAP_ADJ_PVAL_MAX"] = str(dmp_filter.adj_p_value_max)
-        if dmp_filter.delta_beta_min is not None:
-            env["HEATMAP_DELTA_BETA_MIN"] = str(dmp_filter.delta_beta_min)
-        if dmp_filter.delta_beta_max is not None:
-            env["HEATMAP_DELTA_BETA_MAX"] = str(dmp_filter.delta_beta_max)
-        if dmp_filter.dmr_id:
-            env["HEATMAP_DMR_ID"] = dmp_filter.dmr_id
-
     return env
+
+
+def prepare_heatmap_input(job_id: str, job_dir: Path, filters: dict) -> int:
+    """
+    Single source of truth for *which* CpGs go into the heatmap.
+
+    Applies the **same** filter layer as the DMP table view
+    (``table_handler.build_dataframe`` → ``table_filter.apply_filters``) to
+    ``dmp_results.csv``, enforces the 500-row cap, and writes the resulting CpG
+    IDs to ``heatmap_input.csv`` for R. Raises a 400 (no rows / too many) before
+    R is ever started.
+
+    Returns the number of selected CpGs.
+    """
+    csv_path = job_dir / "dmp_results.csv"
+    if not csv_path.exists():
+        raise AppException(
+            ErrorTypes.FILE_NOT_FOUND,
+            detail="dmp_results.csv not found – run the DMP analysis before generating a heatmap.",
+        )
+
+    df = pd.read_csv(csv_path)
+    df = apply_filters(df, "dmp", filters or {})   # SAME filter layer as the table view
+    n = len(df)
+
+    if n == 0:
+        raise AppException(
+            ErrorTypes.HEATMAP_NO_CPGS,
+            detail="No CpGs match the current filter. Please relax the filter criteria.",
+        )
+
+    if n > MAX_CPGS:
+        raise AppException(
+            ErrorTypes.HEATMAP_TOO_MANY_CPGS,
+            detail=(
+                f"Heatmap is limited to {MAX_CPGS} CpGs; your current filter selects "
+                f"{n}. Please tighten the filter (e.g. adjusted p-value or |Δβ|)."
+            ),
+        )
+
+    id_col = "ID" if "ID" in df.columns else df.columns[0]
+    out = df[[id_col]].rename(columns={id_col: "ID"})
+    out.to_csv(job_dir / HEATMAP_INPUT_CSV, index=False)
+    return n
 
 
 # ── Async pipeline task ───────────────────────────────────────────────────────
@@ -95,7 +126,6 @@ async def run_heatmap_pipeline_task(
     dmp_rds:     Path,
     sheet_name:  str,
     grouping:    GroupingPayload,
-    dmp_filter:  Optional[DmpFilterPayload],
     cancel_event: asyncio.Event,
 ) -> None:
     """
@@ -123,7 +153,7 @@ async def run_heatmap_pipeline_task(
             set_progress(job_id, percent=pct, message=data.get("message", ""))
 
     # ── R-Skript aufrufen ──────────────────────────────────────────────────
-    r_env = _build_r_env(grouping, dmp_filter)
+    r_env = _build_r_env(grouping)
 
     result = await run_r_script(
         command=HeatmapCommand(
@@ -251,79 +281,128 @@ def _parse_heatmap_metadata(stdout: str, job_dir: Path) -> dict:
     }
 
 
-def get_grouping_options_from_samplesheet(job_dir: Path) -> list:
+def _read_samplesheet_columns(job_dir: Path) -> tuple[list[str], dict[int, list[str]], int]:
     """
-    Parst das SampleSheet und wendet die vier Heatmap-Filterregeln an:
-      REGEL 1 – Kein Wert darf einzigartig sein (jeder Wert mind. 2×)
-      REGEL 2 – Spalte darf nicht leer sein
-      REGEL 3 – Mind. 2 unterschiedliche Werte
-      REGEL 4 – Anzahl der Gruppen ≤ 50 % der Probenanzahl
+    Parses the sample sheet's [Data] section once and returns
+    ``(headers, {col_index: [non-empty values]}, total_samples)``.
+
+    Shared by both the strict grouping finder and the permissive annotation
+    finder so the parsing lives in exactly one place.
     """
     sample_sheet_name = find_sample_sheet_name(str(job_dir))
     sheet_path = job_dir / sample_sheet_name
 
+    with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
+        lines = f.readlines()
+
+    data_index = next((i for i, line in enumerate(lines) if "[Data]" in line), -1)
+    data_lines = lines[data_index + 1:] if data_index != -1 else lines
+    data_lines = [line.strip() for line in data_lines if line.strip()]
+
+    if not data_lines:
+        return [], {}, 0
+
+    delimiter = ";" if ";" in data_lines[0] else ","
+    rows      = list(csv.reader(data_lines, delimiter=delimiter))
+    headers   = [h.strip() for h in rows[0] if h.strip()]
+    data_rows = rows[1:]
+    total_samples = len(data_rows)
+
+    num_cols   = len(headers)
+    col_values: dict[int, list[str]] = {i: [] for i in range(num_cols)}
+    for row in data_rows:
+        for i in range(num_cols):
+            val = row[i].strip() if i < len(row) else ""
+            if val:
+                col_values[i].append(val)
+
+    return headers, col_values, total_samples
+
+
+def get_grouping_options_from_samplesheet(job_dir: Path) -> list:
+    """
+    Strict grouping finder (used e.g. for batch/comparison columns): a column
+    qualifies only if it has ≥2 distinct values, every value occurs ≥2×, and the
+    number of groups is ≤ 50 % of the samples.
+    """
     try:
-        with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-
-        data_index = -1
-        for i, line in enumerate(lines):
-            if "[Data]" in line:
-                data_index = i
-                break
-
-        data_lines = lines[data_index + 1:] if data_index != -1 else lines
-        data_lines = [line.strip() for line in data_lines if line.strip()]
-
-        if not data_lines:
-            return []
-
-        header_line = data_lines[0]
-        delimiter   = ";" if ";" in header_line else ","
-
-        reader    = csv.reader(data_lines, delimiter=delimiter)
-        rows      = list(reader)
-        headers   = [h.strip() for h in rows[0] if h.strip()]
-        data_rows = rows[1:]
-        total_samples = len(data_rows)
-
+        headers, col_values, total_samples = _read_samplesheet_columns(job_dir)
         if total_samples == 0:
             return []
 
-        num_cols   = len(headers)
-        col_values = {i: [] for i in range(num_cols)}
-
-        for row in data_rows:
-            while len(row) < num_cols:
-                row.append("")
-            for i in range(num_cols):
-                val = row[i].strip()
-                if val:
-                    col_values[i].append(val)
-
         eligible_columns = []
-
         for i, header in enumerate(headers):
             values = col_values[i]
-
             if not values:
                 continue
-
             counter      = Counter(values)
             unique_count = len(counter)
-
             if unique_count < 2:
                 continue
-
             if any(count < 2 for count in counter.values()):
                 continue
-
             if unique_count > (0.5 * total_samples):
                 continue
-
             eligible_columns.append(header)
 
         return eligible_columns
+
+    except Exception as e:
+        raise AppException(
+            ErrorTypes.INVALID_CSV_CONTENT,
+            detail=f"SampleSheet konnte für die Heatmap nicht analysiert werden: {e}",
+        )
+
+
+def _classify_column(values: list[str], n_distinct: int, total_samples: int) -> str:
+    """categorical | continuous | identifier — a hint for the annotation UI/plot."""
+    is_numeric = bool(values) and all(_is_number(v) for v in values)
+    # A numeric column with many distinct values is continuous (e.g. "age"),
+    # even when every value is unique — check this before the identifier rule.
+    if is_numeric and n_distinct > 10:
+        return "continuous"
+    if total_samples > 1 and n_distinct >= total_samples:
+        return "identifier"
+    return "categorical"
+
+
+def _is_number(value: str) -> bool:
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def find_annotation_columns(job_dir: Path) -> list[dict]:
+    """
+    Permissive annotation finder for primary/secondary heatmap groups: returns
+    **every** sample-sheet column that has at least one non-empty value, with a
+    type hint (categorical / continuous / identifier) and the distinct count.
+
+    Unlike :func:`get_grouping_options_from_samplesheet` this does NOT exclude
+    continuous columns (e.g. ``age``) or identifiers — the user chooses; the plot
+    renders categorical columns as discrete colours and continuous ones as a
+    gradient. See ``docs/architecture/heatmap-konzept.md`` §4.
+    """
+    try:
+        headers, col_values, total_samples = _read_samplesheet_columns(job_dir)
+        if total_samples == 0:
+            return []
+
+        columns = []
+        for i, header in enumerate(headers):
+            values = col_values[i]
+            if not values:        # fully empty column → nothing to annotate
+                continue
+            n_distinct = len(set(values))
+            columns.append({
+                "name":       header,
+                "type":       _classify_column(values, n_distinct, total_samples),
+                "n_distinct": n_distinct,
+            })
+
+        return columns
 
     except Exception as e:
         raise AppException(

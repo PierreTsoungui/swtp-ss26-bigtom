@@ -20,7 +20,7 @@ def mock_job(tmp_path):
             for i in range(200):
                 f.write(
                     f"cg{i:08d}_BC11,"
-                    f"chr1,"
+                    f"1,"
                     f"{i*10},"
                     f"GENE{i},"
                     f"feat,"
@@ -39,7 +39,7 @@ def mock_job(tmp_path):
             for i in range(200):
                 f.write(
                     f"DMR_{i},"
-                    f"chr1,"
+                    f"1,"
                     f"{i*10},"
                     f"{i*10+50},"
                     f"{50},"
@@ -155,7 +155,9 @@ def test_filter_chr(mock_job):
     assert res.status_code == 200
 
     for row in res.json()["data"]:
-        assert row["CHR"] == "chr1"
+        # str() because an all-numeric CHR column is read back as int; the point
+        # is that the UI filter "chr1" matched the bare "1" data.
+        assert str(row["CHR"]) == "1"
 
 def test_filter_start(mock_job):
     job_id, _ = mock_job
@@ -215,5 +217,100 @@ def test_filter_chr_and_start(mock_job):
     assert res.status_code == 200
 
     for row in res.json()["data"]:
-        assert row["CHR"] == "chr1"
+        # str() because an all-numeric CHR column is read back as int; the point
+        # is that the UI filter "chr1" matched the bare "1" data.
+        assert str(row["CHR"]) == "1"
         assert row["POS"] >= 2000
+
+# Realistic production layout: bare chromosome ids ("1", not "chr1") and
+# lower-case CpG-island context ("island", not "Island"), exactly as the R
+# pipeline and the customer specification produce them.
+_DMP_CSV = (
+    "ID,CHR,POS,GENE,FEATURE,CGI,ADJ_P,GROUP1_AVG,GROUP2_AVG,DELTA_BETA,LOG_FC,DMR_ID\n"
+    "cg1,1,100,EPHX3,TSS1500,shore,0.01,0.9,0.1,0.8,3.0,DMR_421\n"    # hyper, in DMR_421
+    "cg2,1,200,CMTM2,Body,island,0.02,0.2,0.8,-0.6,-2.0,DMR_4211\n"   # hypo, in DMR_4211
+    "cg3,1,300,GENE3,IGR,opensea,0.03,0.7,0.3,0.4,1.0,-\n"            # hyper, no DMR
+)
+
+
+def _write_dmp(tmp_path):
+    job_dir = tmp_path / "job-x"
+    job_dir.mkdir()
+    (job_dir / "dmp_results.csv").write_text(_DMP_CSV, encoding="utf-8")
+
+
+def test_dmp_filter_by_dmr_id_is_exact(tmp_path):
+    """DMR_421 must match only DMR_421 — never the substring sibling DMR_4211."""
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        res = client.get("/api/v1/table/job-x/dmp", params={"filter_dmr_id": "DMR_421"})
+        data = res.json()
+        assert data["pagination"]["total_rows"] == 1
+        assert data["data"][0]["ID"] == "cg1"
+
+
+def test_dmp_filter_feature_and_cgi(tmp_path):
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        res = client.get("/api/v1/table/job-x/dmp", params={"filter_feature": "TSS1500"})
+        assert res.json()["pagination"]["total_rows"] == 1
+        res = client.get("/api/v1/table/job-x/dmp", params={"filter_cgi": "Island"})
+        rows = res.json()["data"]
+        assert len(rows) == 1 and rows[0]["ID"] == "cg2"
+
+
+def test_dmp_filter_delta_direction(tmp_path):
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        hyper = client.get("/api/v1/table/job-x/dmp", params={"filter_delta_direction": "hyper"}).json()
+        assert {r["ID"] for r in hyper["data"]} == {"cg1", "cg3"}
+        hypo = client.get("/api/v1/table/job-x/dmp", params={"filter_delta_direction": "hypo"}).json()
+        assert {r["ID"] for r in hypo["data"]} == {"cg2"}
+
+
+# ── Regression: categorical filters must be tolerant to the UI's value format ──
+# The table stores bare chromosome ids ("1") and lower-case CpG contexts
+# ("island"), but the UI dropdown sends "chr1" and "Island". Before the fix the
+# exact-equality comparison never matched, so these filters silently returned
+# nothing on real data.
+
+def test_dmp_filter_chr_matches_ui_prefixed_value(tmp_path):
+    """UI sends 'chr1'; the table stores '1' — they must still match (and vice versa)."""
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        prefixed = client.get("/api/v1/table/job-x/dmp", params={"filter_chr": "chr1"}).json()
+        assert prefixed["pagination"]["total_rows"] == 3        # all three rows are chr "1"
+        bare = client.get("/api/v1/table/job-x/dmp", params={"filter_chr": "1"}).json()
+        assert bare["pagination"]["total_rows"] == 3            # bare form also works
+        # A different chromosome must NOT match.
+        other = client.get("/api/v1/table/job-x/dmp", params={"filter_chr": "chr2"}).json()
+        assert other["pagination"]["total_rows"] == 0
+
+
+def test_dmp_filter_cgi_is_case_insensitive(tmp_path):
+    """UI sends 'Island'; the table stores 'island' — they must match."""
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmp(tmp_path)
+        upper = client.get("/api/v1/table/job-x/dmp", params={"filter_cgi": "Island"}).json()
+        lower = client.get("/api/v1/table/job-x/dmp", params={"filter_cgi": "island"}).json()
+        assert {r["ID"] for r in upper["data"]} == {"cg2"}
+        assert {r["ID"] for r in lower["data"]} == {"cg2"}     # both casings agree
+
+
+def _write_dmr(tmp_path):
+    job_dir = tmp_path / "job-x"
+    job_dir.mkdir()
+    (job_dir / "dmr_results.csv").write_text(
+        "ID,N_DMPS,CHR,START,STOP,WIDTH,P_VALUE,MEANDIFF\n"
+        "DMR_1,5,1,150,250,100,0.001,0.3\n"
+        "DMR_2,4,2,400,600,200,0.02,-0.2\n",
+        encoding="utf-8",
+    )
+
+
+def test_dmr_filter_chr_matches_ui_prefixed_value(tmp_path):
+    """The same chromosome tolerance must apply to the DMR table."""
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        _write_dmr(tmp_path)
+        res = client.get("/api/v1/table/job-x/dmr", params={"filter_chr": "chr1"}).json()
+        assert {r["ID"] for r in res["data"]} == {"DMR_1"}

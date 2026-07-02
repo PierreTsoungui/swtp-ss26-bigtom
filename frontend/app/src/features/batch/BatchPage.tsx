@@ -11,7 +11,7 @@ import { useJobPolling } from "../analysis/hooks/useJobPolling";
 import Progressbar from "../../shared/components/Progressbar";
 import { colors } from "../../shared/theme/colors";
 
-import type { BatchFormData } from "./utils/types";
+import type { BatchFormData, GroupSelection } from "./utils/types";
 import {useNavigate} from "react-router";
 import {JobPhase, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 
@@ -103,8 +103,8 @@ const BatchPage: React.FC = () => {
     setShowProgressBar(true);
   };
 
-  const handleSkip = async () => {
-    await skipBatch();
+  const handleSkip = async (selection?: GroupSelection) => {
+    await skipBatch(selection);
     setPollingKey(prev => prev + 1); // Reset Polling
     setShowProgressBar(true);
   };

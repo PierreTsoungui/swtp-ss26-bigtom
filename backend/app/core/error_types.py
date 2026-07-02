@@ -17,6 +17,18 @@ class ErrorTypes:
     # Upload Errors (400, 500)
     INVALID_UPLOAD = ErrorType("/errors/invalid-upload", 400, "Invalid upload")
     SAVE_FAILED    = ErrorType("/errors/save-failed", 500, "Save failed")
+
+    # ── FOLDER / ZIP UPLOAD (inspect → commit) ─────────────────────────
+    INVALID_ARCHIVE      = ErrorType("/errors/invalid-archive", 400, "Invalid archive")
+    ARCHIVE_TOO_LARGE    = ErrorType("/errors/archive-too-large", 400, "Archive too large")
+    NO_SUPPORTED_FILES   = ErrorType("/errors/no-supported-files", 400, "No supported files")
+    MULTIPLE_SAMPLE_SHEETS = ErrorType("/errors/multiple-sample-sheets", 400, "Multiple sample sheets")
+    NO_SAMPLE_SHEET      = ErrorType("/errors/no-sample-sheet", 400, "No sample sheet")
+    NO_IDAT_FILES        = ErrorType("/errors/no-idat-files", 400, "No IDAT files")
+    UNPAIRED_IDATS       = ErrorType("/errors/unpaired-idats", 400, "Unpaired IDAT files")
+    INVALID_SELECTION    = ErrorType("/errors/invalid-selection", 400, "Invalid selection")
+    INVALID_COLUMN_MAPPING = ErrorType("/errors/invalid-column-mapping", 400, "Invalid column mapping")
+    SESSION_NOT_FOUND    = ErrorType("/errors/session-not-found", 404, "Upload session not found")
     
     # Filter Errors (409, 404)
     FILTERING_NOT_FINISHED = ErrorType("/errors/filtering-not-finished", 409, "Filtering not finished")
@@ -35,6 +47,7 @@ class ErrorTypes:
     # ── BATCH CORRECTION ERRORS (400, 404, 409) ───────────────────────
     PLOT_NOT_FOUND = ErrorType("/errors/plot-not-found", 404, "SVD plot not found")
     INVALID_BATCH_VARIABLE = ErrorType("/errors/invalid-batch-variable", 400, "Invalid batch variable")
+    INVALID_COVARIATE = ErrorType("/errors/invalid-covariate", 400, "Invalid covariate")
     COVARIATE_EQUALS_BATCH = ErrorType("/errors/covariate-equals-batch", 400, "Covariate equals batch variable")
     BATCH_NOT_ALLOWED = ErrorType("/errors/batch-not-allowed", 409, "Batch correction not allowed")
 
@@ -42,6 +55,8 @@ class ErrorTypes:
     SAMPLE_SHEET_NOT_FOUND = ErrorType("/errors/sample-sheet-not-found", 404, "Sample sheet not found")
     FILE_NOT_FOUND          = ErrorType("/errors/file-not-found", 404, "File not found")
     HEATMAP_NOT_ALLOWED     = ErrorType("/errors/heatmap-not-allowed", 409, "Heatmap not allowed")
+    HEATMAP_TOO_MANY_CPGS   = ErrorType("/errors/heatmap-too-many-cpgs", 400, "Too many CpGs for heatmap")
+    HEATMAP_NO_CPGS         = ErrorType("/errors/heatmap-no-cpgs", 400, "No CpGs match the filter")
     INVALID_GROUPING_COLUMN = ErrorType("/errors/invalid-grouping-column", 400, "Invalid grouping column")
     INVALID_CSV_CONTENT     = ErrorType("/errors/invalid-csv-content", 400, "Invalid CSV content") 
 

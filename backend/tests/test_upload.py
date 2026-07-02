@@ -7,8 +7,20 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.main import app
+from app.services import file_handler
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_job_dir(tmp_path, monkeypatch):
+    """Keep the legacy /upload tests from writing real job dirs into ./jobs.
+
+    Each test created a persistent job directory under the working directory;
+    over many runs that floods ./jobs. Redirecting the upload base to a tmp dir
+    makes the tests self-contained.
+    """
+    monkeypatch.setattr(file_handler, "UPLOAD_BASE_DIR", tmp_path)
 
 # =========================================================
 # PFADE ZU TESTDATEN

@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.1.0] - 2026-07-02
+
+### Added
+- **ZIP Upload:** The upload workflow now accepts a ZIP archive of the IDAT files (single upload field), with safe server-side extraction and validation, in addition to folder upload.
+- **Sample Sheet Preview & Column Selection:** The upload page shows a preview of the sample sheet and lets the user map the required roles (e.g. the sample group) to the actual sheet columns before starting the analysis.
+- **Interactive PCA Plotter (Normalization Preview):** The PCA of each normalization method is now stored as JSON points and rendered by a dedicated interactive frontend plotter (colour by group, label toggle, client-side export) instead of a static image.
+- **PNG + PDF Export Everywhere:** Every static plot (normalization density, SVD diagnostic, heatmap) can be exported as both PNG and a vector PDF.
+- **Additional Result-Table Filters:** Extended the DMP/DMR result table with additional filter columns in both backend and frontend.
+- **R Utility Test Suites:** New testthat suites for the shared R utility layer (arraytype, beta, columns, heatmap_anno, plotting, progress, runtime, samplesheet, stats).
+- **End-to-End Pipeline Test:** A chained integration test that runs the real scripts in sequence (init_filter → normalize → SVD → DMR → DMP → heatmap) and verifies every hand-off.
+
+### Changed
+- **Normalization Preview Layout:** The raw (unnormalized) data is now shown on the left; density plots are delivered as PNG/PDF and the PCA as the interactive plotter.
+- **Unified Plot Display (Zoom + Export):** Density, SVD and heatmap plots now share a single display component with consistent zoom and PNG/PDF export across the whole application.
+- **Help Buttons Reworked:** Help texts were split into individual Markdown files behind a central registry, are now rendered as Markdown, and the hover behaviour was fixed.
+- **Heatmap Rework:** Improved annotation placement and grouping-column selection, and added PNG + PDF export.
+- **Upload Page Redesign:** Drag-and-drop, a ZIP-file button, the sample-sheet preview and the column selection were integrated into the upload page.
+- **DMR Core Allocation:** Increased the number of CPU cores allocated to DMR analysis in Docker.
+
+### Fixed
+- **Chromosome & CpG-Context Table Filters:** The chromosome filter compared the UI value `chr1` against the stored bare `1`, and the CpG-context filter compared `Island` against the stored `island`, so both silently returned no rows. The backend filter engine now normalizes chromosomes (tolerant to a `chr` prefix and case) and categorical labels (case-insensitive).
+- **DMP/DMR Correctness & Robustness:** Reconstruct the EPIC v2 `probe.features` annotation from the minfi manifest (was missing in ChAMPdata); reject identical within-group replicates up front with a clear message instead of the opaque limma "No sample variance"; make the DMP↔DMR overlap linking fast (interval join) so it no longer times out; treat "no DMRs found" as a valid empty result rather than a failure.
+- **Heatmap Dendrogram & Help Button:** Fixed dendrogram readability (group label moved left to avoid legend overlap, upper branch rendering adjusted) and added the missing help button to the heatmap view.
+
+### Refactored
+- **Full R-Script Overhaul:** All pipeline R scripts (`init_filter.R`, `normalization_preview.R`, `normalize.R`, `batch_svd.R`, `batch_correct.R`, `dmr.R`, `dmp.R`, `heatmap.R`) were reworked for robustness, uniform documentation (roxygen-2, English) and a consistent, testable script/guard structure, with 450K / EPIC v1 / EPIC v2 handled uniformly.
+- **Shared R Utility Layer:** Extracted and hardened the common utilities (runtime, arraytype, columns, beta, samplesheet, plotting, stats, progress, heatmap_anno) as the single source of truth for the analysis scripts.
+- **R Test Suites Extended:** All R script test suites were rewritten and extended with input validation and edge-case coverage (fully documented in English).
+
 ## [1.0.0] - 2026-06-23
 
 ### Added

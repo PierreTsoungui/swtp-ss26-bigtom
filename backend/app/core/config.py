@@ -36,3 +36,23 @@ JOB_CLEANUP_INTERVAL_SECONDS = _get_positive_int(
     "JOB_CLEANUP_INTERVAL_SECONDS",
     86400,
 )
+
+# ── Staging (folder/ZIP upload inspect) ───────────────────────────────────────
+# Unconfirmed uploads live here until the user commits a selection. Kept as a
+# sibling of JOB_BASE_DIR so the commit can move files atomically (same
+# filesystem) into the final job directory.
+STAGING_BASE_DIR = Path(os.getenv("STAGING_BASE_DIR", "./staging"))
+STAGING_RETENTION_HOURS = _get_positive_float("STAGING_RETENTION_HOURS", 2)
+STAGING_CLEANUP_INTERVAL_SECONDS = _get_positive_int(
+    "STAGING_CLEANUP_INTERVAL_SECONDS",
+    900,  # 15 minutes
+)
+
+# ── R compute parallelism ─────────────────────────────────────────────────────
+# Cores handed to dmr.R for its bootstrap step (the heaviest, embarrassingly
+# parallel R workload). dmr.R itself caps this at the host's physical cores
+# (min(nCores, detectCores)), so values above the available cores are harmless.
+# The bootstrap workers are separate R processes, each still single-threaded for
+# BLAS — so this does not nest threads or fight the container's *_NUM_THREADS=1.
+# A conservative default keeps headroom when several jobs run at once.
+DMR_CORES = _get_positive_int("DMR_CORES", 4)

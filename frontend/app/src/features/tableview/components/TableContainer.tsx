@@ -11,7 +11,6 @@ import {type DmpFilters, type DmrFilters, useTableFilters} from "../hooks/useTab
 import HeatMap from "./heatmap/HeatMap.tsx";
 import SkeletonTable from "./SkeletonTable.tsx";
 import { TableExportButton } from "./TableExportButton";
-import {mapDmpTableFiltersToHeatmap} from "../utils/mapDmpTableFiltersToHeatMap.ts";
 
 export function TableContainer() {
   const { job_id } = useParams();
@@ -50,9 +49,6 @@ export function TableContainer() {
     pageSize
   );
 
-  // Typsicherer Zugriff – hier ist appliedFilters.dmp vom Typ DmpTableFilters
-  const heatmapFilter = mapDmpTableFiltersToHeatmap(appliedFilters.dmp);
-
   /*const handleApplyFilters = () => {
     applyFilters(activeTab);
     // Seite zurücksetzen auf 1 (Filter ändert Ergebnismenge)
@@ -88,78 +84,15 @@ export function TableContainer() {
       params.append("sort_order", currentSort.sort_order);
     }
 
+    // Build the filter params generically (single source of truth, same as the
+    // table fetch) so the export always matches the on-screen filtered view and
+    // no filter can be forgotten when a new one is added.
     const filters = appliedFilters[activeTab];
-
-    // DMP & DMR gemeinsame Filter
-    if ((filters as any).chr) {
-      params.append("filter_chr", (filters as any).chr);
-    }
-    if ((filters as any).start) {
-      params.append("filter_start", (filters as any).start);
-    }
-    if ((filters as any).stop) {
-      params.append("filter_stop", (filters as any).stop);
-    }
-
-    // DMR-spezifische Filter
-    if ((filters as any).dmrid) {
-      params.append("filter_dmrid", (filters as any).dmrid);
-    }
-    if ((filters as any).p_value) {
-      params.append("filter_p_value", (filters as any).p_value);
-    }
-
-    // DMP-spezifische Filter
-    if ((filters as any).adj_p_value) {
-      params.append("filter_adj_p_value", (filters as any).adj_p_value);
-    }
-    if ((filters as any).gene) {
-      params.append("filter_gene", (filters as any).gene);
-    }
-    if ((filters as any).delta_beta) {
-      params.append("filter_delta_beta", (filters as any).delta_beta);
-    }
-    if ((filters as any).sample_group) {
-      params.append("filter_sample_group", (filters as any).sample_group);
-    }
-    if ((filters as any).group1_avg_min) {
-      params.append("filter_group1_avg_min", (filters as any).group1_avg_min);
-    }
-    if ((filters as any).group1_avg_max) {
-      params.append("filter_group1_avg_max", (filters as any).group1_avg_max);
-    }
-    if ((filters as any).group2_avg_min) {
-      params.append("filter_group2_avg_min", (filters as any).group2_avg_min);
-    }
-    if ((filters as any).group2_avg_max) {
-      params.append("filter_group2_avg_max", (filters as any).group2_avg_max);
-    }
-    if ((filters as any).log_fc_min) {
-      params.append("filter_log_fc_min", (filters as any).log_fc_min);
-    }
-    if ((filters as any).log_fc_max) {
-      params.append("filter_log_fc_max", (filters as any).log_fc_max);
-    }
-
-    // DMR-spezifische Filter
-    if ((filters as any).mean_diff_min) {
-      params.append("filter_mean_diff_min", (filters as any).mean_diff_min);
-    }
-    if ((filters as any).mean_diff_max) {
-      params.append("filter_mean_diff_max", (filters as any).mean_diff_max);
-    }
-    if ((filters as any).width_min) {
-      params.append("filter_width_min", (filters as any).width_min);
-    }
-    if ((filters as any).width_max) {
-      params.append("filter_width_max", (filters as any).width_max);
-    }
-    if ((filters as any).n_dmps_min) {
-      params.append("filter_n_dmps_min", (filters as any).n_dmps_min);
-    }
-    if ((filters as any).n_dmps_max) {
-      params.append("filter_n_dmps_max", (filters as any).n_dmps_max);
-    }
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== "") {
+        params.append(`filter_${key}`, value as string);
+      }
+    });
 
     try {
       const response = await fetch(
@@ -279,7 +212,7 @@ export function TableContainer() {
       {/* HeatMap */}
       {activeTab === "dmp" && (
           <div className="w-full py-12 mt-3">
-            <HeatMap dmp_filter={heatmapFilter} />
+            <HeatMap filters={appliedFilters.dmp} rowCount={data?.pagination?.total_rows} />
           </div>
       )}
     </div>

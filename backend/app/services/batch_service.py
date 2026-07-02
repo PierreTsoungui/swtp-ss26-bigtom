@@ -8,6 +8,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from app.core.config import DMR_CORES
 from app.core.error_types import BatchException, ErrorTypes
 from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
 from app.services.r_executor import (
@@ -29,17 +30,22 @@ def _failure_detail(result: ExecutionResult, fallback: str) -> str:
     Prefer the structured message the R script emitted via {"type":"error"}
     (captured in extra["r_error"]) over the raw stderr dump, which is full of
     package-loading noise and would otherwise be shown to the user verbatim.
-    Falls back to a generic message (e.g. on timeout, where neither is set).
+
+    A timeout is a special case: the R process is SIGKILLed mid-run, so it never
+    emits an error message and its stderr is just the (successful-looking)
+    package/analysis log up to the kill. Dumping that as the "error" is
+    misleading (it looks like a harmless warning). Report the timeout explicitly
+    instead.
     """
+    if result.is_timeout:
+        return (
+            f"{fallback} Zeitlimit der Analyse überschritten – das R-Skript "
+            "wurde abgebrochen. Bitte mit weniger Proben erneut versuchen oder "
+            "das Zeitlimit erhöhen."
+        )
     return result.extra.get("r_error") or (result.stderr or "").strip() or fallback
 
 JOBS_DIR = Path("jobs").resolve()
-
-# The sample-sheet column the downstream analysis (dmr.R / dmp.R) compares groups
-# by. It must never be chosen as a batch variable: removing it via
-# removeBatchEffect would erase exactly the biological signal DMP/DMR test for,
-# yielding empty results. It may, however, be protected as a covariate.
-PHENOTYPE_COLUMN = "Sample_Group"
 
 
 def _progress_fields(data: dict) -> tuple[int, str]:
@@ -123,69 +129,116 @@ def save_history(job_dir: Path, data: dict) -> None:
         json.dump(data, f, indent=2)
 
 
-def get_available_columns_from_samplesheet(job_dir: Path) -> list:
+def _read_data_section(job_dir: Path) -> tuple[list[str], list[list[str]]]:
+    """Parse the canonical SampleSheet's [Data] section → (headers, data_rows).
+
+    Headers are padded onto every row so callers can index columns safely.
+    """
     try:
         sample_sheet_name = find_sample_sheet_name(str(job_dir))
         sheet_path = job_dir / sample_sheet_name
     except FileNotFoundError:
         raise BatchException(
             ErrorTypes.SAMPLE_SHEET_NOT_FOUND,
-            detail=f"Es wurde kein Samplesheet im Verzeichnis für Job '{job_dir.name}' gefunden."
+            detail=f"Es wurde kein Samplesheet im Verzeichnis für Job '{job_dir.name}' gefunden.",
         )
 
     try:
         with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
 
-        data_index = -1
-        for i, line in enumerate(lines):
-            if "[Data]" in line:
-                data_index = i
-                break
-
+        data_index = next((i for i, line in enumerate(lines) if "[Data]" in line), -1)
         data_lines = lines[data_index + 1:] if data_index != -1 else lines
         data_lines = [line.strip() for line in data_lines if line.strip()]
-
         if not data_lines:
-            return []
+            return [], []
 
-        header_line = data_lines[0]
-        delimiter = ";" if ";" in header_line else ","
-
-        reader = csv.reader(data_lines, delimiter=delimiter)
-        rows = list(reader)
-
+        delimiter = ";" if ";" in data_lines[0] else ","
+        rows = list(csv.reader(data_lines, delimiter=delimiter))
         headers = [h.strip() for h in rows[0] if h.strip()]
-        data_rows = rows[1:]
-        total_samples = len(data_rows)
-
-        if total_samples == 0:
-            return []
-
         num_cols = len(headers)
-        col_values = {i: set() for i in range(num_cols)}
 
-        for row in data_rows:
-            while len(row) < num_cols:
-                row.append("")
-            for i in range(num_cols):
-                val = row[i].strip()
-                if val:
-                    col_values[i].add(val)
-
-        eligible_columns = []
-        for i, header in enumerate(headers):
-            unique_count = len(col_values[i])
-            if 2 <= unique_count < total_samples:
-                eligible_columns.append(header)
-
-        return eligible_columns
-
+        data_rows = []
+        for row in rows[1:]:
+            padded = [(row[i].strip() if i < len(row) else "") for i in range(num_cols)]
+            data_rows.append(padded)
+        return headers, data_rows
+    except BatchException:
+        raise
     except Exception as e:
         raise BatchException(
             ErrorTypes.INVALID_CSV_CONTENT,
-            detail=f"Das Samplesheet konnte nicht statistisch validiert werden: {str(e)}"
+            detail=f"Das Samplesheet konnte nicht gelesen werden: {str(e)}",
         )
+
+
+def get_eligible_columns(job_dir: Path) -> list[dict]:
+    """Columns usable as a batch variable OR a covariate, with their level count.
+
+    Eligible = groups the samples: at least two distinct values and not one per
+    sample (a per-sample identifier groups nothing). No technical/biological
+    guess and no hardcoded column name — the biologist assigns the roles, helped
+    by the sample-sheet preview. Returns ``[{"name", "levels"}]``.
+    """
+    headers, data_rows = _read_data_section(job_dir)
+    total = len(data_rows)
+    if total == 0:
+        return []
+
+    eligible = []
+    for i, header in enumerate(headers):
+        values = sorted({row[i] for row in data_rows if row[i]})
+        if 2 <= len(values) < total:
+            eligible.append({"name": header, "levels": len(values), "values": values})
+    return eligible
+
+
+def validate_group_selection(job_dir: Path, group_column: str, case_group: str, control_group: str) -> None:
+    """Validate a DMP/DMR group selection against the sample sheet.
+
+    Permissive about *which* column is chosen (any grouping column), strict about
+    consistency: the column must exist and both groups must be distinct values in
+    it. Raises ``BatchException`` (RFC-9457) otherwise.
+    """
+    columns = {c["name"]: c for c in get_eligible_columns(job_dir)}
+    col = columns.get(group_column)
+    if col is None:
+        raise BatchException(
+            ErrorTypes.INVALID_BATCH_VARIABLE,
+            detail=f"Vergleichs-Spalte '{group_column}' ist nicht verfügbar.",
+            provided=group_column,
+            available=list(columns),
+        )
+    if case_group == control_group:
+        raise BatchException(
+            ErrorTypes.INVALID_SELECTION,
+            detail="Case- und Control-Gruppe müssen unterschiedlich sein.",
+        )
+    for role, value in (("case", case_group), ("control", control_group)):
+        if value not in col["values"]:
+            raise BatchException(
+                ErrorTypes.INVALID_SELECTION,
+                detail=f"{role}-Gruppe '{value}' kommt in Spalte '{group_column}' nicht vor.",
+                provided=value,
+                available=col["values"],
+            )
+
+
+def get_available_columns_from_samplesheet(job_dir: Path) -> list:
+    """Backward-compatible list of eligible column names (no level counts)."""
+    return [col["name"] for col in get_eligible_columns(job_dir)]
+
+
+def get_samplesheet_preview(job_dir: Path, max_rows: int = 50) -> dict:
+    """Tabular preview of the sample sheet so the biologist can assign roles."""
+    headers, data_rows = _read_data_section(job_dir)
+    limit = max(1, min(max_rows, 200))
+    return {
+        "columns": headers,
+        "rows": data_rows[:limit],
+        "total_rows": len(data_rows),
+        "truncated": len(data_rows) > limit,
+    }
 
 
 # ── Pipeline-Tasks ────────────────────────────────────────────────────────────
@@ -368,17 +421,24 @@ async def run_downstream_analysis_task(
     job_dir_raw: str,
     cancel_event: asyncio.Event,
     *,
-    adj_pval: float = 0.05,
     array_type: str = "EPICv2",
     extract_from_normalized: bool = True,
+    group_column: str = "",
+    case_group: str = "",
+    control_group: str = "",
 ) -> None:
     """
     Runs DMR analysis followed by DMP analysis.
 
-    The caller (batch route) owns the ANALYSIS+RUNNING transition. This flag
-    only selects the beta source: extract_from_normalized=True reads the
-    uncorrected normalized data, =False uses the batch-corrected matrix.
+    The caller (batch route) owns the ANALYSIS+RUNNING transition.
+    ``extract_from_normalized`` selects the beta source (True = uncorrected
+    normalized data, False = batch-corrected matrix).
+
+    ``group_column``/``case_group``/``control_group`` define the comparison
+    (any column name, deterministic Δβ = mean(case) − mean(control), TAB-02).
+    Both analyses keep ALL rows/regions (significance is a table filter, TAB-01).
     """
+    group_args = [group_column, case_group, control_group]
     try:
         job_dir = Path(job_dir_raw).resolve()
         logger.info("Starte Downstream-Analyse: job_id=%s", job_id)
@@ -444,7 +504,12 @@ async def run_downstream_analysis_task(
                 job_id=job_id,
                 job_dir=str(job_dir),
                 sample_sheet=sample_sheet_name,
-                extra_args=["beta.rds", "3", "NULL", str(adj_pval), "1000", array_type, "10", "1"],
+                # Last arg is nCores: parallelize the DMR bootstraps (dmr.R caps
+                # it at the host's physical cores). See app.core.config.DMR_CORES.
+                # adjPvalDmr = 1.0 → keep all found regions (significance is a
+                # table filter); nCores parallelizes bootstraps; then the group
+                # selection (column, case, control) for a deterministic sign.
+                extra_args=["beta.rds", "3", "NULL", "1.0", "1000", array_type, "10", str(DMR_CORES), *group_args],
             ),
             cancel_event=cancel_event,
             on_progress=on_dmr_progress,
@@ -477,7 +542,9 @@ async def run_downstream_analysis_task(
                 job_id=job_id,
                 job_dir=str(job_dir),
                 sample_sheet=sample_sheet_name,
-                extra_args=["beta.rds", str(adj_pval), array_type],
+                # adjPVal = 1.0 → keep ALL probes (significance is a table filter,
+                # TAB-01); then arraytype + group selection (column, case, control).
+                extra_args=["beta.rds", "1.0", array_type, *group_args],
             ),
             cancel_event=cancel_event,
             on_progress=on_dmp_progress,

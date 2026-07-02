@@ -10,6 +10,10 @@ describe("BatchForm HelpButton", () => {
       <BatchForm
         parameters={{
           job_id: "test-job",
+          columns: [
+            { name: "Sample_Plate", levels: 2, values: ["Plate_1", "Plate_2"] },
+            { name: "Sample_Group", levels: 2, values: ["Cellline", "Coriell"] },
+          ],
           available_columns: ["Sample_Plate", "Sample_Group"],
         }}
         onSubmit={onSubmit}
