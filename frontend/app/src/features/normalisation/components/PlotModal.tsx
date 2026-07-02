@@ -1,22 +1,21 @@
 /**
- * Props für die Modalansicht beim Anklicken der Props
- * @property imageURL - URL des Bildes, das im Modal angezeigt werden soll
- * @property title - Titel oder Beschreibung des Bildes, das im Modal angezeigt wird
- * @property onClose - Funktion, die aufgerufen wird, wenn das Modal geschlossen werden soll (z.B. durch Klicken außerhalb des Modals oder auf den Schließen-Button)
- *
+ * Props for the PlotModal component.
  */
 interface PlotModalProps {
+    /** The source URL of the image to be displayed. */
     imageURL: string;
+    /** Descriptive title for the image, also used as alternative text. */
     title: string;
+    /** Callback fired when the modal requests to be closed (via backdrop click or close button). */
     onClose: () => void;
 }
 
 /**
- * Komponente, die ein Modal anzeigt, wenn auf ein Plot geklickt wird. Das Modal zeigt das Bild in voller Größe und einen Titel an.
- * @param imageURL - URL des Bildes, das im Modal angezeigt werden soll
- * @param title - Titel oder Beschreibung des Bildes, das im Modal angezeigt wird
- * @param onClose - Funktion, die aufgerufen wird, wenn das Modal geschlossen werden soll (z.B. durch Klicken außerhalb des Modals oder auf den Schließen-Button)
- * @constructor
+ * A modal lightbox for inspecting analysis plots in high detail.
+ *
+ * It features a backdrop blur effect and ensures the plot remains within
+ * the viewport boundaries. Clicks on the backdrop are intercepted to
+ * facilitate easy closing.
  */
 function PlotModal({imageURL, title, onClose}: PlotModalProps) {
     return (

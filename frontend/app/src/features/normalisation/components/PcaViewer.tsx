@@ -4,14 +4,18 @@ import PcaPlot from "./PcaPlot";
 import { defaultGroupColors, uniqueGroups } from "../utils/pcaColors";
 import { exportSvgAsPng } from "../utils/exportSvg";
 
+/**
+ * Interface for the props of the PcaViewer component.
+ */
 interface PcaViewerProps {
   method: string;
   data: PcaData;
   onClose: () => void;
 }
 
-// Named palette for the colour dropdown (NRM-03: two dropdowns – pick a point,
-// then assign a colour).
+/**
+ * Palette of high-contrast colors for manual point highlighting.
+ */
 const COLOR_OPTIONS: { name: string; value: string }[] = [
   { name: "Blue", value: "#1f77b4" },
   { name: "Red", value: "#d62728" },

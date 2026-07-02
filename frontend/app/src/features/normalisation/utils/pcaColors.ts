@@ -1,30 +1,30 @@
 import type { PcaPoint } from "./types";
 
 /**
- * Kontrastreiche, gut unterscheidbare Farbpalette (kein Hellgrau), damit die
- * Punkte auch in Screenshots und Ausdrucken erkennbar sind (NRM-02).
- * Reihenfolge nach maximaler Unterscheidbarkeit gewählt.
+ * High-contrast color palette optimized for accessibility and print visibility.
+ * Colors are selected for maximum distinctness to ensure points remain
+ * recognizable in screenshots and publications.
  */
 export const PCA_PALETTE: string[] = [
-  "#1f77b4", // blau
-  "#d62728", // rot
-  "#2ca02c", // grün
+  "#1f77b4", // blue
+  "#d62728", // red
+  "#2ca02c", // green
   "#ff7f0e", // orange
-  "#9467bd", // violett
-  "#17becf", // türkis
-  "#bcbd22", // oliv
+  "#9467bd", // purple
+  "#17becf", // cyan
+  "#bcbd22", // olive
   "#e377c2", // pink
-  "#8c564b", // braun
-  "#393b79", // dunkelblau
+  "#8c564b", // brown
+  "#393b79", // dark blue
 ];
 
-/** Farbe für Punkte ohne erkennbare Gruppe. */
+/** Fallback color for samples without a designated group. */
 export const NO_GROUP_COLOR = "#555555";
 
-/** Display name for points without a group. */
+/** Fallback label for samples without a designated group. */
 export const NO_GROUP_LABEL = "No group";
 
-/** Eindeutige Gruppen in stabiler Reihenfolge (Reihenfolge des Auftretens). */
+/** Unique groups in a stable order (order of appearance). */
 export function uniqueGroups(points: PcaPoint[]): string[] {
   const seen = new Set<string>();
   const groups: string[] = [];
@@ -38,7 +38,10 @@ export function uniqueGroups(points: PcaPoint[]): string[] {
   return groups;
 }
 
-/** Weist jeder Gruppe eine Palettenfarbe zu (zyklisch bei vielen Gruppen). */
+/**
+ * Maps each group to a palette color.
+ * Cycles through the {@link PCA_PALETTE} if the group count exceeds the palette size.
+ */
 export function defaultGroupColors(points: PcaPoint[]): Record<string, string> {
   const colors: Record<string, string> = {};
   uniqueGroups(points).forEach((group, i) => {

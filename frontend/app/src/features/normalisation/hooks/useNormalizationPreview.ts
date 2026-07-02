@@ -3,22 +3,26 @@ import type { NormalizationPreview } from "../utils/types";
 import type {ProblemDetail} from "../../../shared/error-handling/types/ErrorTypes.ts";
 
 /**
- * Rückgabewerte des useNormalizationPreview Hooks.
- *  - data: Die Normalisierungsvorschau (Methoden mit Density-URL + PCA-Daten).
- *  - isLoading: Gibt an, ob die Daten geladen werden.
- *  - error: Fehlermeldung, falls ein Fehler auftritt.
- *  - setError: Funktion zum Setzen des Fehlers.
+ * Result of the {@link useNormalizationPreview} hook.
  */
 interface Result {
+  /** The normalization preview containing plot URLs and PCA datasets. */
   data: NormalizationPreview | null;
+  /** Indicates if the data is currently being fetched. */
   isLoading: boolean;
+  /** Error details conforming to {@link ProblemDetail}, an Error object, or a string. */
   error: ProblemDetail | Error | string | null;
+  /** Function to manually update or clear the error state. */
   setError: (error: ProblemDetail | Error | string | null) => void;
 }
 
 /**
- * Lädt die Normalisierungsvorschau eines Jobs. Das Backend liefert pro Methode
- * die URL des Density-Plots (PNG) und die PCA-Punkte als JSON.
+ * Fetches normalization previews for a specific job.
+ *
+ * Retrieves static density plot URLs and dynamic PCA JSON data for each
+ * supported normalization method to allow for comparative visualization.
+ *
+ * @param jobId - The unique identifier of the job. Fetching is skipped if null.
  */
 export function useNormalizationPreview(jobId: string | null): Result {
   const [data, setData] = useState<NormalizationPreview | null>(null);

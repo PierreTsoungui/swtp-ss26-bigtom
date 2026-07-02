@@ -1,10 +1,14 @@
 /**
- * Exportiert ein SVG-Element als PNG-Datei (NRM-04).
+ * Exports an SVG element as a high-resolution PNG file.
  *
- * Der im Frontend gerenderte PCA-Plot (inkl. gewählter Farben und Labels) wird
- * serialisiert, auf einen Canvas mit weißem Hintergrund gezeichnet und als PNG
- * heruntergeladen. ``scale`` erhöht die Pixeldichte, damit der Export auch im
- * Ausdruck/in Publikationen scharf und lesbar ist.
+ * The SVG is serialized, rendered onto a canvas with a solid background,
+ * and downloaded. High-density scaling ensures sharpness for print and publications.
+ *
+ * @param svg - The SVG element to capture.
+ * @param filename - Target name for the downloaded file.
+ * @param width - Base width of the image.
+ * @param height - Base height of the image.
+ * @param scale - Pixel density multiplier (e.g., 2 for Retina quality).
  */
 export function exportSvgAsPng(
   svg: SVGSVGElement,
@@ -26,18 +30,18 @@ export function exportSvgAsPng(
 
       const ctx = canvas.getContext("2d");
       if (!ctx) {
-        reject(new Error("Canvas-Kontext nicht verfügbar"));
+        reject(new Error("Canvas context not available"));
         return;
       }
 
-      // Weißer Hintergrund für Druck/Screenshot (SVG ist sonst transparent).
+      // Ensure solid white background for print (prevent transparency).
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
       canvas.toBlob((blob) => {
         if (!blob) {
-          reject(new Error("PNG-Export fehlgeschlagen"));
+          reject(new Error("PNG export failed"));
           return;
         }
         const url = URL.createObjectURL(blob);
@@ -51,7 +55,7 @@ export function exportSvgAsPng(
         resolve();
       }, "image/png");
     };
-    image.onerror = () => reject(new Error("SVG konnte nicht gerendert werden"));
+    image.onerror = () => reject(new Error("SVG could not be rendered"));
     image.src = svgDataUrl;
   });
 }
