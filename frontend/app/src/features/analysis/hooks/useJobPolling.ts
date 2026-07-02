@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import type { ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../../shared/utils/JobTypes.ts";
 
+/** Das Intervall für das Polling in Millisekunden. */
+const POLLING_INTERVAL = 3000; // 3 Sekunden
 
 /**
  * Hilfsfunktion, die überprüft, ob sich ein Job in einem terminalen Zustand befindet.
@@ -69,7 +71,7 @@ export function useJobPolling(jobId: string | null, resetKey? : number): JobStat
         const shouldStop = isTerminalState(data.phase, data.status);
 
         if (!shouldStop && !cancelled) {
-          timeoutId = setTimeout(poll, 1500);
+          timeoutId = setTimeout(poll, POLLING_INTERVAL);
         }
       } catch (err) {
         failCountRef.current += 1;
@@ -81,7 +83,6 @@ export function useJobPolling(jobId: string | null, resetKey? : number): JobStat
                     ...prev,
                     status:  JobStatusValue.FAILED,
                     error: {
-                      type: "http://localhost:3000/analysis/errors#connection-error",
                       title: "Verbindungsfehler",
                       status: 503,
                       detail: "Verbindung zum Server nach 3 Versuchen unterbrochen.",
@@ -92,7 +93,7 @@ export function useJobPolling(jobId: string | null, resetKey? : number): JobStat
           );
 
         } else if (!cancelled) {
-          timeoutId = setTimeout(poll, 1500 * failCountRef.current); // Exponentielles Backoff
+          timeoutId = setTimeout(poll, POLLING_INTERVAL * failCountRef.current); // Exponentielles Backoff
         }
       }
     };

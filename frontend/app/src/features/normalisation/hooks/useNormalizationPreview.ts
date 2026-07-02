@@ -1,16 +1,19 @@
 import { useState, useEffect } from "react";
 import type { NormalizationPreview } from "../utils/types";
+import type {ProblemDetail} from "../../../shared/error-handling/types/ErrorTypes.ts";
 
 /**
  * Rückgabewerte des useNormalizationPreview Hooks.
  *  - data: Die Normalisierungsvorschau (Methoden mit Density-URL + PCA-Daten).
  *  - isLoading: Gibt an, ob die Daten geladen werden.
  *  - error: Fehlermeldung, falls ein Fehler auftritt.
+ *  - setError: Funktion zum Setzen des Fehlers.
  */
 interface Result {
   data: NormalizationPreview | null;
   isLoading: boolean;
-  error: string | null;
+  error: ProblemDetail | Error | string | null;
+  setError: (error: ProblemDetail | Error | string | null) => void;
 }
 
 /**
@@ -20,7 +23,7 @@ interface Result {
 export function useNormalizationPreview(jobId: string | null): Result {
   const [data, setData] = useState<NormalizationPreview | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ProblemDetail | Error | string | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -34,12 +37,20 @@ export function useNormalizationPreview(jobId: string | null): Result {
         const res = await fetch(`/api/v1/preview/normalization/${jobId}`, {
           signal: controller.signal,
         });
-        if (!res.ok) throw new Error(`Error: ${res.status}`);
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => null);
+          setError(errorData ?? {
+            title: "Too Many Requests",
+            status: res.status,
+            detail: "Rate limit exceeded. Please wait before retrying."
+          });
+          return;
+        }
         const json: NormalizationPreview = await res.json();
         setData(json);
       } catch (e) {
         if (controller.signal.aborted) return;
-        setError(e instanceof Error ? e.message : "Unknown error");
+        setError(e as ProblemDetail | Error | string);
       } finally {
         if (!controller.signal.aborted) setIsLoading(false);
       }
@@ -49,5 +60,5 @@ export function useNormalizationPreview(jobId: string | null): Result {
     return () => controller.abort();
   }, [jobId]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, setError };
 }
