@@ -70,14 +70,14 @@ source("/app/r_backend/utils/beta.R")
 #'     suited to datasets with large global differences (e.g. tumor vs. normal).
 #' }
 NORMALIZATION_METHODS <- list(
-  noob     = function(rgset) preprocessNoob(rgset),
+  noob = function(rgset) preprocessNoob(rgset),
   quantile = function(rgset) preprocessQuantile(rgset),
-  swan     = function(rgset) {
+  swan = function(rgset) {
     # preprocessSWAN needs the per-probe design from a MethylSet; build it
     # explicitly so the input is unambiguous.
     preprocessSWAN(rgset, mSet = preprocessRaw(rgset))
   },
-  funnorm  = function(rgset) {
+  funnorm = function(rgset) {
     # nPCs must stay below the sample count; clamp for small cohorts.
     n_pcs <- min(2L, max(1L, ncol(rgset) - 1L))
     preprocessFunnorm(rgset, nPCs = n_pcs)
@@ -185,7 +185,7 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     emit_error("Too few arguments. Expected: <job_dir> <method>")
   }
   job_dir <- args[1]
-  method  <- tolower(args[2])
+  method <- tolower(args[2])
 
   if (!method %in% names(NORMALIZATION_METHODS)) {
     emit_error(sprintf(
@@ -202,8 +202,10 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
 
   # Log the auto-detected array type for traceability (450K / EPIC / EPIC v2).
   array_info <- tryCatch(paste(annotation(rgset), collapse = " / "), error = function(e) "unknown")
-  emit_progress(15, sprintf("Data loaded - Samples: %d, Probes: %d, Array: %s",
-                            ncol(rgset), nrow(rgset), array_info))
+  emit_progress(15, sprintf(
+    "Data loaded - Samples: %d, Probes: %d, Array: %s",
+    ncol(rgset), nrow(rgset), array_info
+  ))
 
   # Normalize.
   emit_progress(30, paste("Normalizing with method:", method))

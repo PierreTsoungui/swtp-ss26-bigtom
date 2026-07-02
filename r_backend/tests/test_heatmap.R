@@ -31,33 +31,38 @@ library(testthat)
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
 
 SCRIPT_PATH <- "/app/r_backend/heatmap.R"
-ANNO_UTIL   <- "/app/r_backend/utils/heatmap_anno.R"
+ANNO_UTIL <- "/app/r_backend/utils/heatmap_anno.R"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # UNIT TESTS — annotation helpers (utils/heatmap_anno.R)
 # ══════════════════════════════════════════════════════════════════════════════
 
-anno_loaded <- tryCatch({
-  suppressWarnings(suppressMessages(library(circlize)))   # make_anno_spec continuous path
-  source(ANNO_UTIL)
-  exists("build_colours") && exists("make_anno_spec")
-}, error = function(e) FALSE)
+anno_loaded <- tryCatch(
+  {
+    suppressWarnings(suppressMessages(library(circlize))) # make_anno_spec continuous path
+    source(ANNO_UTIL)
+    exists("build_colours") && exists("make_anno_spec")
+  },
+  error = function(e) FALSE
+)
 
 skip_if_no_anno <- function() {
-  skip_if_not(isTRUE(anno_loaded),
-              paste("utils/heatmap_anno.R could not be sourced (needs circlize):", ANNO_UTIL))
+  skip_if_not(
+    isTRUE(anno_loaded),
+    paste("utils/heatmap_anno.R could not be sourced (needs circlize):", ANNO_UTIL)
+  )
 }
 
 test_that("build_colours maps every level to a colour and recycles beyond 12", {
   skip_if_no_anno()
   cols <- build_colours(c("A", "B", "A", "C"))
-  expect_equal(sort(names(cols)), c("A", "B", "C"))   # one entry per distinct level
+  expect_equal(sort(names(cols)), c("A", "B", "C")) # one entry per distinct level
   expect_true(all(grepl("^#[0-9A-Fa-f]{6}$", cols)))
 
   many <- build_colours(paste0("L", 1:15))
   expect_length(many, 15L)
-  expect_equal(unname(many["L13"]), unname(many["L1"]))   # palette (12) recycled
+  expect_equal(unname(many["L13"]), unname(many["L1"])) # palette (12) recycled
 })
 
 test_that("make_anno_spec treats a categorical column as discrete swatches", {
@@ -65,15 +70,15 @@ test_that("make_anno_spec treats a categorical column as discrete swatches", {
   spec <- make_anno_spec("Group", c("Case", "Ctrl", "Case", "Ctrl"))
   expect_equal(spec$kind, "discrete")
   expect_equal(spec$name, "Group")
-  expect_type(spec$col, "character")                  # named colour vector
+  expect_type(spec$col, "character") # named colour vector
   expect_true(all(c("Case", "Ctrl") %in% names(spec$col)))
 })
 
 test_that("make_anno_spec treats a many-valued numeric column as a continuous gradient", {
   skip_if_no_anno()
-  spec <- make_anno_spec("Age", as.character(20:40))   # 21 distinct numeric values
+  spec <- make_anno_spec("Age", as.character(20:40)) # 21 distinct numeric values
   expect_equal(spec$kind, "continuous")
-  expect_true(is.function(spec$col))                   # colorRamp2 function
+  expect_true(is.function(spec$col)) # colorRamp2 function
   expect_true(is.numeric(spec$values))
 })
 
@@ -157,12 +162,15 @@ run_heatmap <- function(n_cpg = 10L, select_ids = NULL, write_input = TRUE,
     ids <- character(0)
   }
   if (is.null(sheet)) {
-    sheet <- file.path(jd, "sheet.csv"); write_sheet(sheet)
+    sheet <- file.path(jd, "sheet.csv")
+    write_sheet(sheet)
   }
   if (write_input) {
     sel <- select_ids %||% ids
     write.csv(data.frame(ID = sel, stringsAsFactors = FALSE),
-              file.path(jd, "heatmap_input.csv"), row.names = FALSE)
+      file.path(jd, "heatmap_input.csv"),
+      row.names = FALSE
+    )
   }
   if (!is.null(beta)) saveRDS(beta, file.path(jd, "beta.rds"))
 
@@ -172,21 +180,28 @@ run_heatmap <- function(n_cpg = 10L, select_ids = NULL, write_input = TRUE,
     stdout = TRUE, stderr = TRUE, env = env_vec
   ))
   status <- attr(out, "status") %||% 0L
-  logs <- Filter(function(x) !is.null(x) && is.list(x),
-                 lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL)))
-  list(status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
-       logs = logs, job_dir = jd,
-       output = file.path(jd, env$HEATMAP_OUTPUT %||% "heatmap.png"))
+  logs <- Filter(
+    function(x) !is.null(x) && is.list(x),
+    lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL))
+  )
+  list(
+    status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
+    logs = logs, job_dir = jd,
+    output = file.path(jd, env$HEATMAP_OUTPUT %||% "heatmap.png")
+  )
 }
 
-log_types    <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
+log_types <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
 log_messages <- function(res) unlist(lapply(res$logs, function(x) x$message %||% NULL))
 
 skip_if_no_script <- function() skip_if_not(file.exists(SCRIPT_PATH), "heatmap.R not found")
 
 # Memoise the group-average happy run.
 .hm_cache <- new.env(parent = emptyenv())
-happy_run <- function() { if (is.null(.hm_cache$res)) .hm_cache$res <- run_heatmap(); .hm_cache$res }
+happy_run <- function() {
+  if (is.null(.hm_cache$res)) .hm_cache$res <- run_heatmap()
+  .hm_cache$res
+}
 
 # ── Happy path (group-average mode) ───────────────────────────────────────────
 
@@ -198,7 +213,7 @@ test_that("group-average run exits 0, signals 'done', and writes PNG + PDF", {
   expect_false("error" %in% log_types(res))
 
   expect_true(file.exists(res$output), info = "heatmap.png not created")
-  expect_gt(file.size(res$output), 1000L)                 # a real image, not empty
+  expect_gt(file.size(res$output), 1000L) # a real image, not empty
   pdf <- file.path(res$job_dir, "heatmap.pdf")
   expect_true(file.exists(pdf), info = "heatmap.pdf not created")
 })
@@ -215,7 +230,7 @@ test_that("a custom HEATMAP_OUTPUT filename is honoured (default not created)", 
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
   expect_equal(res$status, 0L, info = res$stdout)
   expect_true(file.exists(file.path(res$job_dir, "custom_heatmap.png")))
-  expect_true(file.exists(file.path(res$job_dir, "custom_heatmap.pdf")))   # derived name
+  expect_true(file.exists(file.path(res$job_dir, "custom_heatmap.pdf"))) # derived name
   expect_false(file.exists(file.path(res$job_dir, "heatmap.png")))
 })
 
@@ -223,17 +238,22 @@ test_that("a custom HEATMAP_OUTPUT filename is honoured (default not created)", 
 
 test_that("per-sample mode renders from beta.rds mapped via Sentrix addresses", {
   skip_if_no_script()
-  jd <- tempfile("hm_persample_"); dir.create(jd)
+  jd <- tempfile("hm_persample_")
+  dir.create(jd)
   on.exit(unlink(jd, recursive = TRUE), add = TRUE)
   ids <- write_dmp_rds(file.path(jd, "dmp_results.rds"), n = 8L)
   sheet_df <- write_sheet(file.path(jd, "sheet.csv"))
   # beta.rds columns are the Sentrix addresses (Sentrix_ID + "_" + Position).
   addrs <- paste0(sheet_df$Sentrix_ID, "_", sheet_df$Sentrix_Position)
-  bmat <- matrix(runif(length(ids) * length(addrs)), nrow = length(ids),
-                 dimnames = list(ids, addrs))
+  bmat <- matrix(runif(length(ids) * length(addrs)),
+    nrow = length(ids),
+    dimnames = list(ids, addrs)
+  )
 
-  res <- run_heatmap(job_dir = jd, result_rds = file.path(jd, "dmp_results.rds"),
-                     sheet = file.path(jd, "sheet.csv"), beta = bmat, select_ids = ids)
+  res <- run_heatmap(
+    job_dir = jd, result_rds = file.path(jd, "dmp_results.rds"),
+    sheet = file.path(jd, "sheet.csv"), beta = bmat, select_ids = ids
+  )
   expect_equal(res$status, 0L, info = res$stdout)
   expect_true(any(grepl("recovered from beta.rds|Sentrix addresses mapped", log_messages(res), ignore.case = TRUE)))
   expect_true(file.exists(file.path(jd, "heatmap.png")))
@@ -250,32 +270,45 @@ test_that("wrong argument count is rejected with a usage error", {
 
 test_that("a missing result.rds is rejected", {
   skip_if_no_script()
-  jd <- tempfile("hm_nords_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE))
+  jd <- tempfile("hm_nords_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE))
   write_sheet(file.path(jd, "sheet.csv"))
-  res <- run_heatmap(job_dir = jd, result_rds = file.path(jd, "nope.rds"),
-                     sheet = file.path(jd, "sheet.csv"))
+  res <- run_heatmap(
+    job_dir = jd, result_rds = file.path(jd, "nope.rds"),
+    sheet = file.path(jd, "sheet.csv")
+  )
   expect_equal(res$status, 1L)
   expect_true(any(grepl("result.rds not found", log_messages(res), ignore.case = TRUE)))
 })
 
 test_that("a missing sample sheet is rejected", {
   skip_if_no_script()
-  jd <- tempfile("hm_nosheet_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE))
+  jd <- tempfile("hm_nosheet_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE))
   write_dmp_rds(file.path(jd, "dmp_results.rds"))
-  res <- run_heatmap(job_dir = jd, result_rds = file.path(jd, "dmp_results.rds"),
-                     sheet = file.path(jd, "nope.csv"))
+  res <- run_heatmap(
+    job_dir = jd, result_rds = file.path(jd, "dmp_results.rds"),
+    sheet = file.path(jd, "nope.csv")
+  )
   expect_equal(res$status, 1L)
   expect_true(any(grepl("sample_sheet.csv not found", log_messages(res), ignore.case = TRUE)))
 })
 
 test_that("a non-existent job_dir is rejected", {
   skip_if_no_script()
-  jd <- tempfile("hm_setup_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE))
-  rds <- file.path(jd, "dmp_results.rds"); write_dmp_rds(rds)
-  sh  <- file.path(jd, "sheet.csv"); write_sheet(sh)
+  jd <- tempfile("hm_setup_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE))
+  rds <- file.path(jd, "dmp_results.rds")
+  write_dmp_rds(rds)
+  sh <- file.path(jd, "sheet.csv")
+  write_sheet(sh)
   out <- suppressWarnings(system2("Rscript",
     c(shQuote(SCRIPT_PATH), shQuote(rds), shQuote(sh), shQuote("/no/such/dir")),
-    stdout = TRUE, stderr = TRUE))
+    stdout = TRUE, stderr = TRUE
+  ))
   status <- attr(out, "status") %||% 0L
   expect_true(status != 0L)
   expect_true(any(grepl("job_dir does not exist", out, ignore.case = TRUE)))
@@ -283,7 +316,9 @@ test_that("a non-existent job_dir is rejected", {
 
 test_that("an empty DMP table is rejected", {
   skip_if_no_script()
-  jd <- tempfile("hm_empty_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE))
+  jd <- tempfile("hm_empty_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE))
   rds <- file.path(jd, "dmp_results.rds")
   saveRDS(data.frame(ID = character(0), GROUP1_AVG = numeric(0), GROUP2_AVG = numeric(0)), rds)
   write_sheet(file.path(jd, "sheet.csv"))
@@ -294,9 +329,11 @@ test_that("an empty DMP table is rejected", {
 
 test_that("a non-data-frame result.rds is rejected", {
   skip_if_no_script()
-  jd <- tempfile("hm_badtype_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE))
+  jd <- tempfile("hm_badtype_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE))
   rds <- file.path(jd, "dmp_results.rds")
-  saveRDS(list("not", "a", "data frame"), rds)   # a list -> obj[[1]] is a string
+  saveRDS(list("not", "a", "data frame"), rds) # a list -> obj[[1]] is a string
   write_sheet(file.path(jd, "sheet.csv"))
   res <- run_heatmap(job_dir = jd, result_rds = rds, sheet = file.path(jd, "sheet.csv"))
   expect_equal(res$status, 1L)
@@ -336,7 +373,8 @@ test_that("an invalid HEATMAP_MAX_ROWS (0 or non-numeric) is rejected", {
     on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
     expect_equal(res$status, 1L, info = paste("HEATMAP_MAX_ROWS =", val))
     expect_true(any(grepl("positive integer", log_messages(res), ignore.case = TRUE)),
-                info = paste("HEATMAP_MAX_ROWS =", val))
+      info = paste("HEATMAP_MAX_ROWS =", val)
+    )
   }
 })
 
@@ -345,15 +383,21 @@ test_that("an invalid HEATMAP_MAX_ROWS (0 or non-numeric) is rejected", {
 test_that("an NA-heavy beta matrix is rejected", {
   # > 20% NA in the beta matrix aborts (grey-cell soup is not a useful heatmap).
   skip_if_no_script()
-  jd <- tempfile("hm_na_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE))
+  jd <- tempfile("hm_na_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE))
   ids <- write_dmp_rds(file.path(jd, "dmp_results.rds"), n = 8L)
   sheet_df <- write_sheet(file.path(jd, "sheet.csv"))
   addrs <- paste0(sheet_df$Sentrix_ID, "_", sheet_df$Sentrix_Position)
-  bmat <- matrix(runif(length(ids) * length(addrs)), nrow = length(ids),
-                 dimnames = list(ids, addrs))
-  bmat[sample(length(bmat), ceiling(length(bmat) * 0.5))] <- NA   # 50% NA
-  res <- run_heatmap(job_dir = jd, result_rds = file.path(jd, "dmp_results.rds"),
-                     sheet = file.path(jd, "sheet.csv"), beta = bmat, select_ids = ids)
+  bmat <- matrix(runif(length(ids) * length(addrs)),
+    nrow = length(ids),
+    dimnames = list(ids, addrs)
+  )
+  bmat[sample(length(bmat), ceiling(length(bmat) * 0.5))] <- NA # 50% NA
+  res <- run_heatmap(
+    job_dir = jd, result_rds = file.path(jd, "dmp_results.rds"),
+    sheet = file.path(jd, "sheet.csv"), beta = bmat, select_ids = ids
+  )
   expect_equal(res$status, 1L)
   expect_true(any(grepl("NA values", log_messages(res), ignore.case = TRUE)))
 })
@@ -365,17 +409,24 @@ test_that("an NA-heavy beta matrix is rejected", {
 #' Build a per-sample heatmap job with Sample_Group AND Batch grouping columns.
 #' @return list(job, rds, sheet) with heatmap_input.csv already written.
 setup_grouping_job <- function(n = 4L) {
-  jd <- tempfile("hm_grp_"); dir.create(jd)
-  ids  <- write_dmp_rds(file.path(jd, "dmp_results.rds"), n = 8L)
-  sids <- paste0("ID", seq_len(n)); pos <- paste0("R0", seq_len(n), "C01")
+  jd <- tempfile("hm_grp_")
+  dir.create(jd)
+  ids <- write_dmp_rds(file.path(jd, "dmp_results.rds"), n = 8L)
+  sids <- paste0("ID", seq_len(n))
+  pos <- paste0("R0", seq_len(n), "C01")
   addrs <- paste0(sids, "_", pos)
-  sheet <- data.frame(Sample_Name = paste0("S", seq_len(n)),
-                      Sample_Group = rep(c("A", "B"), length.out = n),
-                      Batch        = rep(c("X", "Y"), each = n %/% 2L),
-                      Sentrix_ID = sids, Sentrix_Position = pos, stringsAsFactors = FALSE)
-  shp <- file.path(jd, "sheet.csv"); write.csv(sheet, shp, row.names = FALSE)
-  saveRDS(matrix(runif(length(ids) * n), nrow = length(ids), dimnames = list(ids, addrs)),
-          file.path(jd, "beta.rds"))
+  sheet <- data.frame(
+    Sample_Name = paste0("S", seq_len(n)),
+    Sample_Group = rep(c("A", "B"), length.out = n),
+    Batch = rep(c("X", "Y"), each = n %/% 2L),
+    Sentrix_ID = sids, Sentrix_Position = pos, stringsAsFactors = FALSE
+  )
+  shp <- file.path(jd, "sheet.csv")
+  write.csv(sheet, shp, row.names = FALSE)
+  saveRDS(
+    matrix(runif(length(ids) * n), nrow = length(ids), dimnames = list(ids, addrs)),
+    file.path(jd, "beta.rds")
+  )
   write.csv(data.frame(ID = ids), file.path(jd, "heatmap_input.csv"), row.names = FALSE)
   list(job = jd, rds = file.path(jd, "dmp_results.rds"), sheet = shp)
 }
@@ -385,17 +436,23 @@ run_hm_grp <- function(s, env = list()) {
   env_vec <- if (length(env)) paste0(names(env), "=", unlist(env)) else character(0)
   out <- suppressWarnings(system2("Rscript",
     c(shQuote(SCRIPT_PATH), shQuote(s$rds), shQuote(s$sheet), shQuote(s$job)),
-    stdout = TRUE, stderr = TRUE, env = env_vec))
+    stdout = TRUE, stderr = TRUE, env = env_vec
+  ))
   status <- attr(out, "status") %||% 0L
-  logs <- Filter(function(x) !is.null(x) && is.list(x),
-                 lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL)))
-  list(status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
-       logs = logs, job = s$job)
+  logs <- Filter(
+    function(x) !is.null(x) && is.list(x),
+    lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL))
+  )
+  list(
+    status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
+    logs = logs, job = s$job
+  )
 }
 
 test_that("HEATMAP_GROUP1 selects an explicit primary annotation column", {
   skip_if_no_script()
-  s <- setup_grouping_job(); on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
+  s <- setup_grouping_job()
+  on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
   res <- run_hm_grp(s, env = list(HEATMAP_GROUP1 = "Batch"))
   expect_equal(res$status, 0L, info = res$stdout)
   expect_true(file.exists(file.path(s$job, "heatmap.png")))
@@ -403,7 +460,8 @@ test_that("HEATMAP_GROUP1 selects an explicit primary annotation column", {
 
 test_that("an unknown HEATMAP_GROUP1 column is rejected", {
   skip_if_no_script()
-  s <- setup_grouping_job(); on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
+  s <- setup_grouping_job()
+  on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
   res <- run_hm_grp(s, env = list(HEATMAP_GROUP1 = "NoSuchColumn"))
   expect_equal(res$status, 1L)
   expect_true(any(grepl("Primary grouping column not found", log_messages(res), ignore.case = TRUE)))
@@ -411,7 +469,8 @@ test_that("an unknown HEATMAP_GROUP1 column is rejected", {
 
 test_that("HEATMAP_GROUP2 adds a secondary annotation and renders", {
   skip_if_no_script()
-  s <- setup_grouping_job(); on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
+  s <- setup_grouping_job()
+  on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
   res <- run_hm_grp(s, env = list(HEATMAP_GROUP1 = "Sample_Group", HEATMAP_GROUP2 = "Batch"))
   expect_equal(res$status, 0L, info = res$stdout)
   expect_true(file.exists(file.path(s$job, "heatmap.png")))
@@ -419,7 +478,8 @@ test_that("HEATMAP_GROUP2 adds a secondary annotation and renders", {
 
 test_that("identical primary/secondary annotation columns are rejected", {
   skip_if_no_script()
-  s <- setup_grouping_job(); on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
+  s <- setup_grouping_job()
+  on.exit(unlink(s$job, recursive = TRUE), add = TRUE)
   res <- run_hm_grp(s, env = list(HEATMAP_GROUP1 = "Sample_Group", HEATMAP_GROUP2 = "Sample_Group"))
   expect_equal(res$status, 1L)
   expect_true(any(grepl("must be different", log_messages(res), ignore.case = TRUE)))

@@ -85,10 +85,10 @@ DMR_OUTPUT_COLUMNS <- c("ID", "N_DMPS", "CHR", "START", "STOP", "WIDTH", "P_VALU
 #' @param case_group,control_group Chosen group labels.
 #' @return A list with the reduced \code{beta} and the \code{pheno} factor.
 build_two_group_design <- function(beta, group_vec, case_group, control_group) {
-  keep      <- group_vec %in% c(case_group, control_group)
-  beta      <- beta[, keep, drop = FALSE]
+  keep <- group_vec %in% c(case_group, control_group)
+  beta <- beta[, keep, drop = FALSE]
   group_vec <- group_vec[keep]
-  pheno     <- factor(group_vec, levels = c(control_group, case_group))
+  pheno <- factor(group_vec, levels = c(control_group, case_group))
 
   if (nlevels(pheno) < 2L) {
     emit_error("At least two distinct groups are required for DMR analysis.")
@@ -102,7 +102,7 @@ build_two_group_design <- function(beta, group_vec, case_group, control_group) {
       new_col[new_col < 0] <- 0
       new_col[new_col > 1] <- 1
       colnames(new_col) <- paste0(colnames(beta)[idx], "_virtual_rep")
-      beta  <- cbind(beta, new_col)
+      beta <- cbind(beta, new_col)
       pheno <- factor(c(as.character(pheno), g), levels = c(control_group, case_group))
     }
   }
@@ -117,14 +117,16 @@ build_two_group_design <- function(beta, group_vec, case_group, control_group) {
 #' @param min_probes Minimum probes per cluster.
 #' @return Number of qualifying clusters, or \code{NA} when the check is skipped.
 count_usable_clusters <- function(beta, pf, max_gap, min_probes) {
-  if (is.null(pf)) return(NA_integer_)
+  if (is.null(pf)) {
+    return(NA_integer_)
+  }
   cpg_idx <- intersect(rownames(beta), rownames(pf))
   if (length(cpg_idx) == 0L) {
     emit_error("Genomic alignment error: no overlap between beta features and the probe annotation. The arraytype likely does not match the data.")
   }
   anno <- pf[cpg_idx, ]
   anno <- anno[order(anno$CHR, anno$MAPINFO), ]
-  cl   <- bumphunter::clusterMaker(anno$CHR, anno$MAPINFO, maxGap = max_gap)
+  cl <- bumphunter::clusterMaker(anno$CHR, anno$MAPINFO, maxGap = max_gap)
   sum(table(cl) >= min_probes)
 }
 
@@ -138,17 +140,19 @@ build_dmr_output <- function(dmr_table) {
     START = numeric(0), STOP = numeric(0), WIDTH = numeric(0),
     P_VALUE = numeric(0), MEANDIFF = numeric(0), stringsAsFactors = FALSE
   )
-  if (is.null(dmr_table) || nrow(dmr_table) == 0L) return(empty)
+  if (is.null(dmr_table) || nrow(dmr_table) == 0L) {
+    return(empty)
+  }
 
   data.frame(
-    ID       = paste0("DMR_", seq_len(nrow(dmr_table))),
-    N_DMPS   = pick_col(dmr_table, c("L", "nCpGs", "nprobes"), fallback = NA_real_),
-    CHR      = pick_col(dmr_table, c("seqnames", "chr"),       fallback = NA_real_),
-    START    = pick_col(dmr_table, c("start"),                 fallback = NA_real_),
-    STOP     = pick_col(dmr_table, c("end"),                   fallback = NA_real_),
-    WIDTH    = pick_col(dmr_table, c("width"),                 fallback = NA_real_),
-    P_VALUE  = pick_col(dmr_table, c("p.valueArea", "p.value"), fallback = NA_real_),
-    MEANDIFF = pick_col(dmr_table, c("value", "meanDiff"),     fallback = NA_real_),
+    ID = paste0("DMR_", seq_len(nrow(dmr_table))),
+    N_DMPS = pick_col(dmr_table, c("L", "nCpGs", "nprobes"), fallback = NA_real_),
+    CHR = pick_col(dmr_table, c("seqnames", "chr"), fallback = NA_real_),
+    START = pick_col(dmr_table, c("start"), fallback = NA_real_),
+    STOP = pick_col(dmr_table, c("end"), fallback = NA_real_),
+    WIDTH = pick_col(dmr_table, c("width"), fallback = NA_real_),
+    P_VALUE = pick_col(dmr_table, c("p.valueArea", "p.value"), fallback = NA_real_),
+    MEANDIFF = pick_col(dmr_table, c("value", "meanDiff"), fallback = NA_real_),
     stringsAsFactors = FALSE
   )
 }
@@ -173,25 +177,25 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   }
 
   sample_sheet_path <- args[1]
-  job_dir           <- args[2]
-  beta_input        <- args[3]
-  beta_path         <- if (file.exists(beta_input)) beta_input else file.path(job_dir, beta_input)
+  job_dir <- args[2]
+  beta_input <- args[3]
+  beta_path <- if (file.exists(beta_input)) beta_input else file.path(job_dir, beta_input)
 
-  min_probes   <- if (length(args) >= 4) as.numeric(args[4]) else 3
-  cutoff_raw   <- if (length(args) >= 5) args[5] else "NULL"
-  cutoff       <- if (toupper(cutoff_raw) %in% c("NULL", "", "NA")) NULL else as.numeric(cutoff_raw)
-  adj_pval     <- if (length(args) >= 6) as.numeric(args[6]) else 0.05
-  max_gap      <- if (length(args) >= 7) as.numeric(args[7]) else 1000
+  min_probes <- if (length(args) >= 4) as.numeric(args[4]) else 3
+  cutoff_raw <- if (length(args) >= 5) args[5] else "NULL"
+  cutoff <- if (toupper(cutoff_raw) %in% c("NULL", "", "NA")) NULL else as.numeric(cutoff_raw)
+  adj_pval <- if (length(args) >= 6) as.numeric(args[6]) else 0.05
+  max_gap <- if (length(args) >= 7) as.numeric(args[7]) else 1000
   # Array type: prefer the value minfi detected during filtering (array_type.txt);
   # the CLI argument is only a fallback. This prevents loading the wrong ChAMP
   # annotation (e.g. EPICv2 on 450K data -> "object 'probe.features' not found").
-  array_type   <- read_array_type(job_dir, fallback = if (length(args) >= 8) args[8] else "EPICv2")
+  array_type <- read_array_type(job_dir, fallback = if (length(args) >= 8) args[8] else "EPICv2")
   n_bootstraps <- if (length(args) >= 9) as.integer(args[9]) else 10L
-  n_cores      <- if (length(args) >= 10) as.integer(args[10]) else 1L
+  n_cores <- if (length(args) >= 10) as.integer(args[10]) else 1L
 
   # Dynamic comparison (any column) + deterministic sign via the control reference.
-  group_column  <- if (length(args) >= 11 && nzchar(args[11])) args[11] else "Sample_Group"
-  case_group    <- if (length(args) >= 12 && nzchar(args[12])) args[12] else ""
+  group_column <- if (length(args) >= 11 && nzchar(args[11])) args[11] else "Sample_Group"
+  case_group <- if (length(args) >= 12 && nzchar(args[12])) args[12] else ""
   control_group <- if (length(args) >= 13 && nzchar(args[13])) args[13] else ""
 
   numeric_params <- c(min_probes, adj_pval, max_gap, n_bootstraps, n_cores)
@@ -200,7 +204,7 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     emit_error("Parameter validation failed: non-numeric values detected in numerical arguments.")
   }
   if (n_bootstraps < 1L) emit_error("Configuration error: nBootstraps must be >= 1.")
-  if (n_cores < 1L)      emit_error("Configuration error: nCores must be >= 1.")
+  if (n_cores < 1L) emit_error("Configuration error: nCores must be >= 1.")
   if (!dir.exists(job_dir)) dir.create(job_dir, recursive = TRUE)
 
   emit_progress(0, "Initializing Differential Methylation Region (DMR) workflow")
@@ -210,13 +214,16 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   if (n_cores == 1L) {
     registerDoSEQ()
   } else {
-    ok <- tryCatch({
-      n_actual <- min(n_cores, parallel::detectCores(logical = FALSE))
-      cl_par   <- makeCluster(n_actual)
-      registerDoParallel(cl_par)
-      on.exit(stopCluster(cl_par), add = TRUE)
-      TRUE
-    }, error = function(e) FALSE)
+    ok <- tryCatch(
+      {
+        n_actual <- min(n_cores, parallel::detectCores(logical = FALSE))
+        cl_par <- makeCluster(n_actual)
+        registerDoParallel(cl_par)
+        on.exit(stopCluster(cl_par), add = TRUE)
+        TRUE
+      },
+      error = function(e) FALSE
+    )
     if (!isTRUE(ok)) {
       emit_progress(5, "Parallel setup failed; falling back to sequential processing.")
       registerDoSEQ()
@@ -246,16 +253,16 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
 
   emit_progress(50, "Selecting case/control groups")
   group_vec <- as.character(samples_aligned[[group_column]])
-  groups    <- resolve_case_control(group_vec, group_column, case_group, control_group)
-  design    <- build_two_group_design(beta, group_vec, groups$case, groups$control)
-  beta      <- design$beta
-  pheno     <- design$pheno
+  groups <- resolve_case_control(group_vec, group_column, case_group, control_group)
+  design <- build_two_group_design(beta, group_vec, groups$case, groups$control)
+  beta <- design$beta
+  pheno <- design$pheno
 
   emit_progress(65, "Validating genomic probe density and clusters")
   # Load the correct probe annotation AND bind it globally as `probe.features`, so
   # ChAMP's internals always find it (guards against "object 'probe.features' not
   # found" regardless of ChAMP's own arraytype handling).
-  pf            <- ensure_probe_features(array_type)
+  pf <- ensure_probe_features(array_type)
   cluster_count <- tryCatch(
     count_usable_clusters(beta, pf, max_gap, min_probes),
     error = function(e) emit_error(sprintf("Cluster validation failed: %s", conditionMessage(e)))
@@ -290,7 +297,9 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
       # route it to the empty-result path (status 0, empty table) instead of
       # failing the whole job — otherwise the downstream steps are blocked by a
       # result that simply says "no regions".
-      if (grepl("No DMR detected", msg, ignore.case = TRUE)) return(list(BumphunterDMR = NULL))
+      if (grepl("No DMR detected", msg, ignore.case = TRUE)) {
+        return(list(BumphunterDMR = NULL))
+      }
       emit_error(sprintf("ChAMP DMR execution failed: %s", msg))
     }
   )
@@ -311,10 +320,13 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   emit_progress(100, "Saving discovered DMR regions")
   output_csv <- file.path(job_dir, "dmr_results.csv")
   output_rds <- file.path(job_dir, "dmr_results.rds")
-  tryCatch({
-    write.csv(dmr_out, output_csv, row.names = FALSE)
-    saveRDS(dmr_out, output_rds)
-  }, error = function(e) emit_error(sprintf("Failed to save DMR results: %s", conditionMessage(e))))
+  tryCatch(
+    {
+      write.csv(dmr_out, output_csv, row.names = FALSE)
+      saveRDS(dmr_out, output_rds)
+    },
+    error = function(e) emit_error(sprintf("Failed to save DMR results: %s", conditionMessage(e)))
+  )
 
   emit_done(
     output_csv     = output_csv,

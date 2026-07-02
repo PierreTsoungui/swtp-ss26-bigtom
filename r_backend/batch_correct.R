@@ -86,13 +86,15 @@ sanitize_model_column <- function(x) {
 #' @return Character vector of valid covariate names (possibly empty).
 validate_covariates <- function(targets, covariates_str, n_samples) {
   valid <- character(0)
-  if (is.na(covariates_str) || !nzchar(trimws(covariates_str))) return(valid)
+  if (is.na(covariates_str) || !nzchar(trimws(covariates_str))) {
+    return(valid)
+  }
 
   for (cov in trimws(unlist(strsplit(covariates_str, ",")))) {
     if (!nzchar(cov) || !cov %in% colnames(targets)) next
-    col      <- targets[[cov]]
+    col <- targets[[cov]]
     nonempty <- col[!is.na(col) & nzchar(trimws(as.character(col)))]
-    n_dist   <- length(unique(as.character(nonempty)))
+    n_dist <- length(unique(as.character(nonempty)))
 
     if (n_dist < 2L) {
       emit_progress(52, paste0("Info: Ignoring covariate '", cov, "' (single level)."))
@@ -130,8 +132,10 @@ validate_batch_vars <- function(targets, batch_vars, n_samples) {
       next
     }
     if (n_dist >= n_samples) {
-      emit_progress(55, paste0("Warning: Batch variable '", bv,
-                               "' has one level per sample (fully confounded) – skipping."))
+      emit_progress(55, paste0(
+        "Warning: Batch variable '", bv,
+        "' has one level per sample (fully confounded) – skipping."
+      ))
       next
     }
     valid <- c(valid, bv)
@@ -146,7 +150,7 @@ validate_batch_vars <- function(targets, batch_vars, n_samples) {
 #' @return A model matrix (intercept-only when no covariates are given).
 build_design <- function(targets, covariates) {
   if (length(covariates) == 0L) {
-    return(model.matrix(~ 1, data = targets))
+    return(model.matrix(~1, data = targets))
   }
   df <- as.data.frame(lapply(targets[, covariates, drop = FALSE], sanitize_model_column))
   colnames(df) <- covariates
@@ -166,10 +170,12 @@ build_design <- function(targets, covariates) {
 #' @param batch_vars_extra Character vector of the 3rd+ batch variable names.
 #' @return A numeric matrix, or \code{NULL} when there are none.
 build_extra_batch_covariates <- function(targets, batch_vars_extra) {
-  if (length(batch_vars_extra) == 0L) return(NULL)
+  if (length(batch_vars_extra) == 0L) {
+    return(NULL)
+  }
   mats <- lapply(batch_vars_extra, function(bv) {
     mm <- model.matrix(~ sanitize_model_column(targets[[bv]]))
-    mm[, -1, drop = FALSE]  # drop the intercept -> contrast columns only
+    mm[, -1, drop = FALSE] # drop the intercept -> contrast columns only
   })
   do.call(cbind, mats)
 }
@@ -186,7 +192,6 @@ build_extra_batch_covariates <- function(targets, batch_vars_extra) {
 #' @param covariates_str Comma-separated biological covariates to protect.
 #' @return Invisibly \code{NULL}. Writes \code{corrected_data.rds}.
 run_batch_correction <- function(job_dir, batch_vars_str, covariates_str = "") {
-
   emit_progress(0, "Script initialized – starting batch correction")
 
   emit_progress(10, "Loading Bioconductor packages (limma & minfi)...")
@@ -236,7 +241,7 @@ run_batch_correction <- function(job_dir, batch_vars_str, covariates_str = "") {
   emit_progress(45, "Synchronizing sample sheet with data columns...")
   # Positional-fallback alignment (full id match if possible, else assume the
   # sheet is in matrix-column order); strip IDAT suffixes from the data columns.
-  targets   <- align_samples_to_matrix(mat, targets, mode = "positional", strip_idat = TRUE)$samples
+  targets <- align_samples_to_matrix(mat, targets, mode = "positional", strip_idat = TRUE)$samples
   n_samples <- ncol(mat)
 
   # ── Biological covariates (protected via the design) ────────────────────────
@@ -273,7 +278,7 @@ run_batch_correction <- function(job_dir, batch_vars_str, covariates_str = "") {
     paste(valid_batch_vars, collapse = ", "), " ..."
   ))
 
-  batch_factor  <- sanitize_model_column(targets[[valid_batch_vars[1L]]])
+  batch_factor <- sanitize_model_column(targets[[valid_batch_vars[1L]]])
   batch2_factor <- if (length(valid_batch_vars) >= 2L) {
     sanitize_model_column(targets[[valid_batch_vars[2L]]])
   } else {
@@ -330,7 +335,7 @@ if (sys.nframe() == 0L) {
   if (length(args) < 2L) {
     emit_error("Missing required CLI arguments: job_dir and batch_vars (comma-separated)")
   }
-  job_dir        <- args[1L]
+  job_dir <- args[1L]
   batch_vars_str <- args[2L]
   covariates_str <- if (length(args) >= 3L) args[3L] else ""
 

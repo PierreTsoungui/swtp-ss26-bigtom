@@ -118,7 +118,7 @@ clamp_beta <- function(beta, lo = 0, hi = 1) {
 drop_invariant_probes <- function(beta, min_sd = 1e-5, require_finite = TRUE) {
   keep <- rep(TRUE, nrow(beta))
   if (require_finite) keep <- rowSums(!is.finite(beta)) == 0L
-  sds  <- row_sd(beta)
+  sds <- row_sd(beta)
   keep <- keep & is.finite(sds) & sds > min_sd
   beta[keep, , drop = FALSE]
 }
@@ -140,7 +140,7 @@ impute_row_means <- function(beta, drop_all_na = TRUE) {
   }
   na_idx <- which(is.na(beta), arr.ind = TRUE)
   if (nrow(na_idx) > 0L) {
-    row_means    <- rowMeans(beta, na.rm = TRUE)
+    row_means <- rowMeans(beta, na.rm = TRUE)
     beta[na_idx] <- row_means[na_idx[, 1L]]
   }
   beta

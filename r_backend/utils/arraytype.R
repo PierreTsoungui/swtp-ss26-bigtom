@@ -30,9 +30,15 @@ ARRAY_TYPE_FILE <- "array_type.txt"
 #'   error (via \code{emit_error}) for anything else.
 normalize_arraytype <- function(x) {
   x <- toupper(trimws(as.character(x)))
-  if (x %in% c("EPIC", "850K", "EPICV1")) return("EPICv1")
-  if (x == "EPICV2") return("EPICv2")
-  if (x == "450K")   return("450K")
+  if (x %in% c("EPIC", "850K", "EPICV1")) {
+    return("EPICv1")
+  }
+  if (x == "EPICV2") {
+    return("EPICv2")
+  }
+  if (x == "450K") {
+    return("450K")
+  }
   emit_error(sprintf("Invalid arraytype: '%s'. Allowed: 450K, EPICv1 (EPIC), EPICv2.", x))
 }
 
@@ -49,9 +55,10 @@ normalize_arraytype <- function(x) {
 #'   \code{"EPICv2"}.
 champ_arraytype <- function(x) {
   switch(normalize_arraytype(x),
-         "450K"   = "450K",
-         "EPICv1" = "EPIC",
-         "EPICv2" = "EPICv2")
+    "450K"   = "450K",
+    "EPICv1" = "EPIC",
+    "EPICv2" = "EPICv2"
+  )
 }
 
 #' Candidate ChAMPdata \code{probe.features} data set names per array type.
@@ -87,13 +94,18 @@ MINFI_ANNO_PKG <- list(
 #' @return The \code{probe.features} data.frame, or \code{NULL} if unavailable.
 load_probe_features_champdata <- function(arraytype) {
   for (nm in CHAMP_PROBE_FEATURES[[normalize_arraytype(arraytype)]]) {
-    pf <- tryCatch({
-      e <- new.env()
-      suppressWarnings(utils::data(list = nm, package = "ChAMPdata", envir = e))
-      created <- ls(e)                       # e.g. "probe.features", not `nm`
-      if (length(created) > 0L) get(created[[1L]], envir = e) else NULL
-    }, error = function(err) NULL)
-    if (is.data.frame(pf) && nrow(pf) > 0L) return(pf)
+    pf <- tryCatch(
+      {
+        e <- new.env()
+        suppressWarnings(utils::data(list = nm, package = "ChAMPdata", envir = e))
+        created <- ls(e) # e.g. "probe.features", not `nm`
+        if (length(created) > 0L) get(created[[1L]], envir = e) else NULL
+      },
+      error = function(err) NULL
+    )
+    if (is.data.frame(pf) && nrow(pf) > 0L) {
+      return(pf)
+    }
   }
   NULL
 }
@@ -113,9 +125,11 @@ load_probe_features_champdata <- function(arraytype) {
 #' @return A \code{probe.features} data.frame, or \code{NULL} if the annotation
 #'   package is not installed / cannot be read.
 build_probe_features_minfi <- function(arraytype) {
-  at  <- normalize_arraytype(arraytype)
+  at <- normalize_arraytype(arraytype)
   pkg <- MINFI_ANNO_PKG[[at]]
-  if (is.null(pkg) || !requireNamespace(pkg, quietly = TRUE)) return(NULL)
+  if (is.null(pkg) || !requireNamespace(pkg, quietly = TRUE)) {
+    return(NULL)
+  }
 
   # Pass the annotation package NAME (not the object): minfi attaches the package
   # itself, which its getAnnotation()/updateObject() machinery requires (the
@@ -124,11 +138,14 @@ build_probe_features_minfi <- function(arraytype) {
     as.data.frame(minfi::getAnnotation(pkg)),
     error = function(e) NULL
   )
-  if (is.null(ann) || nrow(ann) == 0L) return(NULL)
+  if (is.null(ann) || nrow(ann) == 0L) {
+    return(NULL)
+  }
 
   # First semicolon-separated token (UCSC_RefGene_* are multi-transcript lists).
   first_token <- function(x) {
-    x <- as.character(x); x[is.na(x)] <- ""
+    x <- as.character(x)
+    x[is.na(x)] <- ""
     sub(";.*$", "", x)
   }
 
@@ -151,16 +168,17 @@ build_probe_features_minfi <- function(arraytype) {
 
   strand <- as.character(ann$strand)
   strand <- ifelse(strand %in% c("+", "F"), "F",
-                   ifelse(strand %in% c("-", "R"), "R", strand))
+    ifelse(strand %in% c("-", "R"), "R", strand)
+  )
 
   data.frame(
-    CHR      = chr,
-    MAPINFO  = suppressWarnings(as.integer(ann$pos)),
-    Strand   = strand,
-    Type     = as.character(ann$Type),
-    gene     = gene,
-    feature  = feature,
-    cgi      = cgi,
+    CHR = chr,
+    MAPINFO = suppressWarnings(as.integer(ann$pos)),
+    Strand = strand,
+    Type = as.character(ann$Type),
+    gene = gene,
+    feature = feature,
+    cgi = cgi,
     feat.cgi = paste(feature, cgi, sep = "-"),
     row.names = rownames(ann),
     stringsAsFactors = FALSE
@@ -222,12 +240,19 @@ ensure_probe_features <- function(arraytype) {
 #'   be determined.
 detect_array_type <- function(rgset) {
   arr <- tryCatch(as.character(minfi::annotation(rgset)[["array"]]),
-                  error = function(e) "")
+    error = function(e) ""
+  )
   if (length(arr) == 0L || is.na(arr)) arr <- ""
   # Order matters: "EPICv2" contains "EPIC", so test it first.
-  if (grepl("EPICv2", arr, ignore.case = TRUE)) return("EPICv2")
-  if (grepl("EPIC",   arr, ignore.case = TRUE)) return("EPICv1")
-  if (grepl("450",    arr))                      return("450K")
+  if (grepl("EPICv2", arr, ignore.case = TRUE)) {
+    return("EPICv2")
+  }
+  if (grepl("EPIC", arr, ignore.case = TRUE)) {
+    return("EPICv1")
+  }
+  if (grepl("450", arr)) {
+    return("450K")
+  }
   NA_character_
 }
 
@@ -258,7 +283,7 @@ write_array_type <- function(job_dir, type) {
 #' @return A canonical array type.
 read_array_type <- function(job_dir, fallback = "EPICv2") {
   path <- file.path(job_dir, ARRAY_TYPE_FILE)
-  raw  <- if (file.exists(path)) {
+  raw <- if (file.exists(path)) {
     line <- trimws(readLines(path, warn = FALSE))
     line <- line[nzchar(line)]
     if (length(line) > 0L) line[1] else fallback

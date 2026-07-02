@@ -26,14 +26,14 @@ test_that("build_colours recycles the 12-colour palette beyond 12 levels", {
 test_that("make_anno_spec draws a categorical column as discrete swatches", {
   spec <- make_anno_spec("Group", c("Case", "Ctrl", "Case", "Ctrl"))
   expect_equal(spec$kind, "discrete")
-  expect_type(spec$col, "character")                 # named colour vector
+  expect_type(spec$col, "character") # named colour vector
   expect_true(all(c("Case", "Ctrl") %in% names(spec$col)))
 })
 
 test_that("make_anno_spec draws a many-valued numeric column as a continuous gradient", {
-  spec <- make_anno_spec("Age", as.character(20:40))  # 21 distinct numerics
+  spec <- make_anno_spec("Age", as.character(20:40)) # 21 distinct numerics
   expect_equal(spec$kind, "continuous")
-  expect_true(is.function(spec$col))                 # colorRamp2 function
+  expect_true(is.function(spec$col)) # colorRamp2 function
   expect_true(is.numeric(spec$values))
 })
 

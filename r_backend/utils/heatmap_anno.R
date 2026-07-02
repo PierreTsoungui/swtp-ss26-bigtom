@@ -18,10 +18,12 @@
 #' @param values A vector of category values (coerced to character).
 #' @return A named character vector mapping each distinct level to a hex colour.
 build_colours <- function(values) {
-  lvls    <- unique(as.character(values))
-  palette <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2",
-               "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7",
-               "#9C755F", "#BAB0AC", "#D37295", "#A0CBE8")
+  lvls <- unique(as.character(values))
+  palette <- c(
+    "#4E79A7", "#F28E2B", "#E15759", "#76B7B2",
+    "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7",
+    "#9C755F", "#BAB0AC", "#D37295", "#A0CBE8"
+  )
   setNames(rep_len(palette, length(lvls)), lvls)
 }
 
@@ -42,14 +44,16 @@ build_colours <- function(values) {
 make_anno_spec <- function(name, raw_values) {
   vals_chr <- as.character(raw_values)
   nonempty <- vals_chr[nzchar(trimws(vals_chr))]
-  n_dist   <- length(unique(nonempty))
-  num      <- suppressWarnings(as.numeric(vals_chr))
-  is_num   <- length(nonempty) > 0L && all(!is.na(suppressWarnings(as.numeric(nonempty))))
+  n_dist <- length(unique(nonempty))
+  num <- suppressWarnings(as.numeric(vals_chr))
+  is_num <- length(nonempty) > 0L && all(!is.na(suppressWarnings(as.numeric(nonempty))))
   if (is_num && n_dist > 10L) {
     rng <- range(num, na.rm = TRUE)
     if (is.finite(rng[1]) && is.finite(rng[2]) && rng[1] != rng[2]) {
-      col_fun <- colorRamp2(c(rng[1], mean(rng), rng[2]),
-                            c("#FFF7BC", "#FEC44F", "#D95F0E"))
+      col_fun <- colorRamp2(
+        c(rng[1], mean(rng), rng[2]),
+        c("#FFF7BC", "#FEC44F", "#D95F0E")
+      )
       return(list(name = name, kind = "continuous", values = num, col = col_fun))
     }
   }

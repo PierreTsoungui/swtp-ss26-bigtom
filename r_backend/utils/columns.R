@@ -47,7 +47,7 @@
 #' @param name A single column name.
 #' @return \code{TRUE} if a column matches \code{name} ignoring case, else \code{FALSE}.
 #' @examples
-#' has_col_ci(data.frame(CHR = 1), "chr")  # TRUE
+#' has_col_ci(data.frame(CHR = 1), "chr") # TRUE
 has_col_ci <- function(df, name) !is.na(.column_index_ci(df, name))
 
 #' Get a column by name (case-insensitive), or a fallback when it is absent.
@@ -76,7 +76,7 @@ get_col_ci <- function(df, name, fallback = NULL) {
 #' @param fallback Value returned when none of the candidates match (default \code{NA}).
 #' @return The first matching column, or \code{fallback}.
 #' @examples
-#' pick_col(data.frame(chr = 1:2), c("CHR", "chr"))  # the lowercase "chr" column
+#' pick_col(data.frame(chr = 1:2), c("CHR", "chr")) # the lowercase "chr" column
 pick_col <- function(df, candidates, fallback = NA) {
   cols <- colnames(df)
   if (is.null(cols) || length(cols) == 0L || length(candidates) == 0L) {
@@ -85,13 +85,17 @@ pick_col <- function(df, candidates, fallback = NA) {
 
   # Pass 1: exact match (precise spelling wins over a fuzzy one).
   exact <- candidates[candidates %in% cols]
-  if (length(exact) > 0L) return(.column_extract(df, exact[1]))
+  if (length(exact) > 0L) {
+    return(.column_extract(df, exact[1]))
+  }
 
   # Pass 2: case-insensitive match, honouring candidate order.
   lc <- tolower(cols)
   for (cand in candidates) {
     idx <- match(tolower(cand), lc)
-    if (!is.na(idx)) return(.column_extract(df, idx))
+    if (!is.na(idx)) {
+      return(.column_extract(df, idx))
+    }
   }
 
   fallback

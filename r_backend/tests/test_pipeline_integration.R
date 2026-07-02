@@ -50,37 +50,44 @@ R_BACKEND <- "/app/r_backend"
 discover_pipeline_fixture <- function(min_delta = 0.03) {
   cands <- list()
   for (d in list.dirs("/app/jobs", recursive = FALSE)) {
-    sh <- file.path(d, "SampleSheet.csv"); at <- file.path(d, "array_type.txt")
+    sh <- file.path(d, "SampleSheet.csv")
+    at <- file.path(d, "array_type.txt")
     br <- file.path(d, "beta.rds")
     if (!all(file.exists(c(sh, at, br)))) next
     ln <- tryCatch(readLines(sh, warn = FALSE), error = function(e) character(0))
-    ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-    s  <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
-                   error = function(e) NULL)
+    ds <- grep("^\\[Data\\]", ln)
+    skip_n <- if (length(ds)) ds[1] else 0
+    s <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
     if (is.null(s) || !all(c("Sentrix_ID", "Sentrix_Position", "Sample_Group") %in% colnames(s))) next
     if (length(unique(s$Sample_Group)) != 2L) next
     aid <- paste0(s$Sentrix_ID, "_", s$Sentrix_Position)
     if (anyDuplicated(aid)) next
     grn <- file.exists(file.path(d, paste0(aid, "_Grn.idat")))
     red <- file.exists(file.path(d, paste0(aid, "_Red.idat")))
-    if (!all(grn) || !all(red)) next                                  # need every IDAT pair
-    cands[[length(cands) + 1L]] <- list(dir = d, sheet = sh, at = at, br = br, s = s,
-                                        aid = aid, size = file.info(br)$size)
+    if (!all(grn) || !all(red)) next # need every IDAT pair
+    cands[[length(cands) + 1L]] <- list(
+      dir = d, sheet = sh, at = at, br = br, s = s,
+      aid = aid, size = file.info(br)$size
+    )
   }
-  cands <- cands[order(vapply(cands, function(x) x$size, numeric(1)))]  # cheapest first
+  cands <- cands[order(vapply(cands, function(x) x$size, numeric(1)))] # cheapest first
   for (c in cands) {
     b <- tryCatch(readRDS(c$br), error = function(e) NULL)
     if (is.null(b) || !is.matrix(b)) next
     grp <- setNames(c$s$Sample_Group, c$aid)[colnames(b)]
-    lv  <- unique(grp)
+    lv <- unique(grp)
     if (anyNA(grp) || length(lv) != 2L) next
     set.seed(1)
-    idx   <- sample(nrow(b), min(3000L, nrow(b)))
+    idx <- sample(nrow(b), min(3000L, nrow(b)))
     delta <- median(abs(rowMeans(b[idx, grp == lv[1], drop = FALSE]) -
-                        rowMeans(b[idx, grp == lv[2], drop = FALSE])), na.rm = TRUE)
+      rowMeans(b[idx, grp == lv[2], drop = FALSE])), na.rm = TRUE)
     if (is.finite(delta) && delta >= min_delta) {
-      return(list(dir = c$dir, sheet = c$sheet, array_ids = c$aid,
-                  arraytype = readLines(c$at, warn = FALSE)[1]))
+      return(list(
+        dir = c$dir, sheet = c$sheet, array_ids = c$aid,
+        arraytype = readLines(c$at, warn = FALSE)[1]
+      ))
     }
   }
   NULL
@@ -100,12 +107,17 @@ FIXTURE <- discover_pipeline_fixture()
 run_r <- function(script = NULL, args = character(0), inline = NULL) {
   # system2() pastes command + args into a shell command string, so the inline
   # R code (which contains '(', ';', quotes) must be shell-quoted.
-  cmd <- if (!is.null(inline)) c("-e", shQuote(inline))
-         else c(shQuote(file.path(R_BACKEND, script)), args)
+  cmd <- if (!is.null(inline)) {
+    c("-e", shQuote(inline))
+  } else {
+    c(shQuote(file.path(R_BACKEND, script)), args)
+  }
   out <- suppressWarnings(system2("Rscript", cmd, stdout = TRUE, stderr = TRUE))
   status <- attr(out, "status") %||% 0L
-  logs <- Filter(function(x) !is.null(x) && is.list(x),
-                 lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL)))
+  logs <- Filter(
+    function(x) !is.null(x) && is.list(x),
+    lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL))
+  )
   list(status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"), logs = logs)
 }
 
@@ -122,12 +134,17 @@ run_r <- function(script = NULL, args = character(0), inline = NULL) {
 #'
 #' @return list(job, steps) where steps is a named list of run_r() results.
 run_pipeline_once <- function() {
-  if (!is.null(.pipe$res)) return(.pipe$res)
+  if (!is.null(.pipe$res)) {
+    return(.pipe$res)
+  }
 
-  job <- tempfile("pipe_e2e_"); dir.create(job)
+  job <- tempfile("pipe_e2e_")
+  dir.create(job)
   # Copy only what a fresh job would have: the raw IDATs + the sample sheet.
-  idats <- file.path(FIXTURE$dir, paste0(rep(FIXTURE$array_ids, each = 2),
-                                         c("_Grn.idat", "_Red.idat")))
+  idats <- file.path(FIXTURE$dir, paste0(
+    rep(FIXTURE$array_ids, each = 2),
+    c("_Grn.idat", "_Red.idat")
+  ))
   file.copy(idats, job)
   sheet <- file.path(job, "SampleSheet.csv")
   file.copy(FIXTURE$sheet, sheet)
@@ -143,29 +160,42 @@ run_pipeline_once <- function() {
   # 3. Beta extraction (mirrors the backend's BetaExtractionCommand).
   steps$beta <- run_r(inline = sprintf(
     "suppressMessages(library(minfi)); b<-getBeta(readRDS('%s/normalized_data.rds')); saveRDS(b,'%s/beta.rds')",
-    job, job))
+    job, job
+  ))
 
   # 4. SVD batch diagnostic: beta.rds + sheet -> svd_plot.png.
-  steps$svd <- run_r("batch_svd.R",
-                     c(shQuote(file.path(job, "beta.rds")), shQuote(sheet), shQuote(job), "svd_plot.png"))
+  steps$svd <- run_r(
+    "batch_svd.R",
+    c(shQuote(file.path(job, "beta.rds")), shQuote(sheet), shQuote(job), "svd_plot.png")
+  )
 
   # 5. DMR FIRST (so DMP can link to the regions). adjPvalDmr=1 keeps all regions.
-  steps$dmr <- run_r("dmr.R",
-                     c(shQuote(sheet), shQuote(job), "beta.rds", "3", "NULL", "1", "1000",
-                       FIXTURE$arraytype, "2", "1"))
+  steps$dmr <- run_r(
+    "dmr.R",
+    c(
+      shQuote(sheet), shQuote(job), "beta.rds", "3", "NULL", "1", "1000",
+      FIXTURE$arraytype, "2", "1"
+    )
+  )
 
   # 6. DMP: keeps all probes (adjPVal ignored); links against dmr_results.rds.
-  steps$dmp <- run_r("dmp.R",
-                     c(shQuote(sheet), shQuote(job), "beta.rds", "1", FIXTURE$arraytype))
+  steps$dmp <- run_r(
+    "dmp.R",
+    c(shQuote(sheet), shQuote(job), "beta.rds", "1", FIXTURE$arraytype)
+  )
 
   # 7. Heatmap from the DMP table. Select a small CpG subset (single filter
   #    source: the backend writes heatmap_input.csv; here we emulate it).
   if (steps$dmp$status == 0L && file.exists(file.path(job, "dmp_results.rds"))) {
     dmp_ids <- head(as.character(readRDS(file.path(job, "dmp_results.rds"))$ID), 40L)
     write.csv(data.frame(ID = dmp_ids, stringsAsFactors = FALSE),
-              file.path(job, "heatmap_input.csv"), row.names = FALSE)
-    steps$heatmap <- run_r("heatmap.R",
-                           c(shQuote(file.path(job, "dmp_results.rds")), shQuote(sheet), shQuote(job)))
+      file.path(job, "heatmap_input.csv"),
+      row.names = FALSE
+    )
+    steps$heatmap <- run_r(
+      "heatmap.R",
+      c(shQuote(file.path(job, "dmp_results.rds")), shQuote(sheet), shQuote(job))
+    )
   } else {
     steps$heatmap <- list(status = NA_integer_, lines = "skipped (no DMP output)", stdout = "", logs = list())
   }
@@ -176,15 +206,20 @@ run_pipeline_once <- function() {
 
 skip_if_no_fixture <- function() {
   skip_if_not(dir.exists(R_BACKEND), "not running inside the r_worker container")
-  skip_if(is.null(FIXTURE),
-          "No IDAT fixture with a two-group, signal-bearing sample sheet under /app/jobs")
+  skip_if(
+    is.null(FIXTURE),
+    "No IDAT fixture with a two-group, signal-bearing sample sheet under /app/jobs"
+  )
 }
 
 #' Fail-with-context helper for a pipeline step.
 expect_step_ok <- function(step, file = NULL, job = NULL) {
   expect_equal(step$status, 0L, info = step$stdout)
-  if (!is.null(file)) expect_true(file.exists(file.path(job, file)),
-                                  info = paste("missing artifact:", file))
+  if (!is.null(file)) {
+    expect_true(file.exists(file.path(job, file)),
+      info = paste("missing artifact:", file)
+    )
+  }
 }
 
 
@@ -204,7 +239,7 @@ test_that("step 2 — normalize.R produces normalized_data.rds preserving all sa
   p <- run_pipeline_once()
   expect_step_ok(p$steps$normalize, "normalized_data.rds", p$job)
 
-  filtered   <- readRDS(file.path(p$job, "filtered_data.rds"))
+  filtered <- readRDS(file.path(p$job, "filtered_data.rds"))
   normalized <- readRDS(file.path(p$job, "normalized_data.rds"))
   # The sample set must survive normalization unchanged (order-independent).
   expect_setequal(colnames(normalized), colnames(filtered))
@@ -216,9 +251,10 @@ test_that("step 3 — beta extraction yields a numeric matrix in [0,1]", {
   expect_step_ok(p$steps$beta, "beta.rds", p$job)
   beta <- readRDS(file.path(p$job, "beta.rds"))
   expect_true(is.matrix(beta))
-  expect_gt(nrow(beta), 0L); expect_gt(ncol(beta), 0L)
+  expect_gt(nrow(beta), 0L)
+  expect_gt(ncol(beta), 0L)
   fin <- beta[is.finite(beta)]
-  expect_true(min(fin) >= -0.001 && max(fin) <= 1.001)   # methylation fractions
+  expect_true(min(fin) >= -0.001 && max(fin) <= 1.001) # methylation fractions
 })
 
 test_that("step 4 — batch_svd.R renders the SVD association heatmap", {
@@ -235,7 +271,7 @@ test_that("step 5 — dmr.R discovers regions and writes the results table", {
   dmr <- readRDS(file.path(p$job, "dmr_results.rds"))
   expect_true(is.data.frame(dmr))
   expect_true(all(c("ID", "N_DMPS", "CHR", "START", "STOP") %in% colnames(dmr)))
-  expect_gt(nrow(dmr), 0L)   # HeLa/Raji-type signal must yield DMRs (adjPvalDmr=1)
+  expect_gt(nrow(dmr), 0L) # HeLa/Raji-type signal must yield DMRs (adjPvalDmr=1)
 })
 
 test_that("step 6 — dmp.R keeps all probes and links to the upstream DMRs", {

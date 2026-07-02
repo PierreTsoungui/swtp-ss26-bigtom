@@ -12,13 +12,21 @@ library(testthat)
 
 source("/app/r_backend/utils/progress.R")
 assign("emit_error", function(message) {
-  stop(structure(class = c("util_fatal", "error", "condition"),
-                 list(message = as.character(message), call = NULL)))
+  stop(structure(
+    class = c("util_fatal", "error", "condition"),
+    list(message = as.character(message), call = NULL)
+  ))
 }, envir = globalenv())
 source("/app/r_backend/utils/arraytype.R")
 
 expect_fatal <- function(expr, regexp = NULL) {
-  cnd <- tryCatch({ force(expr); NULL }, util_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    util_fatal = function(c) c
+  )
   expect_false(is.null(cnd), info = "expected a fatal emit_error() but none was raised")
   if (!is.null(regexp) && !is.null(cnd)) expect_match(conditionMessage(cnd), regexp, ignore.case = TRUE)
 }
@@ -27,11 +35,11 @@ expect_fatal <- function(expr, regexp = NULL) {
 
 test_that("normalize_arraytype canonicalises the supported values and aliases", {
   expect_equal(normalize_arraytype("450K"), "450K")
-  expect_equal(normalize_arraytype("EPIC"), "EPICv1")     # alias
-  expect_equal(normalize_arraytype("850K"), "EPICv1")     # alias
+  expect_equal(normalize_arraytype("EPIC"), "EPICv1") # alias
+  expect_equal(normalize_arraytype("850K"), "EPICv1") # alias
   expect_equal(normalize_arraytype("EPICv1"), "EPICv1")
   expect_equal(normalize_arraytype("EPICv2"), "EPICv2")
-  expect_equal(normalize_arraytype("  epicv2 "), "EPICv2")  # case + whitespace tolerant
+  expect_equal(normalize_arraytype("  epicv2 "), "EPICv2") # case + whitespace tolerant
 })
 
 test_that("normalize_arraytype rejects unknown array types", {
@@ -40,30 +48,36 @@ test_that("normalize_arraytype rejects unknown array types", {
 
 test_that("champ_arraytype maps canonical types to ChAMP's expected strings", {
   expect_equal(champ_arraytype("450K"), "450K")
-  expect_equal(champ_arraytype("EPICv1"), "EPIC")         # ChAMP uses "EPIC" for v1
-  expect_equal(champ_arraytype("EPIC"), "EPIC")           # alias -> EPICv1 -> "EPIC"
+  expect_equal(champ_arraytype("EPICv1"), "EPIC") # ChAMP uses "EPIC" for v1
+  expect_equal(champ_arraytype("EPIC"), "EPIC") # alias -> EPICv1 -> "EPIC"
   expect_equal(champ_arraytype("EPICv2"), "EPICv2")
 })
 
 # ── write_array_type() / read_array_type() ────────────────────────────────────
 
 test_that("write_array_type persists a canonical value and read_array_type reads it back", {
-  d <- tempfile("job_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   expect_true(write_array_type(d, "EPICv2"))
   expect_true(file.exists(file.path(d, ARRAY_TYPE_FILE)))
   expect_equal(read_array_type(d), "EPICv2")
 })
 
 test_that("write_array_type is a no-op for NA/empty input", {
-  d <- tempfile("job_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   expect_false(write_array_type(d, NA))
   expect_false(write_array_type(d, ""))
   expect_false(file.exists(file.path(d, ARRAY_TYPE_FILE)))
 })
 
 test_that("read_array_type uses (and normalises) the fallback when the file is absent", {
-  d <- tempfile("job_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
-  expect_equal(read_array_type(d, fallback = "EPIC"), "EPICv1")   # alias normalised
+  d <- tempfile("job_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  expect_equal(read_array_type(d, fallback = "EPIC"), "EPICv1") # alias normalised
   expect_equal(read_array_type(d, fallback = "450K"), "450K")
 })
 
@@ -92,24 +106,28 @@ test_that("load_probe_features loads the ChAMPdata annotation for 450K / EPIC v1
   expect_true(all(c("CHR", "MAPINFO") %in% colnames(pf450)))
   expect_gt(nrow(pf450), 0L)
 
-  pfepic <- load_probe_features("EPICv1")     # ChAMPdata "probe.features.epic"
+  pfepic <- load_probe_features("EPICv1") # ChAMPdata "probe.features.epic"
   expect_s3_class(pfepic, "data.frame")
   expect_gt(nrow(pfepic), 0L)
 })
 
 test_that("build_probe_features_minfi reconstructs an EPIC v2 probe.features table", {
-  skip_if_not(requireNamespace("IlluminaHumanMethylationEPICv2anno.20a1.hg38", quietly = TRUE),
-              "EPIC v2 minfi annotation not installed")
+  skip_if_not(
+    requireNamespace("IlluminaHumanMethylationEPICv2anno.20a1.hg38", quietly = TRUE),
+    "EPIC v2 minfi annotation not installed"
+  )
   pf <- build_probe_features_minfi("EPICv2")
   expect_s3_class(pf, "data.frame")
   expect_true(all(c("CHR", "MAPINFO", "gene", "feature", "cgi") %in% colnames(pf)))
-  expect_gt(nrow(pf), 5e5L)                            # ~930k probes
-  expect_false(any(grepl("^chr", pf$CHR)))            # "chr" prefix stripped
+  expect_gt(nrow(pf), 5e5L) # ~930k probes
+  expect_false(any(grepl("^chr", pf$CHR))) # "chr" prefix stripped
 })
 
 test_that("ensure_probe_features binds a global probe.features for EPIC v2", {
-  skip_if_not(requireNamespace("IlluminaHumanMethylationEPICv2anno.20a1.hg38", quietly = TRUE),
-              "EPIC v2 minfi annotation not installed")
+  skip_if_not(
+    requireNamespace("IlluminaHumanMethylationEPICv2anno.20a1.hg38", quietly = TRUE),
+    "EPIC v2 minfi annotation not installed"
+  )
   if (exists("probe.features", envir = globalenv())) rm("probe.features", envir = globalenv())
   pf <- ensure_probe_features("EPICv2")
   expect_true(exists("probe.features", envir = globalenv()))

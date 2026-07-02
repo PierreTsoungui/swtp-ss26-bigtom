@@ -11,13 +11,21 @@ library(testthat)
 
 source("/app/r_backend/utils/progress.R")
 assign("emit_error", function(message) {
-  stop(structure(class = c("util_fatal", "error", "condition"),
-                 list(message = as.character(message), call = NULL)))
+  stop(structure(
+    class = c("util_fatal", "error", "condition"),
+    list(message = as.character(message), call = NULL)
+  ))
 }, envir = globalenv())
 source("/app/r_backend/utils/beta.R")
 
 expect_fatal <- function(expr, regexp = NULL) {
-  cnd <- tryCatch({ force(expr); NULL }, util_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    util_fatal = function(c) c
+  )
   expect_false(is.null(cnd), info = "expected a fatal emit_error() but none was raised")
   if (!is.null(regexp) && !is.null(cnd)) expect_match(conditionMessage(cnd), regexp, ignore.case = TRUE)
 }
@@ -28,8 +36,8 @@ test_that("extract_beta returns a numeric matrix for plain matrices and data fra
   m <- matrix(1:6, nrow = 2, dimnames = list(c("cg1", "cg2"), c("s1", "s2", "s3")))
   out <- extract_beta(m)
   expect_true(is.matrix(out))
-  expect_equal(storage.mode(out), "double")       # coerced to numeric
-  expect_equal(rownames(out), c("cg1", "cg2"))     # names preserved
+  expect_equal(storage.mode(out), "double") # coerced to numeric
+  expect_equal(rownames(out), c("cg1", "cg2")) # names preserved
 
   df <- data.frame(s1 = c(0.1, 0.2), s2 = c(0.3, 0.4), row.names = c("cg1", "cg2"))
   outd <- extract_beta(df)
@@ -41,8 +49,10 @@ test_that("extract_beta handles a real minfi RGChannelSet (preprocessRaw -> getB
   # The S4 path is the one used in production (init_filter writes an RGChannelSet);
   # exercise it on a discovered fixture. Raw channel sets have no direct getBeta,
   # so extract_beta must preprocessRaw() first and still return beta in [0, 1].
-  rds <- head(list.files("/app/jobs", pattern = "^filtered_data\\.rds$",
-                         recursive = TRUE, full.names = TRUE), 1L)
+  rds <- head(list.files("/app/jobs",
+    pattern = "^filtered_data\\.rds$",
+    recursive = TRUE, full.names = TRUE
+  ), 1L)
   skip_if(length(rds) == 0L, "no filtered_data.rds fixture under /app/jobs")
   obj <- suppressWarnings(suppressMessages(readRDS(rds)))
   skip_if_not(methods::is(obj, "RGChannelSet"), "fixture is not an RGChannelSet")
@@ -51,9 +61,9 @@ test_that("extract_beta handles a real minfi RGChannelSet (preprocessRaw -> getB
   beta <- extract_beta(obj)
   expect_true(is.matrix(beta))
   expect_equal(storage.mode(beta), "double")
-  expect_equal(ncol(beta), ncol(obj))            # one column per sample
+  expect_equal(ncol(beta), ncol(obj)) # one column per sample
   fin <- beta[is.finite(beta)]
-  expect_true(min(fin) >= 0 && max(fin) <= 1)    # methylation fractions
+  expect_true(min(fin) >= 0 && max(fin) <= 1) # methylation fractions
 })
 
 # ── clamp_beta() ──────────────────────────────────────────────────────────────
@@ -61,30 +71,30 @@ test_that("extract_beta handles a real minfi RGChannelSet (preprocessRaw -> getB
 test_that("clamp_beta clamps only finite out-of-range values, leaving NA/Inf intact", {
   m <- matrix(c(-0.5, 0.5, 1.5, NA, Inf, 0.2), nrow = 2)
   out <- clamp_beta(m)
-  expect_equal(out[1, 1], 0)      # -0.5 -> 0
-  expect_equal(out[1, 2], 1)      # 1.5  -> 1
-  expect_equal(out[2, 2], NA_real_)   # NA untouched
-  expect_true(is.infinite(out[1, 3]))  # Inf untouched (not finite)
-  expect_equal(out[2, 3], 0.2)    # in range -> unchanged
+  expect_equal(out[1, 1], 0) # -0.5 -> 0
+  expect_equal(out[1, 2], 1) # 1.5  -> 1
+  expect_equal(out[2, 2], NA_real_) # NA untouched
+  expect_true(is.infinite(out[1, 3])) # Inf untouched (not finite)
+  expect_equal(out[2, 3], 0.2) # in range -> unchanged
 })
 
 test_that("clamp_beta honours custom bounds", {
   # Column-major layout: [1,1]=0.1, [2,1]=0.9, [1,2]=0.5, [2,2]=0.5.
   m <- matrix(c(0.1, 0.9, 0.5, 0.5), nrow = 2)
   out <- clamp_beta(m, lo = 0.2, hi = 0.8)
-  expect_equal(out[1, 1], 0.2)     # 0.1 -> lower bound
-  expect_equal(out[2, 1], 0.8)     # 0.9 -> upper bound
-  expect_equal(out[1, 2], 0.5)     # in range -> unchanged
+  expect_equal(out[1, 1], 0.2) # 0.1 -> lower bound
+  expect_equal(out[2, 1], 0.8) # 0.9 -> upper bound
+  expect_equal(out[1, 2], 0.5) # in range -> unchanged
 })
 
 # ── drop_invariant_probes() ───────────────────────────────────────────────────
 
 test_that("drop_invariant_probes removes constant and non-finite rows, keeps variable ones", {
   m <- matrix(c(
-    0.5, 0.5, 0.5,    # constant   -> dropped
-    0.1, 0.9, 0.5,    # variable   -> kept
-    0.2, NA,  0.8,    # non-finite -> dropped (require_finite)
-    Inf, 0.3, 0.4     # non-finite -> dropped
+    0.5, 0.5, 0.5, # constant   -> dropped
+    0.1, 0.9, 0.5, # variable   -> kept
+    0.2, NA,  0.8, # non-finite -> dropped (require_finite)
+    Inf, 0.3, 0.4 # non-finite -> dropped
   ), nrow = 4, byrow = TRUE, dimnames = list(c("c", "v", "na", "inf"), NULL))
   out <- drop_invariant_probes(m, min_sd = 1e-5, require_finite = TRUE)
   expect_equal(rownames(out), "v")
@@ -101,13 +111,13 @@ test_that("drop_invariant_probes never collapses to a vector (drop = FALSE)", {
 
 test_that("impute_row_means fills NAs with the row mean and drops all-NA rows", {
   m <- matrix(c(
-    0.2, NA, 0.4,     # NA -> mean(0.2,0.4) = 0.3
-    NA,  NA, NA       # all NA -> dropped
+    0.2, NA, 0.4, # NA -> mean(0.2,0.4) = 0.3
+    NA,  NA, NA # all NA -> dropped
   ), nrow = 2, byrow = TRUE, dimnames = list(c("a", "allna"), NULL))
   out <- impute_row_means(m)
   expect_equal(rownames(out), "a")
   expect_false(anyNA(out))
-  expect_equal(as.numeric(out["a", 2]), mean(c(0.2, 0.4)))   # NA -> row mean
+  expect_equal(as.numeric(out["a", 2]), mean(c(0.2, 0.4))) # NA -> row mean
 })
 
 test_that("impute_row_means leaves a complete matrix unchanged", {
@@ -118,7 +128,8 @@ test_that("impute_row_means leaves a complete matrix unchanged", {
 # ── load_beta_matrix() ────────────────────────────────────────────────────────
 
 test_that("load_beta_matrix reads a valid RDS matrix", {
-  f <- tempfile(fileext = ".rds"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".rds")
+  on.exit(unlink(f))
   m <- matrix(runif(6), nrow = 2, dimnames = list(c("cg1", "cg2"), c("s1", "s2", "s3")))
   saveRDS(m, f)
   out <- load_beta_matrix(f)
@@ -131,13 +142,15 @@ test_that("load_beta_matrix aborts on a missing file", {
 })
 
 test_that("load_beta_matrix aborts on a corrupted RDS", {
-  f <- tempfile(fileext = ".rds"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".rds")
+  on.exit(unlink(f))
   writeLines("not an rds", f)
   expect_fatal(load_beta_matrix(f), "read")
 })
 
 test_that("load_beta_matrix aborts on an empty matrix", {
-  f <- tempfile(fileext = ".rds"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".rds")
+  on.exit(unlink(f))
   saveRDS(matrix(numeric(0), nrow = 0, ncol = 0), f)
   expect_fatal(load_beta_matrix(f), "empty")
 })

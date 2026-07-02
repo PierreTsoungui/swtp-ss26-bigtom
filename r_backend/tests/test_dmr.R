@@ -30,31 +30,44 @@ library(testthat)
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
 
-SCRIPT_PATH  <- "/app/r_backend/dmr.R"
-DMR_COLUMNS  <- c("ID", "N_DMPS", "CHR", "START", "STOP", "WIDTH", "P_VALUE", "MEANDIFF")
+SCRIPT_PATH <- "/app/r_backend/dmr.R"
+DMR_COLUMNS <- c("ID", "N_DMPS", "CHR", "START", "STOP", "WIDTH", "P_VALUE", "MEANDIFF")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Setup: source functions + catchable emit_error() double
 # ══════════════════════════════════════════════════════════════════════════════
 
-dmr_loaded <- tryCatch({
-  suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
-  assign("emit_error", function(message) {
-    stop(structure(class = c("dmr_fatal", "error", "condition"),
-                   list(message = as.character(message), call = NULL)))
-  }, envir = globalenv())
-  assign("emit_progress", function(percent, message) invisible(NULL), envir = globalenv())
-  exists("build_dmr_output") && exists("build_two_group_design")
-}, error = function(e) FALSE)
+dmr_loaded <- tryCatch(
+  {
+    suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
+    assign("emit_error", function(message) {
+      stop(structure(
+        class = c("dmr_fatal", "error", "condition"),
+        list(message = as.character(message), call = NULL)
+      ))
+    }, envir = globalenv())
+    assign("emit_progress", function(percent, message) invisible(NULL), envir = globalenv())
+    exists("build_dmr_output") && exists("build_two_group_design")
+  },
+  error = function(e) FALSE
+)
 
 skip_if_not_loaded <- function() {
-  skip_if_not(isTRUE(dmr_loaded),
-              paste("dmr.R could not be sourced (run in the r_worker container):", SCRIPT_PATH))
+  skip_if_not(
+    isTRUE(dmr_loaded),
+    paste("dmr.R could not be sourced (run in the r_worker container):", SCRIPT_PATH)
+  )
 }
 
 expect_fatal <- function(expr, regexp = NULL) {
-  cnd <- tryCatch({ force(expr); NULL }, dmr_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    dmr_fatal = function(c) c
+  )
   expect_false(is.null(cnd), info = "expected a fatal emit_error() but none was raised")
   if (!is.null(regexp) && !is.null(cnd)) expect_match(conditionMessage(cnd), regexp, ignore.case = TRUE)
   invisible(cnd)
@@ -86,12 +99,12 @@ test_that("build_dmr_output maps ChAMP/Bumphunter columns and assigns DMR_<n> id
   )
   out <- build_dmr_output(tab)
   expect_equal(colnames(out), DMR_COLUMNS)
-  expect_equal(out$ID, c("DMR_1", "DMR_2"))          # sequential, unique
+  expect_equal(out$ID, c("DMR_1", "DMR_2")) # sequential, unique
   expect_true(all(grepl("^DMR_\\d+$", out$ID)))
-  expect_equal(out$N_DMPS, c(5, 8))                   # from L
-  expect_equal(out$CHR, c("chr1", "chr2"))            # from seqnames
-  expect_equal(out$P_VALUE, c(0.01, 0.20))            # from p.valueArea
-  expect_equal(out$MEANDIFF, c(0.3, -0.2))            # from value
+  expect_equal(out$N_DMPS, c(5, 8)) # from L
+  expect_equal(out$CHR, c("chr1", "chr2")) # from seqnames
+  expect_equal(out$P_VALUE, c(0.01, 0.20)) # from p.valueArea
+  expect_equal(out$MEANDIFF, c(0.3, -0.2)) # from value
 })
 
 test_that("build_dmr_output falls back to alternative column names", {
@@ -114,8 +127,8 @@ test_that("build_two_group_design keeps two balanced groups with control as refe
   skip_if_not_loaded()
   beta <- matrix(runif(10 * 4), nrow = 10, dimnames = list(NULL, paste0("s", 1:4)))
   d <- build_two_group_design(beta, c("A", "A", "B", "B"), case_group = "B", control_group = "A")
-  expect_equal(ncol(d$beta), 4L)                     # no virtual replicate needed
-  expect_equal(levels(d$pheno), c("A", "B"))         # control (A) is the reference level
+  expect_equal(ncol(d$beta), 4L) # no virtual replicate needed
+  expect_equal(levels(d$pheno), c("A", "B")) # control (A) is the reference level
   expect_equal(as.integer(table(d$pheno)), c(2L, 2L))
 })
 
@@ -125,9 +138,9 @@ test_that("build_two_group_design adds a virtual replicate for a single-sample g
   skip_if_not_loaded()
   beta <- matrix(runif(10 * 4), nrow = 10, dimnames = list(NULL, paste0("s", 1:4)))
   d <- build_two_group_design(beta, c("A", "B", "B", "B"), case_group = "B", control_group = "A")
-  expect_equal(ncol(d$beta), 5L)                     # one synthetic column added
+  expect_equal(ncol(d$beta), 5L) # one synthetic column added
   expect_true(any(grepl("_virtual_rep$", colnames(d$beta))))
-  expect_equal(as.integer(table(d$pheno)["A"]), 2L)  # the singleton group is padded to 2
+  expect_equal(as.integer(table(d$pheno)["A"]), 2L) # the singleton group is padded to 2
 })
 
 # ── count_usable_clusters() ───────────────────────────────────────────────────
@@ -141,17 +154,19 @@ test_that("count_usable_clusters returns NA when no annotation is available", {
 test_that("count_usable_clusters errors when beta and annotation do not overlap", {
   skip_if_not_loaded()
   beta <- matrix(runif(6 * 4), nrow = 6, dimnames = list(paste0("cg", 1:6), NULL))
-  pf   <- data.frame(CHR = "chr1", MAPINFO = 1:3, row.names = paste0("zz", 1:3))
+  pf <- data.frame(CHR = "chr1", MAPINFO = 1:3, row.names = paste0("zz", 1:3))
   expect_fatal(count_usable_clusters(beta, pf, max_gap = 1000, min_probes = 3), "overlap")
 })
 
 test_that("count_usable_clusters counts clusters that meet the minProbes threshold", {
   skip_if_not_loaded()
-  ids  <- paste0("cg", 1:6)
+  ids <- paste0("cg", 1:6)
   beta <- matrix(runif(6 * 4), nrow = 6, dimnames = list(ids, NULL))
   # Six probes on chr1 within maxGap => one cluster of 6.
-  pf   <- data.frame(CHR = rep("chr1", 6), MAPINFO = c(100, 200, 300, 400, 500, 600),
-                     row.names = ids)
+  pf <- data.frame(
+    CHR = rep("chr1", 6), MAPINFO = c(100, 200, 300, 400, 500, 600),
+    row.names = ids
+  )
   expect_equal(count_usable_clusters(beta, pf, max_gap = 1000, min_probes = 3), 1L)
   expect_equal(count_usable_clusters(beta, pf, max_gap = 1000, min_probes = 10), 0L)
 })
@@ -177,41 +192,48 @@ test_that("count_usable_clusters counts clusters that meet the minProbes thresho
 discover_dmr_fixtures <- function(signal_delta = 0.03, flat_delta = 0.015) {
   cand <- list()
   for (d in list.dirs("/app/jobs", recursive = FALSE)) {
-    beta <- file.path(d, "beta.rds"); sh <- file.path(d, "SampleSheet.csv"); at <- file.path(d, "array_type.txt")
+    beta <- file.path(d, "beta.rds")
+    sh <- file.path(d, "SampleSheet.csv")
+    at <- file.path(d, "array_type.txt")
     if (!all(file.exists(c(beta, sh, at)))) next
     ln <- tryCatch(readLines(sh, warn = FALSE), error = function(e) character(0))
-    ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-    s  <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
-                   error = function(e) NULL)
+    ds <- grep("^\\[Data\\]", ln)
+    skip_n <- if (length(ds)) ds[1] else 0
+    s <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
     if (is.null(s) || !all(c("Sentrix_ID", "Sentrix_Position", "Sample_Group") %in% colnames(s))) next
     aid <- paste0(s$Sentrix_ID, "_", s$Sentrix_Position)
     if (anyDuplicated(aid) || length(unique(s$Sample_Group)) != 2L) next
-    cand[[length(cand) + 1L]] <- list(beta = beta, sheet = sh, at = at, s = s, aid = aid,
-                                      size = file.info(beta)$size)
+    cand[[length(cand) + 1L]] <- list(
+      beta = beta, sheet = sh, at = at, s = s, aid = aid,
+      size = file.info(beta)$size
+    )
   }
-  cand <- cand[order(vapply(cand, function(x) x$size, numeric(1)))]   # smallest first
+  cand <- cand[order(vapply(cand, function(x) x$size, numeric(1)))] # smallest first
 
-  signal <- NULL; degenerate <- NULL
+  signal <- NULL
+  degenerate <- NULL
   for (c in cand) {
     if (!is.null(signal) && !is.null(degenerate)) break
     b <- tryCatch(readRDS(c$beta), error = function(e) NULL)
     if (is.null(b) || !is.matrix(b)) next
     grp <- setNames(c$s$Sample_Group, c$aid)[colnames(b)]
-    lv  <- unique(grp)
+    lv <- unique(grp)
     if (anyNA(grp) || length(lv) != 2L) next
     set.seed(1)
-    idx   <- sample(nrow(b), min(3000L, nrow(b)))
+    idx <- sample(nrow(b), min(3000L, nrow(b)))
     delta <- median(abs(rowMeans(b[idx, grp == lv[1], drop = FALSE]) -
-                        rowMeans(b[idx, grp == lv[2], drop = FALSE])), na.rm = TRUE)
+      rowMeans(b[idx, grp == lv[2], drop = FALSE])), na.rm = TRUE)
     fx <- list(beta = c$beta, sheet = c$sheet, at = c$at)
-    if (is.null(signal)     && is.finite(delta) && delta >= signal_delta) signal     <- fx
-    if (is.null(degenerate) && is.finite(delta) && delta <= flat_delta)   degenerate <- fx
+    if (is.null(signal) && is.finite(delta) && delta >= signal_delta) signal <- fx
+    if (is.null(degenerate) && is.finite(delta) && delta <= flat_delta) degenerate <- fx
   }
   list(signal = signal, degenerate = degenerate)
 }
 
 FIXTURES <- if (file.exists(SCRIPT_PATH)) discover_dmr_fixtures() else list(signal = NULL, degenerate = NULL)
-FIXTURE  <- FIXTURES$signal   # the happy-path / error-path fixture
+FIXTURE <- FIXTURES$signal # the happy-path / error-path fixture
 
 skip_if_no_fixture <- function() {
   skip_if_not(file.exists(SCRIPT_PATH), "dmr.R not found")
@@ -231,23 +253,32 @@ run_dmr <- function(beta = FIXTURE$beta, samples = FIXTURE$sheet, arraytype = "E
   if (copy_array_type && !is.null(at)) file.copy(at, file.path(job_dir, "array_type.txt"))
   out <- suppressWarnings(system2(
     "Rscript",
-    c(shQuote(SCRIPT_PATH), shQuote(samples), shQuote(job_dir), shQuote(beta),
-      minProbes, cutoff, adjPvalDmr, maxGap, arraytype, nBootstraps, nCores),
+    c(
+      shQuote(SCRIPT_PATH), shQuote(samples), shQuote(job_dir), shQuote(beta),
+      minProbes, cutoff, adjPvalDmr, maxGap, arraytype, nBootstraps, nCores
+    ),
     stdout = TRUE, stderr = TRUE
   ))
   status <- attr(out, "status") %||% 0L
-  logs <- Filter(Negate(is.null),
-                 lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL)))
-  list(status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
-       logs = logs, job_dir = job_dir)
+  logs <- Filter(
+    Negate(is.null),
+    lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL))
+  )
+  list(
+    status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
+    logs = logs, job_dir = job_dir
+  )
 }
 
-log_types    <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
+log_types <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
 log_messages <- function(res) unlist(lapply(res$logs, function(x) x$message %||% NULL))
 
 # Memoise the (expensive) happy Bumphunter run.
 .dmr_cache <- new.env(parent = emptyenv())
-happy_run <- function() { if (is.null(.dmr_cache$res)) .dmr_cache$res <- run_dmr(); .dmr_cache$res }
+happy_run <- function() {
+  if (is.null(.dmr_cache$res)) .dmr_cache$res <- run_dmr()
+  .dmr_cache$res
+}
 
 # ── Happy path & output integrity ─────────────────────────────────────────────
 
@@ -268,18 +299,19 @@ test_that("the DMR table has the canonical schema with biologically plausible va
   df <- read.csv(file.path(res$job_dir, "dmr_results.csv"), check.names = FALSE)
 
   expect_true(all(DMR_COLUMNS %in% colnames(df)),
-              info = paste("missing:", paste(setdiff(DMR_COLUMNS, colnames(df)), collapse = ", ")))
-  expect_gt(nrow(df), 0L)                                  # adjPvalDmr=1 keeps all regions
+    info = paste("missing:", paste(setdiff(DMR_COLUMNS, colnames(df)), collapse = ", "))
+  )
+  expect_gt(nrow(df), 0L) # adjPvalDmr=1 keeps all regions
   # NOTE: with adjPvalDmr = 1 the RAW region table is returned unfiltered
   # (TAB-01: keep everything, filter downstream), so it legitimately contains
   # small single-probe regions (N_DMPS == 1, WIDTH == 0). We therefore assert the
   # weaker, always-true invariants rather than the minProbes threshold.
-  expect_true(all(df$N_DMPS >= 1, na.rm = TRUE))           # every region has >= 1 probe
-  expect_true(all(df$WIDTH >= 0, na.rm = TRUE))            # width = STOP - START >= 0
+  expect_true(all(df$N_DMPS >= 1, na.rm = TRUE)) # every region has >= 1 probe
+  expect_true(all(df$WIDTH >= 0, na.rm = TRUE)) # width = STOP - START >= 0
   expect_true(all(df$STOP >= df$START, na.rm = TRUE))
   expect_true(all(df$P_VALUE >= 0 & df$P_VALUE <= 1, na.rm = TRUE))
   expect_true(all(is.finite(df$MEANDIFF)))
-  expect_equal(length(unique(df$ID)), nrow(df))           # unique ids
+  expect_equal(length(unique(df$ID)), nrow(df)) # unique ids
   expect_true(all(grepl("^DMR_\\d+$", df$ID)))
 })
 
@@ -301,7 +333,7 @@ test_that("zero DMRs is a VALID outcome (exit 0, empty table) — not a crash", 
   # EMPTY table (exit 0), never failing the whole job.
   skip_if_not(file.exists(SCRIPT_PATH), "dmr.R not found")
   skip_if(is.null(FIXTURES$degenerate), "no degenerate (no-signal) fixture available")
-  fx  <- FIXTURES$degenerate
+  fx <- FIXTURES$degenerate
   res <- run_dmr(beta = fx$beta, samples = fx$sheet, at = fx$at)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
 
@@ -310,7 +342,7 @@ test_that("zero DMRs is a VALID outcome (exit 0, empty table) — not a crash", 
   expect_false("error" %in% log_types(res))
   df <- read.csv(file.path(res$job_dir, "dmr_results.csv"), check.names = FALSE)
   expect_equal(nrow(df), 0L)
-  expect_equal(colnames(df), DMR_COLUMNS)                  # schema preserved even when empty
+  expect_equal(colnames(df), DMR_COLUMNS) # schema preserved even when empty
 })
 
 # ── Robustness / validation ───────────────────────────────────────────────────
@@ -363,9 +395,11 @@ test_that("a sample sheet without the group column is rejected", {
 test_that("a sample/matrix count mismatch is rejected by strict alignment", {
   skip_if_no_fixture()
   ln <- readLines(FIXTURE$sheet, warn = FALSE)
-  ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-  s  <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
-  bad <- tempfile(fileext = ".csv"); write.csv(s[1, , drop = FALSE], bad, row.names = FALSE)  # 1 row only
+  ds <- grep("^\\[Data\\]", ln)
+  skip_n <- if (length(ds)) ds[1] else 0
+  s <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
+  bad <- tempfile(fileext = ".csv")
+  write.csv(s[1, , drop = FALSE], bad, row.names = FALSE) # 1 row only
   on.exit(unlink(bad), add = TRUE)
   res <- run_dmr(samples = bad)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
@@ -376,10 +410,12 @@ test_that("a sample/matrix count mismatch is rejected by strict alignment", {
 test_that("a single distinct group is rejected (needs two comparison groups)", {
   skip_if_no_fixture()
   ln <- readLines(FIXTURE$sheet, warn = FALSE)
-  ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-  s  <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
+  ds <- grep("^\\[Data\\]", ln)
+  skip_n <- if (length(ds)) ds[1] else 0
+  s <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
   s$Sample_Group <- "OneGroup"
-  bad <- tempfile(fileext = ".csv"); write.csv(s, bad, row.names = FALSE)
+  bad <- tempfile(fileext = ".csv")
+  write.csv(s, bad, row.names = FALSE)
   on.exit(unlink(bad), add = TRUE)
   res <- run_dmr(samples = bad)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)

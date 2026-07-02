@@ -35,7 +35,7 @@ library(jsonlite)
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
 
-SCRIPT_PATH      <- "/app/r_backend/normalization_preview.R"
+SCRIPT_PATH <- "/app/r_backend/normalization_preview.R"
 EXPECTED_METHODS <- c("raw", "noob", "quantile", "swan", "funnorm")
 
 
@@ -43,26 +43,39 @@ EXPECTED_METHODS <- c("raw", "noob", "quantile", "swan", "funnorm")
 # Setup: source the functions and install a catchable emit_error() test double
 # ══════════════════════════════════════════════════════════════════════════════
 
-preview_loaded <- tryCatch({
-  suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
-  # emit_error() normally prints JSON and quits the process; for unit testing we
-  # make it raise a catchable condition instead (bound in globalenv, the sourced
-  # functions' enclosure, so their calls resolve to it).
-  assign("emit_error", function(message) {
-    stop(structure(class = c("preview_fatal", "error", "condition"),
-                   list(message = as.character(message), call = NULL)))
-  }, envir = globalenv())
-  exists("write_pca_json") && exists("read_sample_sheet")
-}, error = function(e) FALSE)
+preview_loaded <- tryCatch(
+  {
+    suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
+    # emit_error() normally prints JSON and quits the process; for unit testing we
+    # make it raise a catchable condition instead (bound in globalenv, the sourced
+    # functions' enclosure, so their calls resolve to it).
+    assign("emit_error", function(message) {
+      stop(structure(
+        class = c("preview_fatal", "error", "condition"),
+        list(message = as.character(message), call = NULL)
+      ))
+    }, envir = globalenv())
+    exists("write_pca_json") && exists("read_sample_sheet")
+  },
+  error = function(e) FALSE
+)
 
 skip_if_not_loaded <- function() {
-  skip_if_not(isTRUE(preview_loaded),
-              paste("normalization_preview.R could not be sourced (run in the r_worker container):", SCRIPT_PATH))
+  skip_if_not(
+    isTRUE(preview_loaded),
+    paste("normalization_preview.R could not be sourced (run in the r_worker container):", SCRIPT_PATH)
+  )
 }
 
 #' Assert that `expr` triggers a fatal emit_error() carrying `regexp`.
 expect_fatal <- function(expr, regexp = NULL) {
-  cnd <- tryCatch({ force(expr); NULL }, preview_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    preview_fatal = function(c) c
+  )
   expect_false(is.null(cnd), info = "expected a fatal emit_error() but none was raised")
   if (!is.null(regexp) && !is.null(cnd)) expect_match(conditionMessage(cnd), regexp, ignore.case = TRUE)
   invisible(cnd)
@@ -77,9 +90,12 @@ expect_fatal <- function(expr, regexp = NULL) {
 
 test_that("read_sample_sheet parses a plain CSV", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".csv"); on.exit(unlink(f))
-  writeLines(c("Sample_Name,Sentrix_ID,Sentrix_Position,Sample_Group",
-               "S1,200000000001,R01C01,A"), f)
+  f <- tempfile(fileext = ".csv")
+  on.exit(unlink(f))
+  writeLines(c(
+    "Sample_Name,Sentrix_ID,Sentrix_Position,Sample_Group",
+    "S1,200000000001,R01C01,A"
+  ), f)
   sheet <- read_sample_sheet(f)
   expect_s3_class(sheet, "data.frame")
   expect_equal(nrow(sheet), 1L)
@@ -88,11 +104,14 @@ test_that("read_sample_sheet parses a plain CSV", {
 
 test_that("read_sample_sheet skips the Illumina [Data] preamble", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".csv"); on.exit(unlink(f))
-  writeLines(c("[Header]", "Investigator,X", "", "[Data]",
-               "Sample_Name,Sentrix_ID,Sentrix_Position",
-               "S1,200000000001,R01C01",
-               "S2,200000000001,R02C01"), f)
+  f <- tempfile(fileext = ".csv")
+  on.exit(unlink(f))
+  writeLines(c(
+    "[Header]", "Investigator,X", "", "[Data]",
+    "Sample_Name,Sentrix_ID,Sentrix_Position",
+    "S1,200000000001,R01C01",
+    "S2,200000000001,R02C01"
+  ), f)
   sheet <- read_sample_sheet(f)
   expect_equal(nrow(sheet), 2L)
   expect_true("Sentrix_Position" %in% colnames(sheet))
@@ -115,23 +134,26 @@ make_beta <- function(nrow, ncol, colnames = paste0("A", seq_len(ncol))) {
 
 test_that("write_pca_json writes the full interactive-plot payload", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".json"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".json")
+  on.exit(unlink(f))
   b <- make_beta(60, 3, c("arr1", "arr2", "arr3"))
 
   write_pca_json(b, f, "NOOB",
-                 sample_labels = c("HeLa", "Raji", "Jurkat"),
-                 sample_groups = c("case", "control", "case"))
+    sample_labels = c("HeLa", "Raji", "Jurkat"),
+    sample_groups = c("case", "control", "case")
+  )
   pj <- jsonlite::fromJSON(f, simplifyVector = FALSE)
 
   expect_equal(pj$method, "NOOB")
-  expect_equal(pj$axes$x, "PC1"); expect_equal(pj$axes$y, "PC2")
+  expect_equal(pj$axes$x, "PC1")
+  expect_equal(pj$axes$y, "PC2")
   expect_true(is.numeric(pj$variance_explained$pc1))
   expect_true(is.numeric(pj$variance_explained$pc2))
   expect_length(pj$points, 3L)
 
   # Labels and groups must stay aligned to the sample (column) order.
   expect_equal(vapply(pj$points, function(p) p$sample, ""), c("HeLa", "Raji", "Jurkat"))
-  expect_equal(vapply(pj$points, function(p) p$group,  ""), c("case", "control", "case"))
+  expect_equal(vapply(pj$points, function(p) p$group, ""), c("case", "control", "case"))
   for (pt in pj$points) {
     expect_true(all(c("sample", "group", "pc1", "pc2") %in% names(pt)))
     expect_true(is.numeric(pt$pc1) && is.numeric(pt$pc2))
@@ -140,13 +162,15 @@ test_that("write_pca_json writes the full interactive-plot payload", {
 
 test_that("write_pca_json falls back sensibly for mismatched labels/groups", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".json"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".json")
+  on.exit(unlink(f))
   b <- make_beta(40, 3, c("c1", "c2", "c3"))
 
   # Wrong-length labels -> use column names; wrong-length groups -> empty groups.
   write_pca_json(b, f, "RAW",
-                 sample_labels = c("only_one"),
-                 sample_groups = c("g1", "g2"))
+    sample_labels = c("only_one"),
+    sample_groups = c("g1", "g2")
+  )
   pj <- jsonlite::fromJSON(f, simplifyVector = FALSE)
   expect_equal(vapply(pj$points, function(p) p$sample, ""), c("c1", "c2", "c3"))
   expect_true(all(vapply(pj$points, function(p) p$group, "") == ""))
@@ -154,7 +178,8 @@ test_that("write_pca_json falls back sensibly for mismatched labels/groups", {
 
 test_that("write_pca_json falls back to generic labels without colnames or labels", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".json"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".json")
+  on.exit(unlink(f))
   b <- make_beta(40, 3, colnames = NULL)
   write_pca_json(b, f, "RAW")
   pj <- jsonlite::fromJSON(f, simplifyVector = FALSE)
@@ -164,7 +189,8 @@ test_that("write_pca_json falls back to generic labels without colnames or label
 test_that("write_pca_json drops invariant/non-finite probes before PCA", {
   # 15 variable probes (kept) + 15 constant probes (dropped) -> PCA still runs.
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".json"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".json")
+  on.exit(unlink(f))
   variable <- make_beta(15, 3, c("a", "b", "c"))
   constant <- matrix(0.5, nrow = 15, ncol = 3, dimnames = list(NULL, c("a", "b", "c")))
   b <- rbind(variable, constant)
@@ -176,14 +202,16 @@ test_that("write_pca_json drops invariant/non-finite probes before PCA", {
 
 test_that("write_pca_json rejects fewer than three samples", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".json"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".json")
+  on.exit(unlink(f))
   expect_error(write_pca_json(make_beta(50, 2), f, "RAW"), "at least 3 samples")
   expect_error(write_pca_json(NULL, f, "RAW"), "at least 3 samples")
 })
 
 test_that("write_pca_json rejects too few valid CpGs after cleaning", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".json"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".json")
+  on.exit(unlink(f))
   # Only 5 variable probes remain after invariant removal -> below the 10 minimum.
   expect_error(write_pca_json(make_beta(5, 3), f, "RAW"), "Not enough valid CpGs")
 })
@@ -192,7 +220,8 @@ test_that("write_pca_json rejects too few valid CpGs after cleaning", {
 
 test_that("write_pca_error_json writes a well-formed error payload", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".json"); on.exit(unlink(f))
+  f <- tempfile(fileext = ".json")
+  on.exit(unlink(f))
   write_pca_error_json(f, "SWAN", "boom")
   pj <- jsonlite::fromJSON(f, simplifyVector = FALSE)
   expect_equal(pj$method, "SWAN")
@@ -214,7 +243,8 @@ test_that("write_pca_error_json writes a well-formed error payload", {
 discover_preview_fixture <- function() {
   cand <- list()
   for (d in list.dirs("/app/jobs", recursive = FALSE)) {
-    rds <- file.path(d, "filtered_data.rds"); sh <- file.path(d, "SampleSheet.csv")
+    rds <- file.path(d, "filtered_data.rds")
+    sh <- file.path(d, "SampleSheet.csv")
     if (file.exists(rds) && file.exists(sh)) {
       hdr <- tryCatch(readLines(sh, n = 40, warn = FALSE), error = function(e) character(0))
       if (any(grepl("Sentrix_ID", hdr)) && any(grepl("Sentrix_Position", hdr))) {
@@ -222,7 +252,9 @@ discover_preview_fixture <- function() {
       }
     }
   }
-  if (!length(cand)) return(NULL)
+  if (!length(cand)) {
+    return(NULL)
+  }
   cand[[which.min(vapply(cand, function(x) x$size, numeric(1)))]]
 }
 
@@ -244,10 +276,14 @@ run_preview <- function(rds = FIXTURE$rds, samples = FIXTURE$sheet,
     stdout = TRUE, stderr = TRUE
   ))
   status <- attr(out, "status") %||% 0L
-  logs <- Filter(Negate(is.null),
-                 lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL)))
-  list(status = as.integer(status), lines = out,
-       stdout = paste(out, collapse = "\n"), logs = logs, job_dir = job_dir)
+  logs <- Filter(
+    Negate(is.null),
+    lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL))
+  )
+  list(
+    status = as.integer(status), lines = out,
+    stdout = paste(out, collapse = "\n"), logs = logs, job_dir = job_dir
+  )
 }
 
 # The full 5-method run is expensive; execute it ONCE and reuse it across the
@@ -261,12 +297,15 @@ shared_run <- function() {
 error_messages <- function(logs) unlist(lapply(logs, function(x) if (identical(x$type, "error")) x$message else NULL))
 success_signalled <- function(logs) {
   types <- unlist(lapply(logs, function(x) x$type))
-  pcts  <- unlist(lapply(logs, function(x) x$percent))
+  pcts <- unlist(lapply(logs, function(x) x$percent))
   ("done" %in% types) || (100 %in% pcts)
 }
 file_has_magic <- function(path, magic) {
-  if (!file.exists(path)) return(FALSE)
-  con <- file(path, "rb"); on.exit(close(con))
+  if (!file.exists(path)) {
+    return(FALSE)
+  }
+  con <- file(path, "rb")
+  on.exit(close(con))
   bytes <- readBin(con, what = "raw", n = length(magic))
   length(bytes) == length(magic) && all(bytes == magic)
 }
@@ -286,7 +325,7 @@ test_that("pipeline runs, signals completion, and writes every artifact", {
   for (m in EXPECTED_METHODS) {
     expect_true(file.exists(file.path(res$job_dir, paste0("density_", m, ".png"))), info = paste("PNG missing:", m))
     expect_true(file.exists(file.path(res$job_dir, paste0("density_", m, ".pdf"))), info = paste("PDF missing:", m))
-    expect_true(file.exists(file.path(res$job_dir, paste0("pca_", m, ".json"))),    info = paste("JSON missing:", m))
+    expect_true(file.exists(file.path(res$job_dir, paste0("pca_", m, ".json"))), info = paste("JSON missing:", m))
   }
 })
 
@@ -316,7 +355,7 @@ test_that("PCA JSON is well-formed and covers all samples consistently", {
   for (m in EXPECTED_METHODS) {
     pca <- jsonlite::fromJSON(file.path(res$job_dir, paste0("pca_", m, ".json")), simplifyVector = FALSE)
     expect_equal(toupper(pca$method %||% ""), toupper(m))
-    if (!is.null(pca$error)) next   # a per-method error payload is also valid
+    if (!is.null(pca$error)) next # a per-method error payload is also valid
 
     expect_gte(length(pca$points), 3L)
     expect_true(is.numeric(pca$variance_explained$pc1))
@@ -327,8 +366,11 @@ test_that("PCA JSON is well-formed and covers all samples consistently", {
     }
     counts <- c(counts, length(pca$points))
   }
-  if (length(counts) > 1L) expect_equal(length(unique(counts)), 1L,
-                                        info = paste("inconsistent sample counts:", paste(counts, collapse = ",")))
+  if (length(counts) > 1L) {
+    expect_equal(length(unique(counts)), 1L,
+      info = paste("inconsistent sample counts:", paste(counts, collapse = ","))
+    )
+  }
 })
 
 # ── Biological layer: group/phenotype is carried into the PCA payload ─────────
@@ -362,7 +404,9 @@ test_that("a missing filtered_data.rds is reported clearly", {
 
 test_that("a corrupted RDS is reported clearly, not a hard crash", {
   skip_if_no_fixture()
-  broken <- tempfile(fileext = ".rds"); writeLines("not an rds", broken); on.exit(unlink(broken))
+  broken <- tempfile(fileext = ".rds")
+  writeLines("not an rds", broken)
+  on.exit(unlink(broken))
   res <- run_preview(rds = broken)
   expect_true(res$status != 0L)
   expect_match(res$stdout, "could not be read")
@@ -373,7 +417,8 @@ test_that("a valid RDS with the wrong object type is rejected", {
   skip_if_no_fixture()
   wrong <- tempfile(fileext = ".rds")
   m <- matrix(runif(20), nrow = 5, dimnames = list(NULL, paste0("S", 1:4)))
-  saveRDS(m, wrong); on.exit(unlink(wrong))
+  saveRDS(m, wrong)
+  on.exit(unlink(wrong))
   res <- run_preview(rds = wrong)
   expect_true(res$status != 0L)
   expect_match(res$stdout, "unexpected format")
@@ -389,7 +434,8 @@ test_that("a missing sample sheet is reported clearly", {
 test_that("a sample sheet without Sentrix columns is rejected", {
   skip_if_no_fixture()
   bad <- tempfile(fileext = ".csv")
-  writeLines(c("Sample_Name,Sample_Group", "S1,A", "S2,B"), bad); on.exit(unlink(bad))
+  writeLines(c("Sample_Name,Sample_Group", "S1,A", "S2,B"), bad)
+  on.exit(unlink(bad))
   res <- run_preview(samples = bad)
   expect_true(res$status != 0L)
   expect_match(res$stdout, "missing required column")
@@ -399,9 +445,10 @@ test_that("a sample sheet without Sentrix columns is rejected", {
 
 test_that("re-running into the same job directory is stable and idempotent", {
   skip_if_no_fixture()
-  job_dir <- tempfile("preview_rerun_"); on.exit(unlink(job_dir, recursive = TRUE), add = TRUE)
+  job_dir <- tempfile("preview_rerun_")
+  on.exit(unlink(job_dir, recursive = TRUE), add = TRUE)
   res1 <- run_preview(job_dir = job_dir)
-  res2 <- run_preview(job_dir = job_dir)   # overwrite the same outputs
+  res2 <- run_preview(job_dir = job_dir) # overwrite the same outputs
   expect_equal(res1$status, 0L, info = res1$stdout)
   expect_equal(res2$status, 0L, info = res2$stdout)
   for (m in EXPECTED_METHODS) {

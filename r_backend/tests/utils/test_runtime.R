@@ -14,11 +14,11 @@ test_that("configure_runtime sets the single-thread environment and returns TRUE
   # Start from a clean slate so we observe the function's own effect.
   Sys.unsetenv("OMP_NUM_THREADS")
   res <- configure_runtime()
-  expect_true(res)                                  # invisibly TRUE
-  expect_equal(Sys.getenv("OMP_NUM_THREADS"),        "1")
-  expect_equal(Sys.getenv("OPENBLAS_NUM_THREADS"),   "1")
-  expect_equal(Sys.getenv("MKL_NUM_THREADS"),        "1")
-  expect_equal(Sys.getenv("NUMEXPR_NUM_THREADS"),    "1")
+  expect_true(res) # invisibly TRUE
+  expect_equal(Sys.getenv("OMP_NUM_THREADS"), "1")
+  expect_equal(Sys.getenv("OPENBLAS_NUM_THREADS"), "1")
+  expect_equal(Sys.getenv("MKL_NUM_THREADS"), "1")
+  expect_equal(Sys.getenv("NUMEXPR_NUM_THREADS"), "1")
   expect_equal(Sys.getenv("VECLIB_MAXIMUM_THREADS"), "1")
   expect_equal(getOption("mc.cores"), 1L)
 })

@@ -30,7 +30,7 @@ test_that("emit_progress writes a well-formed progress event with an integer per
 
 test_that("emit_progress coerces a fractional percent to an integer", {
   j <- capture_json(emit_progress(42.9, "x"))
-  expect_equal(j$percent, 42L)               # as.integer() truncates
+  expect_equal(j$percent, 42L) # as.integer() truncates
 })
 
 test_that("emit_done writes a done event and merges arbitrary named fields", {
@@ -47,7 +47,7 @@ test_that("emit_done works with no extra fields", {
 
 test_that("emit_error prints a JSON error and exits non-zero (subprocess)", {
   code <- "source('/app/r_backend/utils/progress.R'); emit_error('boom happened')"
-  out  <- suppressWarnings(system2("Rscript", c("-e", shQuote(code)), stdout = TRUE, stderr = TRUE))
+  out <- suppressWarnings(system2("Rscript", c("-e", shQuote(code)), stdout = TRUE, stderr = TRUE))
   status <- attr(out, "status") %||% 0L
   status <- if (is.null(attr(out, "status"))) 0L else as.integer(attr(out, "status"))
   expect_equal(status, 1L)

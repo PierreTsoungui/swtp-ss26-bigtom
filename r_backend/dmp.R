@@ -75,26 +75,26 @@ build_dmp_output <- function(dmp_table, beta, pheno, case_group, control_group) 
     emit_error("DMP result table has no recognizable p-value column.")
   }
 
-  ids       <- rownames(dmp_table)
-  case_mean <- rowMeans(beta[, pheno == case_group,    drop = FALSE], na.rm = TRUE)
+  ids <- rownames(dmp_table)
+  case_mean <- rowMeans(beta[, pheno == case_group, drop = FALSE], na.rm = TRUE)
   ctrl_mean <- rowMeans(beta[, pheno == control_group, drop = FALSE], na.rm = TRUE)
-  g1 <- unname(case_mean[ids])   # Case
-  g2 <- unname(ctrl_mean[ids])   # Control
+  g1 <- unname(case_mean[ids]) # Case
+  g2 <- unname(ctrl_mean[ids]) # Control
 
   eps <- 1e-8
   data.frame(
-    ID         = ids,
-    CHR        = as.character(pick_col(dmp_table, c("CHR", "chr"))),
-    POS        = pick_col(dmp_table, c("MAPINFO", "pos", "POS")),
-    GENE       = as.character(pick_col(dmp_table, c("gene", "Gene"), fallback = "")),
-    FEATURE    = as.character(pick_col(dmp_table, c("feature", "Feature"), fallback = "")),
-    CGI        = as.character(pick_col(dmp_table, c("cgi", "CGI"), fallback = "")),
-    ADJ_P      = p_col,
+    ID = ids,
+    CHR = as.character(pick_col(dmp_table, c("CHR", "chr"))),
+    POS = pick_col(dmp_table, c("MAPINFO", "pos", "POS")),
+    GENE = as.character(pick_col(dmp_table, c("gene", "Gene"), fallback = "")),
+    FEATURE = as.character(pick_col(dmp_table, c("feature", "Feature"), fallback = "")),
+    CGI = as.character(pick_col(dmp_table, c("cgi", "CGI"), fallback = "")),
+    ADJ_P = p_col,
     GROUP1_AVG = g1,
     GROUP2_AVG = g2,
     DELTA_BETA = g1 - g2,
-    LOG_FC     = log2((g1 + eps) / (g2 + eps)),
-    DMR_ID     = "-",
+    LOG_FC = log2((g1 + eps) / (g2 + eps)),
+    DMR_ID = "-",
     stringsAsFactors = FALSE
   )
 }
@@ -114,25 +114,33 @@ build_dmp_output <- function(dmp_table, beta, pheno, case_group, control_group) 
 #' @return \code{dmp_df} with \code{DMR_ID} filled where regions overlap.
 link_dmrs <- function(dmp_df, job_dir) {
   dmr_rds_path <- file.path(job_dir, "dmr_results.rds")
-  if (!file.exists(dmr_rds_path)) return(dmp_df)
+  if (!file.exists(dmr_rds_path)) {
+    return(dmp_df)
+  }
 
   dmr_data <- tryCatch(
     readRDS(dmr_rds_path),
     error = function(e) emit_error(sprintf("Failed to load DMR results '%s': %s", dmr_rds_path, conditionMessage(e)))
   )
-  if (is.null(dmr_data) || nrow(dmr_data) == 0L) return(dmp_df)
+  if (is.null(dmr_data) || nrow(dmr_data) == 0L) {
+    return(dmp_df)
+  }
 
   # Keep only probes / regions with usable coordinates; GRanges rejects NA/Inf.
   chr <- as.character(dmp_df$CHR)
   pos <- suppressWarnings(as.numeric(dmp_df$POS))
   dmp_ok <- !is.na(chr) & nzchar(chr) & is.finite(pos)
-  if (!any(dmp_ok)) return(dmp_df)
+  if (!any(dmp_ok)) {
+    return(dmp_df)
+  }
 
-  d_chr   <- as.character(dmr_data$CHR)
+  d_chr <- as.character(dmr_data$CHR)
   d_start <- suppressWarnings(as.numeric(dmr_data$START))
-  d_stop  <- suppressWarnings(as.numeric(dmr_data$STOP))
-  dmr_ok  <- !is.na(d_chr) & nzchar(d_chr) & is.finite(d_start) & is.finite(d_stop)
-  if (!any(dmr_ok)) return(dmp_df)
+  d_stop <- suppressWarnings(as.numeric(dmr_data$STOP))
+  dmr_ok <- !is.na(d_chr) & nzchar(d_chr) & is.finite(d_start) & is.finite(d_stop)
+  if (!any(dmr_ok)) {
+    return(dmp_df)
+  }
 
   dmp_gr <- GenomicRanges::GRanges(
     seqnames = chr[dmp_ok],
@@ -144,7 +152,7 @@ link_dmrs <- function(dmp_df, job_dir) {
   )
   dmr_ids <- as.character(dmr_data$ID[dmr_ok])
 
-  hits    <- GenomicRanges::findOverlaps(dmp_gr, dmr_gr, select = "first")
+  hits <- GenomicRanges::findOverlaps(dmp_gr, dmr_gr, select = "first")
   matched <- !is.na(hits)
   if (any(matched)) {
     dmp_df$DMR_ID[which(dmp_ok)[matched]] <- dmr_ids[hits[matched]]
@@ -173,21 +181,21 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   }
 
   sample_sheet_path <- args[1]
-  job_dir           <- args[2]
-  beta_filename     <- args[3]
-  beta_path         <- if (file.exists(beta_filename)) beta_filename else file.path(job_dir, beta_filename)
+  job_dir <- args[2]
+  beta_filename <- args[3]
+  beta_path <- if (file.exists(beta_filename)) beta_filename else file.path(job_dir, beta_filename)
 
   # Kept for compatibility/logging only; significance is a downstream table filter.
-  adjPVal    <- if (length(args) >= 4) as.numeric(args[4]) else 1.0
+  adjPVal <- if (length(args) >= 4) as.numeric(args[4]) else 1.0
   # Array type: prefer the value minfi detected during filtering (array_type.txt);
   # the CLI argument is only a fallback. This prevents loading the wrong ChAMP
   # annotation (e.g. EPICv2 on 450K data -> "object 'probe.features' not found").
-  arraytype  <- read_array_type(job_dir, fallback = if (length(args) >= 5) args[5] else "EPICv2")
+  arraytype <- read_array_type(job_dir, fallback = if (length(args) >= 5) args[5] else "EPICv2")
 
   # Dynamic comparison: any grouping column, explicit case/control. Delta Beta is
   # then deterministic: mean(case) - mean(control) (TAB-02).
-  group_column  <- if (length(args) >= 6 && nzchar(args[6])) args[6] else "Sample_Group"
-  case_group    <- if (length(args) >= 7 && nzchar(args[7])) args[7] else ""
+  group_column <- if (length(args) >= 6 && nzchar(args[6])) args[6] else "Sample_Group"
+  case_group <- if (length(args) >= 7 && nzchar(args[7])) args[7] else ""
   control_group <- if (length(args) >= 8 && nzchar(args[8])) args[8] else ""
 
   if (!dir.exists(job_dir)) dir.create(job_dir, recursive = TRUE)
@@ -223,15 +231,15 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
 
   emit_progress(55, "Selecting case/control groups")
   group_vec <- as.character(samples_aligned[[group_column]])
-  groups    <- resolve_case_control(group_vec, group_column, case_group, control_group)
-  case_group    <- groups$case
+  groups <- resolve_case_control(group_vec, group_column, case_group, control_group)
+  case_group <- groups$case
   control_group <- groups$control
 
   # Reduce to the two chosen groups; control is the reference level so
   # Delta Beta = mean(Case) - mean(Control).
-  keep      <- group_vec %in% c(case_group, control_group)
-  beta      <- beta[, keep, drop = FALSE]
-  pheno     <- factor(group_vec[keep], levels = c(control_group, case_group))
+  keep <- group_vec %in% c(case_group, control_group)
+  beta <- beta[, keep, drop = FALSE]
+  pheno <- factor(group_vec[keep], levels = c(control_group, case_group))
 
   # A differential test needs >= 2 samples per group; fabricating a replicate
   # would yield statistically invalid p-values, so fail clearly instead.
@@ -252,18 +260,20 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   for (g in levels(pheno)) {
     cols <- which(pheno == g)
     if (length(cols) >= 2L) {
-      sub       <- beta[, cols, drop = FALSE]
+      sub <- beta[, cols, drop = FALSE]
       within_ss <- within_ss + rowSums((sub - rowMeans(sub))^2)
     }
   }
   if (mean(within_ss < 1e-12) > 0.99) {
-    cn       <- colnames(beta)
+    cn <- colnames(beta)
     dup_pairs <- character(0)
     for (g in levels(pheno)) {
       cols <- which(pheno == g)
-      for (i in seq_along(cols)) for (j in seq_len(i - 1L)) {
-        if (isTRUE(all.equal(beta[, cols[i]], beta[, cols[j]], tolerance = 1e-9))) {
-          dup_pairs <- c(dup_pairs, sprintf("%s = %s", cn[cols[j]], cn[cols[i]]))
+      for (i in seq_along(cols)) {
+        for (j in seq_len(i - 1L)) {
+          if (isTRUE(all.equal(beta[, cols[i]], beta[, cols[j]], tolerance = 1e-9))) {
+            dup_pairs <- c(dup_pairs, sprintf("%s = %s", cn[cols[j]], cn[cols[i]]))
+          }
         }
       }
     }
@@ -307,10 +317,13 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   emit_progress(100, "Saving computed DMP results")
   output_csv <- file.path(job_dir, "dmp_results.csv")
   output_rds <- file.path(job_dir, "dmp_results.rds")
-  tryCatch({
-    write.csv(dmp_out, output_csv, row.names = FALSE)
-    saveRDS(dmp_out, output_rds)
-  }, error = function(e) emit_error(sprintf("Failed to save DMP results: %s", conditionMessage(e))))
+  tryCatch(
+    {
+      write.csv(dmp_out, output_csv, row.names = FALSE)
+      saveRDS(dmp_out, output_rds)
+    },
+    error = function(e) emit_error(sprintf("Failed to save DMP results: %s", conditionMessage(e)))
+  )
 
   emit_done(
     output_csv = output_csv,

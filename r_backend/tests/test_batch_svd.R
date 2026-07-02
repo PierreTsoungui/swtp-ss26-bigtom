@@ -36,18 +36,25 @@ SCRIPT_PATH <- "/app/r_backend/batch_svd.R"
 # Setup: source functions + catchable emit_error() double
 # ══════════════════════════════════════════════════════════════════════════════
 
-svd_loaded <- tryCatch({
-  suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
-  assign("emit_error", function(message) {
-    stop(structure(class = c("svd_fatal", "error", "condition"),
-                   list(message = as.character(message), call = NULL)))
-  }, envir = globalenv())
-  exists("compute_principal_components") && exists("select_grouping_variables")
-}, error = function(e) FALSE)
+svd_loaded <- tryCatch(
+  {
+    suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
+    assign("emit_error", function(message) {
+      stop(structure(
+        class = c("svd_fatal", "error", "condition"),
+        list(message = as.character(message), call = NULL)
+      ))
+    }, envir = globalenv())
+    exists("compute_principal_components") && exists("select_grouping_variables")
+  },
+  error = function(e) FALSE
+)
 
 skip_if_not_loaded <- function() {
-  skip_if_not(isTRUE(svd_loaded),
-              paste("batch_svd.R could not be sourced (run in the r_worker container):", SCRIPT_PATH))
+  skip_if_not(
+    isTRUE(svd_loaded),
+    paste("batch_svd.R could not be sourced (run in the r_worker container):", SCRIPT_PATH)
+  )
 }
 
 
@@ -63,8 +70,8 @@ test_that("compute_principal_components returns PCs with the right shape", {
   beta <- matrix(runif(100 * 4), nrow = 100, ncol = 4, dimnames = list(NULL, paste0("S", 1:4)))
   res <- compute_principal_components(beta)
 
-  expect_equal(nrow(res$pcs), 4L)               # one row per sample
-  expect_equal(res$n_pcs, min(10L, 4L))          # n_pcs = min(MAX_PCS, #components)
+  expect_equal(nrow(res$pcs), 4L) # one row per sample
+  expect_equal(res$n_pcs, min(10L, 4L)) # n_pcs = min(MAX_PCS, #components)
   expect_equal(ncol(res$pcs), res$n_pcs)
   expect_length(res$var_explained, res$n_pcs)
   expect_true(all(res$var_explained >= 0 & res$var_explained <= 100))
@@ -75,7 +82,7 @@ test_that("compute_principal_components caps the number of PCs at MAX_PCS (10)",
   set.seed(2)
   beta <- matrix(runif(200 * 15), nrow = 200, ncol = 15, dimnames = list(NULL, paste0("S", 1:15)))
   res <- compute_principal_components(beta)
-  expect_equal(res$n_pcs, 10L)                   # min(MAX_PCS=10, 15 components)
+  expect_equal(res$n_pcs, 10L) # min(MAX_PCS=10, 15 components)
   expect_equal(ncol(res$pcs), 10L)
 })
 
@@ -98,12 +105,12 @@ test_that("select_grouping_variables keeps grouping columns and drops the rest",
   # variable; constants, per-sample-unique ids and Array_ID are excluded.
   skip_if_not_loaded()
   df <- data.frame(
-    Array_ID     = c("a1", "a2", "a3", "a4"),   # always excluded
-    Sample_Group = c("A", "A", "B", "B"),        # 2 distinct  -> kept
-    Batch        = c("b1", "b1", "b2", "b2"),    # 2 distinct  -> kept
-    Constant     = c("x", "x", "x", "x"),        # 1 distinct  -> dropped
-    Unique       = c("u1", "u2", "u3", "u4"),    # 4 == n      -> dropped
-    MostlyEmpty  = c("p", "p", NA, ""),          # 1 non-empty -> dropped
+    Array_ID = c("a1", "a2", "a3", "a4"), # always excluded
+    Sample_Group = c("A", "A", "B", "B"), # 2 distinct  -> kept
+    Batch = c("b1", "b1", "b2", "b2"), # 2 distinct  -> kept
+    Constant = c("x", "x", "x", "x"), # 1 distinct  -> dropped
+    Unique = c("u1", "u2", "u3", "u4"), # 4 == n      -> dropped
+    MostlyEmpty = c("p", "p", NA, ""), # 1 non-empty -> dropped
     stringsAsFactors = FALSE
   )
   sgv <- select_grouping_variables(df, n_samples = 4L)
@@ -115,9 +122,11 @@ test_that("select_grouping_variables keeps grouping columns and drops the rest",
 
 test_that("select_grouping_variables returns an empty list when nothing groups", {
   skip_if_not_loaded()
-  df <- data.frame(Array_ID = c("a1", "a2", "a3"),
-                   AllSame  = c("z", "z", "z"),
-                   AllUniq  = c("u1", "u2", "u3"), stringsAsFactors = FALSE)
+  df <- data.frame(
+    Array_ID = c("a1", "a2", "a3"),
+    AllSame = c("z", "z", "z"),
+    AllUniq = c("u1", "u2", "u3"), stringsAsFactors = FALSE
+  )
   expect_length(select_grouping_variables(df, n_samples = 3L), 0L)
 })
 
@@ -132,10 +141,11 @@ test_that("association_pvalue returns a p-value in [0,1] for a real two-group sp
   skip_if_not_loaded()
   set.seed(10)
   groups <- rep(c("A", "B"), each = 6)
-  scores <- c(rnorm(6, 0), rnorm(6, 5))          # clearly separated
+  scores <- c(rnorm(6, 0), rnorm(6, 5)) # clearly separated
   p <- association_pvalue(groups, scores)
   expect_false(is.na(p))
-  expect_gte(p, 0); expect_lte(p, 1)
+  expect_gte(p, 0)
+  expect_lte(p, 1)
 })
 
 test_that("association_pvalue returns NA on an internal error", {
@@ -149,9 +159,11 @@ test_that("association_pvalue returns NA on an internal error", {
 test_that("compute_pvalue_matrix builds a variable x PC matrix", {
   skip_if_not_loaded()
   set.seed(11)
-  pcs <- matrix(rnorm(6 * 3), nrow = 6, ncol = 3)          # 6 samples x 3 PCs
-  vf  <- list(Group = as.integer(factor(rep(c("A", "B"), each = 3))),
-              Batch = as.integer(factor(rep(c("x", "y"), times = 3))))
+  pcs <- matrix(rnorm(6 * 3), nrow = 6, ncol = 3) # 6 samples x 3 PCs
+  vf <- list(
+    Group = as.integer(factor(rep(c("A", "B"), each = 3))),
+    Batch = as.integer(factor(rep(c("x", "y"), times = 3)))
+  )
   m <- compute_pvalue_matrix(vf, pcs, n_pcs = 3L)
 
   expect_equal(dim(m), c(2L, 3L))
@@ -165,7 +177,7 @@ test_that("compute_pvalue_matrix returns a placeholder row when nothing groups",
   pcs <- matrix(rnorm(4 * 2), nrow = 4, ncol = 2)
   m <- compute_pvalue_matrix(list(), pcs, n_pcs = 2L)
   expect_equal(dim(m), c(1L, 2L))
-  expect_equal(rownames(m), "—")            # em dash placeholder
+  expect_equal(rownames(m), "—") # em dash placeholder
   expect_true(all(is.na(m)))
 })
 
@@ -173,12 +185,12 @@ test_that("compute_pvalue_matrix returns a placeholder row when nothing groups",
 
 test_that("pvalue_to_color maps p-values to the correct bins", {
   skip_if_not_loaded()
-  expect_equal(pvalue_to_color(NA),     PVAL_NA_COLOR)
-  expect_equal(pvalue_to_color(1e-11),  PVAL_BIN_COLORS[1])   # p < 1e-10
-  expect_equal(pvalue_to_color(1e-6),   PVAL_BIN_COLORS[2])   # p < 1e-5
-  expect_equal(pvalue_to_color(5e-3),   PVAL_BIN_COLORS[3])   # p < 0.01
-  expect_equal(pvalue_to_color(0.03),   PVAL_BIN_COLORS[4])   # p < 0.05
-  expect_equal(pvalue_to_color(0.5),    PVAL_BIN_COLORS[5])   # p >= 0.05
+  expect_equal(pvalue_to_color(NA), PVAL_NA_COLOR)
+  expect_equal(pvalue_to_color(1e-11), PVAL_BIN_COLORS[1]) # p < 1e-10
+  expect_equal(pvalue_to_color(1e-6), PVAL_BIN_COLORS[2]) # p < 1e-5
+  expect_equal(pvalue_to_color(5e-3), PVAL_BIN_COLORS[3]) # p < 0.01
+  expect_equal(pvalue_to_color(0.03), PVAL_BIN_COLORS[4]) # p < 0.05
+  expect_equal(pvalue_to_color(0.5), PVAL_BIN_COLORS[5]) # p >= 0.05
 })
 
 
@@ -195,19 +207,24 @@ test_that("pvalue_to_color maps p-values to the correct bins", {
 discover_svd_fixture <- function() {
   cand <- list()
   for (d in list.dirs("/app/jobs", recursive = FALSE)) {
-    beta <- file.path(d, "beta.rds"); sh <- file.path(d, "SampleSheet.csv")
+    beta <- file.path(d, "beta.rds")
+    sh <- file.path(d, "SampleSheet.csv")
     if (!file.exists(beta) || !file.exists(sh)) next
     ln <- tryCatch(readLines(sh, warn = FALSE), error = function(e) character(0))
-    ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-    s  <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
-                   error = function(e) NULL)
+    ds <- grep("^\\[Data\\]", ln)
+    skip_n <- if (length(ds)) ds[1] else 0
+    s <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
     if (is.null(s) || !all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(s))) next
     aid <- paste0(s$Sentrix_ID, "_", s$Sentrix_Position)
     if (nrow(s) >= 3L && !anyDuplicated(aid)) {
       cand[[length(cand) + 1L]] <- list(beta = beta, sheet = sh, size = file.info(beta)$size)
     }
   }
-  if (!length(cand)) return(NULL)
+  if (!length(cand)) {
+    return(NULL)
+  }
   cand[[which.min(vapply(cand, function(x) x$size, numeric(1)))]]
 }
 
@@ -228,20 +245,27 @@ run_svd <- function(beta = FIXTURE$beta, samples = FIXTURE$sheet,
     stdout = TRUE, stderr = TRUE
   ))
   status <- attr(out, "status") %||% 0L
-  logs <- Filter(Negate(is.null),
-                 lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL)))
-  list(status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
-       logs = logs, job_dir = job_dir,
-       png_path = file.path(job_dir, png_name),
-       pdf_path = file.path(job_dir, sub("\\.png$", ".pdf", png_name)))
+  logs <- Filter(
+    Negate(is.null),
+    lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL))
+  )
+  list(
+    status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
+    logs = logs, job_dir = job_dir,
+    png_path = file.path(job_dir, png_name),
+    pdf_path = file.path(job_dir, sub("\\.png$", ".pdf", png_name))
+  )
 }
 
-log_types    <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
+log_types <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
 log_messages <- function(res) unlist(lapply(res$logs, function(x) x$message %||% NULL))
 
 # The happy run is reused across several assertions.
 .svd_cache <- new.env(parent = emptyenv())
-happy_run <- function() { if (is.null(.svd_cache$res)) .svd_cache$res <- run_svd(); .svd_cache$res }
+happy_run <- function() {
+  if (is.null(.svd_cache$res)) .svd_cache$res <- run_svd()
+  .svd_cache$res
+}
 
 # ── Happy path ────────────────────────────────────────────────────────────────
 
@@ -254,7 +278,7 @@ test_that("a standard run exits 0, emits 'done', and writes a PNG + PDF", {
   expect_false("error" %in% log_types(res), info = "an error was emitted on a successful run")
 
   expect_true(file.exists(res$png_path), info = "SVD PNG not created")
-  expect_gt(file.size(res$png_path), 5000L)          # a real plot, not a blank canvas
+  expect_gt(file.size(res$png_path), 5000L) # a real plot, not a blank canvas
   expect_true(file.exists(res$pdf_path), info = "SVD PDF not created")
 })
 
@@ -265,7 +289,7 @@ test_that("a custom png_name is honoured (and the default is not created)", {
 
   expect_equal(res$status, 0L, info = res$stdout)
   expect_true(file.exists(file.path(res$job_dir, "my_svd_analysis.png")))
-  expect_true(file.exists(file.path(res$job_dir, "my_svd_analysis.pdf")))  # derived name
+  expect_true(file.exists(file.path(res$job_dir, "my_svd_analysis.pdf"))) # derived name
   expect_false(file.exists(file.path(res$job_dir, "svd_plot.png")))
 })
 
@@ -303,10 +327,12 @@ test_that("too few matching samples between beta and sheet is rejected", {
   # required 2 samples align -> the intersect step emits a clear error.
   skip_if_no_fixture()
   ln <- readLines(FIXTURE$sheet, warn = FALSE)
-  ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-  s  <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
-  if (nrow(s) >= 2L) s$Sentrix_Position[-1] <- "R99C99"    # break all but the first
-  bad <- tempfile(fileext = ".csv"); write.csv(s, bad, row.names = FALSE)
+  ds <- grep("^\\[Data\\]", ln)
+  skip_n <- if (length(ds)) ds[1] else 0
+  s <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
+  if (nrow(s) >= 2L) s$Sentrix_Position[-1] <- "R99C99" # break all but the first
+  bad <- tempfile(fileext = ".csv")
+  write.csv(s, bad, row.names = FALSE)
   on.exit(unlink(bad), add = TRUE)
 
   res <- run_svd(samples = bad)
@@ -321,13 +347,20 @@ test_that("SVD still renders when no sample-sheet column groups the samples (n_v
   # either constant (Sample_Group) or one-per-sample (Sample_Name), no variable
   # qualifies; the script must still succeed and draw the placeholder heatmap.
   skip_if_not(file.exists(SCRIPT_PATH), "batch_svd.R not found")
-  jd <- tempfile("svd_novars_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE), add = TRUE)
-  beta <- matrix(runif(200 * 4), nrow = 200,
-                 dimnames = list(paste0("cg", 1:200), paste0("s", 1:4)))
-  brds <- file.path(jd, "beta.rds"); saveRDS(beta, brds)
+  jd <- tempfile("svd_novars_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE), add = TRUE)
+  beta <- matrix(runif(200 * 4),
+    nrow = 200,
+    dimnames = list(paste0("cg", 1:200), paste0("s", 1:4))
+  )
+  brds <- file.path(jd, "beta.rds")
+  saveRDS(beta, brds)
   sheet <- file.path(jd, "sheet.csv")
-  write.csv(data.frame(Sample_Name = paste0("s", 1:4), Sample_Group = "OneGroup",
-                       stringsAsFactors = FALSE), sheet, row.names = FALSE)
+  write.csv(data.frame(
+    Sample_Name = paste0("s", 1:4), Sample_Group = "OneGroup",
+    stringsAsFactors = FALSE
+  ), sheet, row.names = FALSE)
 
   res <- run_svd(beta = brds, samples = sheet, job_dir = jd)
   expect_equal(res$status, 0L, info = res$stdout)

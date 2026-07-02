@@ -40,7 +40,7 @@
 #' @return Invisibly \code{NULL}; called for its stdout side effect.
 #' @examples
 #' \dontrun{
-#' emit_progress(0,  "Initializing workflow")
+#' emit_progress(0, "Initializing workflow")
 #' emit_progress(75, "Running statistical test")
 #' }
 emit_progress <- function(percent, message) {

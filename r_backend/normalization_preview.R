@@ -80,7 +80,7 @@ read_sample_sheet <- function(path) {
     error = function(e) emit_error("The sample sheet could not be read. Please check the file.")
   )
   data_start <- grep("^\\[Data\\]", lines)
-  skip_n     <- if (length(data_start) > 0) data_start[1] else 0
+  skip_n <- if (length(data_start) > 0) data_start[1] else 0
 
   tryCatch(
     read.csv(path, skip = skip_n, stringsAsFactors = FALSE, check.names = FALSE),
@@ -110,9 +110,9 @@ create_error_png <- function(filename, message, method, plot_kind) {
       plot.new()
       text(0.5, 0.5, paste("ERROR:\n", message), cex = 1.3, col = "red")
     },
-    width  = 800,
+    width = 800,
     height = 500,
-    res    = 96
+    res = 96
   )
 }
 
@@ -142,9 +142,9 @@ make_density_plot <- function(beta_values, filename, title) {
         lwd      = 2.5
       )
     },
-    width  = 1000,
+    width = 1000,
     height = 650,
-    res    = 120
+    res = 120
   )
 }
 
@@ -178,15 +178,15 @@ write_pca_json <- function(beta_values, filename, method_name,
   beta_values <- drop_invariant_probes(beta_values, min_sd = 1e-3, require_finite = TRUE)
 
   if (nrow(beta_values) < 10) stop("Not enough valid CpGs remaining for PCA")
-  if (ncol(beta_values) < 2)  stop("Not enough samples for PCA")
+  if (ncol(beta_values) < 2) stop("Not enough samples for PCA")
 
   if (nrow(beta_values) > MAX_PROBES_FOR_PCA) {
     set.seed(123)
-    idx         <- sample(seq_len(nrow(beta_values)), MAX_PROBES_FOR_PCA)
+    idx <- sample(seq_len(nrow(beta_values)), MAX_PROBES_FOR_PCA)
     beta_values <- beta_values[idx, , drop = FALSE]
   }
 
-  pca     <- prcomp(t(beta_values), center = TRUE, scale. = FALSE)
+  pca <- prcomp(t(beta_values), center = TRUE, scale. = FALSE)
   var_exp <- round((pca$sdev^2 / sum(pca$sdev^2)) * 100, 1)
 
   n <- ncol(beta_values)
@@ -261,54 +261,62 @@ write_pca_error_json <- function(filename, method_name, message) {
 #' @return Invisibly \code{NULL}.
 run_method <- function(method_name, normalization_expr, base_pct) {
   density_filename <- file.path(job_dir, paste0("density_", tolower(method_name), ".png"))
-  pca_filename     <- file.path(job_dir, paste0("pca_",     tolower(method_name), ".json"))
+  pca_filename <- file.path(job_dir, paste0("pca_", tolower(method_name), ".json"))
 
   emit_progress(base_pct, paste0("Running preview for method: ", method_name))
 
   normalized <- NULL
-  beta       <- NULL
+  beta <- NULL
 
-  tryCatch({
-    # Normalization + beta extraction.
-    normalized <- eval(normalization_expr)
-    beta       <- extract_beta(normalized)
+  tryCatch(
+    {
+      # Normalization + beta extraction.
+      normalized <- eval(normalization_expr)
+      beta <- extract_beta(normalized)
 
-    # Map array ids to sample names and groups for the PCA payload.
-    array_ids     <- colnames(beta)
-    sample_labels <- ifelse(array_ids %in% names(id_to_name),  id_to_name[array_ids],  array_ids)
-    sample_groups <- ifelse(array_ids %in% names(id_to_group), id_to_group[array_ids], "")
+      # Map array ids to sample names and groups for the PCA payload.
+      array_ids <- colnames(beta)
+      sample_labels <- ifelse(array_ids %in% names(id_to_name), id_to_name[array_ids], array_ids)
+      sample_groups <- ifelse(array_ids %in% names(id_to_group), id_to_group[array_ids], "")
 
-    # Density plot (PNG + PDF).
-    tryCatch({
-      emit_progress(base_pct + 3, paste0(method_name, ": generating density plot..."))
-      make_density_plot(beta, density_filename, method_name)
-    }, error = function(e) {
-      emit_progress(base_pct + 3, paste0("Density plot failed for ", method_name))
-      create_error_png(density_filename, conditionMessage(e), method_name, "density")
-    })
-
-    # PCA points (JSON).
-    tryCatch({
-      emit_progress(base_pct + 6, paste0(method_name, ": generating PCA data (JSON)..."))
-      write_pca_json(
-        beta, pca_filename, method_name,
-        sample_labels = sample_labels,
-        sample_groups = sample_groups
+      # Density plot (PNG + PDF).
+      tryCatch(
+        {
+          emit_progress(base_pct + 3, paste0(method_name, ": generating density plot..."))
+          make_density_plot(beta, density_filename, method_name)
+        },
+        error = function(e) {
+          emit_progress(base_pct + 3, paste0("Density plot failed for ", method_name))
+          create_error_png(density_filename, conditionMessage(e), method_name, "density")
+        }
       )
-    }, error = function(e) {
-      emit_progress(base_pct + 6, paste0("PCA failed for ", method_name))
-      write_pca_error_json(pca_filename, method_name, conditionMessage(e))
-    })
 
-    rm(normalized, beta)
+      # PCA points (JSON).
+      tryCatch(
+        {
+          emit_progress(base_pct + 6, paste0(method_name, ": generating PCA data (JSON)..."))
+          write_pca_json(
+            beta, pca_filename, method_name,
+            sample_labels = sample_labels,
+            sample_groups = sample_groups
+          )
+        },
+        error = function(e) {
+          emit_progress(base_pct + 6, paste0("PCA failed for ", method_name))
+          write_pca_error_json(pca_filename, method_name, conditionMessage(e))
+        }
+      )
 
-  }, error = function(e) {
-    # Whole-method failure (e.g. normalization itself): emit placeholders so the
-    # frontend shows a clear message for this method and the rest still run.
-    emit_progress(base_pct + 8, paste0("Error in method ", method_name, ": ", conditionMessage(e)))
-    create_error_png(density_filename, paste("Normalization failed:", conditionMessage(e)), method_name, "density")
-    write_pca_error_json(pca_filename, method_name, paste("Normalization failed:", conditionMessage(e)))
-  })
+      rm(normalized, beta)
+    },
+    error = function(e) {
+      # Whole-method failure (e.g. normalization itself): emit placeholders so the
+      # frontend shows a clear message for this method and the rest still run.
+      emit_progress(base_pct + 8, paste0("Error in method ", method_name, ": ", conditionMessage(e)))
+      create_error_png(density_filename, paste("Normalization failed:", conditionMessage(e)), method_name, "density")
+      write_pca_error_json(pca_filename, method_name, paste("Normalization failed:", conditionMessage(e)))
+    }
+  )
 
   gc(verbose = FALSE, full = TRUE)
   invisible(NULL)
@@ -317,14 +325,13 @@ run_method <- function(method_name, normalization_expr, base_pct) {
 
 # ── Main pipeline (run only as a script, not when sourced for tests) ───────────
 if (sys.nframe() == 0L) {
-
   # ── Input check ─────────────────────────────────────────────────────────────
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) < 3) {
     emit_error("Usage: Rscript normalization_preview.R <filtered_data.rds> <job_dir> <sample_sheet.csv>")
   }
-  rds_path          <- args[1]
-  job_dir           <- args[2]
+  rds_path <- args[1]
+  job_dir <- args[2]
   sample_sheet_path <- args[3]
 
   # ── Load filtered data ──────────────────────────────────────────────────────
@@ -374,13 +381,13 @@ if (sys.nframe() == 0L) {
 
   # ── Data information ────────────────────────────────────────────────────────
   n_samples <- ncol(filtered_rgset)
-  n_probes  <- nrow(filtered_rgset)
+  n_probes <- nrow(filtered_rgset)
   emit_progress(6, paste0("Data loaded - Samples: ", n_samples, ", Probes: ", n_probes))
 
   # ── Execute all normalization methods ───────────────────────────────────────
   # RAW is included as an unnormalized baseline for comparison (NRM-01).
-  run_method("RAW",      quote(preprocessRaw(filtered_rgset)),      base_pct = 10)
-  run_method("NOOB",     quote(preprocessNoob(filtered_rgset)),     base_pct = 28)
+  run_method("RAW", quote(preprocessRaw(filtered_rgset)), base_pct = 10)
+  run_method("NOOB", quote(preprocessNoob(filtered_rgset)), base_pct = 28)
   run_method("QUANTILE", quote(preprocessQuantile(filtered_rgset)), base_pct = 46)
 
   run_method("SWAN", quote({

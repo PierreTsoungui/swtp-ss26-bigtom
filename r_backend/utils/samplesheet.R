@@ -27,9 +27,9 @@ suppressPackageStartupMessages(library(readr))
 #' @param path Path to the SampleSheet CSV.
 #' @return A data.frame with the raw sample-sheet columns.
 read_sample_sheet_smart <- function(path) {
-  lines      <- readLines(path, warn = FALSE)
+  lines <- readLines(path, warn = FALSE)
   data_start <- grep("^\\[Data\\]", lines)
-  skip_n     <- if (length(data_start) > 0) data_start[1] else 0
+  skip_n <- if (length(data_start) > 0) data_start[1] else 0
   as.data.frame(read_csv(path, skip = skip_n, show_col_types = FALSE))
 }
 
@@ -107,9 +107,9 @@ align_samples_to_matrix <- function(beta, samples,
                                     mode = c("strict", "intersect", "positional"),
                                     strip_idat = FALSE,
                                     min_common = 2L) {
-  mode    <- match.arg(mode)
+  mode <- match.arg(mode)
   samples <- as.data.frame(samples, stringsAsFactors = FALSE)
-  n_cols  <- ncol(beta)
+  n_cols <- ncol(beta)
   if (is.null(n_cols) || n_cols == 0L) {
     emit_error("Cannot align: the matrix has no sample columns.")
   }
@@ -131,12 +131,16 @@ align_samples_to_matrix <- function(beta, samples,
   id_candidates <- intersect(c("Sample_Name", "Array_ID"), colnames(samples))
 
   # Pick the candidate with the highest coverage of the matrix columns.
-  best_col <- NA_character_; best_cov <- 0
+  best_col <- NA_character_
+  best_cov <- 0
   for (cc in id_candidates) {
     ids <- normalize_id(samples[[cc]])
-    if (all(is.na(ids) | !nzchar(ids) | ids == "NA")) next   # column carries no usable id
+    if (all(is.na(ids) | !nzchar(ids) | ids == "NA")) next # column carries no usable id
     cov <- mean(beta_ids %in% ids)
-    if (cov > best_cov) { best_cov <- cov; best_col <- cc }
+    if (cov > best_cov) {
+      best_cov <- cov
+      best_col <- cc
+    }
   }
 
   # Reject ambiguous (duplicated) identifiers in the chosen column.
@@ -152,8 +156,10 @@ align_samples_to_matrix <- function(beta, samples,
   if (best_cov == 1) {
     assert_unique_ids(best_col)
     idx <- match(beta_ids, normalize_id(samples[[best_col]]))
-    return(list(beta = beta, samples = samples[idx, , drop = FALSE],
-                id_col = best_col, method = "id"))
+    return(list(
+      beta = beta, samples = samples[idx, , drop = FALSE],
+      id_col = best_col, method = "id"
+    ))
   }
 
   if (mode == "strict") {
@@ -162,27 +168,35 @@ align_samples_to_matrix <- function(beta, samples,
 
   if (mode == "intersect" && !is.na(best_col)) {
     assert_unique_ids(best_col)
-    ids    <- normalize_id(samples[[best_col]])
+    ids <- normalize_id(samples[[best_col]])
     common <- intersect(beta_ids, ids)
     if (length(common) < min_common) {
-      emit_error(sprintf("Sample ID mismatch: only %d matching sample(s) between data and sample sheet (minimum %d).",
-                         length(common), min_common))
+      emit_error(sprintf(
+        "Sample ID mismatch: only %d matching sample(s) between data and sample sheet (minimum %d).",
+        length(common), min_common
+      ))
     }
-    keep      <- beta_ids %in% common
-    beta_sub  <- beta[, keep, drop = FALSE]
+    keep <- beta_ids %in% common
+    beta_sub <- beta[, keep, drop = FALSE]
     order_idx <- match(beta_ids[keep], ids)
-    return(list(beta = beta_sub, samples = samples[order_idx, , drop = FALSE],
-                id_col = best_col, method = "id"))
+    return(list(
+      beta = beta_sub, samples = samples[order_idx, , drop = FALSE],
+      id_col = best_col, method = "id"
+    ))
   }
 
   # --- Positional fallback (positional mode, or intersect with no matches) ---
   if (nrow(samples) < n_cols) {
-    emit_error(sprintf("Sample sheet has fewer rows (%d) than the data has samples (%d); cannot align.",
-                       nrow(samples), n_cols))
+    emit_error(sprintf(
+      "Sample sheet has fewer rows (%d) than the data has samples (%d); cannot align.",
+      nrow(samples), n_cols
+    ))
   }
   warning("Could not match sample identifiers; falling back to positional alignment.")
-  list(beta = beta, samples = samples[seq_len(n_cols), , drop = FALSE],
-       id_col = NA_character_, method = "positional")
+  list(
+    beta = beta, samples = samples[seq_len(n_cols), , drop = FALSE],
+    id_col = NA_character_, method = "positional"
+  )
 }
 
 
@@ -203,16 +217,20 @@ resolve_case_control <- function(group_vec, group_column, case_group, control_gr
   if (!nzchar(case_group) || !nzchar(control_group)) {
     lv <- sort(unique(group_vec[!is.na(group_vec) & nzchar(group_vec)]))
     if (length(lv) != 2L) {
-      emit_error(sprintf("Column '%s' has %d usable groups; specify a case and a control group.",
-                         group_column, length(lv)))
+      emit_error(sprintf(
+        "Column '%s' has %d usable groups; specify a case and a control group.",
+        group_column, length(lv)
+      ))
     }
     control_group <- lv[1]
-    case_group    <- lv[2]
+    case_group <- lv[2]
   }
   if (case_group == control_group) emit_error("Case and control group must be different.")
   if (!(case_group %in% group_vec) || !(control_group %in% group_vec)) {
-    emit_error(sprintf("Case ('%s') or control ('%s') not present in column '%s'.",
-                       case_group, control_group, group_column))
+    emit_error(sprintf(
+      "Case ('%s') or control ('%s') not present in column '%s'.",
+      case_group, control_group, group_column
+    ))
   }
   list(case = case_group, control = control_group)
 }

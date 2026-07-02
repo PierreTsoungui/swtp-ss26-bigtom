@@ -45,31 +45,36 @@ SCRIPT_PATH <- "/app/r_backend/init_filter.R"
 #' killing the session; progress is captured; done is a no-op.
 #'
 #' @return TRUE if the script and its functions loaded successfully.
-init_filter_loaded <- tryCatch({
-  suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
+init_filter_loaded <- tryCatch(
+  {
+    suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
 
-  assign("emit_error", function(message) {
-    stop(structure(
-      class = c("initfilter_fatal", "error", "condition"),
-      list(message = as.character(message), call = NULL)
-    ))
-  }, envir = globalenv())
+    assign("emit_error", function(message) {
+      stop(structure(
+        class = c("initfilter_fatal", "error", "condition"),
+        list(message = as.character(message), call = NULL)
+      ))
+    }, envir = globalenv())
 
-  assign("emit_progress", function(percent, message) {
-    .emit_capture$progress <- c(.emit_capture$progress, as.character(message))
-    invisible(NULL)
-  }, envir = globalenv())
+    assign("emit_progress", function(percent, message) {
+      .emit_capture$progress <- c(.emit_capture$progress, as.character(message))
+      invisible(NULL)
+    }, envir = globalenv())
 
-  assign("emit_done", function(...) invisible(NULL), envir = globalenv())
+    assign("emit_done", function(...) invisible(NULL), envir = globalenv())
 
-  exists("parse_filter_config") && exists("validate_sample_sheet")
-}, error = function(e) FALSE)
+    exists("parse_filter_config") && exists("validate_sample_sheet")
+  },
+  error = function(e) FALSE
+)
 
 
 #' Skip a unit test unless init_filter.R loaded (i.e. we are in the container).
 skip_if_not_loaded <- function() {
-  skip_if_not(isTRUE(init_filter_loaded),
-              paste("init_filter.R could not be sourced (run inside the r_worker container):", SCRIPT_PATH))
+  skip_if_not(
+    isTRUE(init_filter_loaded),
+    paste("init_filter.R could not be sourced (run inside the r_worker container):", SCRIPT_PATH)
+  )
 }
 
 #' Assert that evaluating `expr` triggers a fatal emit_error().
@@ -78,10 +83,16 @@ skip_if_not_loaded <- function() {
 #' @param regexp Optional case-insensitive pattern the error message must match.
 #' @return Invisibly the captured condition (or NULL if none).
 expect_fatal <- function(expr, regexp = NULL) {
-  cnd <- tryCatch({ force(expr); NULL },
-                  initfilter_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    initfilter_fatal = function(c) c
+  )
   expect_false(is.null(cnd),
-               info = "expected a fatal emit_error() but the expression returned normally")
+    info = "expected a fatal emit_error() but the expression returned normally"
+  )
   if (!is.null(regexp) && !is.null(cnd)) {
     expect_match(conditionMessage(cnd), regexp, ignore.case = TRUE)
   }
@@ -90,10 +101,17 @@ expect_fatal <- function(expr, regexp = NULL) {
 
 #' Assert that evaluating `expr` does NOT trigger a fatal emit_error().
 expect_not_fatal <- function(expr) {
-  cnd <- tryCatch({ force(expr); NULL },
-                  initfilter_fatal = function(c) c)
-  expect_null(cnd, info = paste("unexpected fatal error:",
-                                if (!is.null(cnd)) conditionMessage(cnd) else ""))
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    initfilter_fatal = function(c) c
+  )
+  expect_null(cnd, info = paste(
+    "unexpected fatal error:",
+    if (!is.null(cnd)) conditionMessage(cnd) else ""
+  ))
 }
 
 
@@ -114,7 +132,7 @@ test_that("assert_in_range accepts values inside the inclusive range", {
 test_that("assert_in_range rejects out-of-range values", {
   skip_if_not_loaded()
   expect_fatal(assert_in_range(0.005, 0.01, 0.05, "det_p.cutoff"), "between")
-  expect_fatal(assert_in_range(0.06,  0.01, 0.05, "det_p.cutoff"), "between")
+  expect_fatal(assert_in_range(0.06, 0.01, 0.05, "det_p.cutoff"), "between")
 })
 
 test_that("assert_in_range rejects non-finite and non-scalar values", {
@@ -122,8 +140,8 @@ test_that("assert_in_range rejects non-finite and non-scalar values", {
   # must be caught so they cannot silently disable a filter downstream.
   skip_if_not_loaded()
   expect_fatal(assert_in_range(NA_real_, 0.01, 0.05, "x"), "must be a number")
-  expect_fatal(assert_in_range(NaN,      0.01, 0.05, "x"), "must be a number")
-  expect_fatal(assert_in_range(Inf,      0.01, 0.05, "x"), "must be a number")
+  expect_fatal(assert_in_range(NaN, 0.01, 0.05, "x"), "must be a number")
+  expect_fatal(assert_in_range(Inf, 0.01, 0.05, "x"), "must be a number")
   expect_fatal(assert_in_range(c(0.02, 0.03), 0.01, 0.05, "x"), "must be a number")
 })
 
@@ -132,8 +150,10 @@ test_that("assert_in_range rejects non-finite and non-scalar values", {
 test_that("assert_probes_remain passes when probes remain and fails at zero", {
   skip_if_not_loaded()
   expect_not_fatal(assert_probes_remain(100L, "Detection P-Value"))
-  expect_fatal(assert_probes_remain(0L, "Detection P-Value"),
-               "No probes remaining after step 'Detection P-Value'")
+  expect_fatal(
+    assert_probes_remain(0L, "Detection P-Value"),
+    "No probes remaining after step 'Detection P-Value'"
+  )
 })
 
 # ── parse_filter_config() ─────────────────────────────────────────────────────
@@ -165,74 +185,97 @@ test_that("parse_filter_config merges a partial config onto the defaults", {
 
   expect_true(cfg$det_p$enabled)
   expect_equal(cfg$det_p$cutoff, 0.05)
-  expect_false(cfg$bead_count$enabled)   # untouched default
+  expect_false(cfg$bead_count$enabled) # untouched default
   expect_false(cfg$snp$enabled)
 })
 
 test_that("parse_filter_config applies a fully specified config verbatim", {
   skip_if_not_loaded()
   cfg <- parse_filter_config(toJSON(list(
-    det_p          = list(enabled = TRUE,  cutoff = 0.02),
-    bead_count     = list(enabled = TRUE,  bead_cutoff = 0.1),
-    non_cpg        = list(enabled = TRUE),
-    snp            = list(enabled = TRUE,  maf_cutoff = 0.05),
-    multi_hit      = list(enabled = TRUE),
+    det_p = list(enabled = TRUE, cutoff = 0.02),
+    bead_count = list(enabled = TRUE, bead_cutoff = 0.1),
+    non_cpg = list(enabled = TRUE),
+    snp = list(enabled = TRUE, maf_cutoff = 0.05),
+    multi_hit = list(enabled = TRUE),
     xy_chromosomes = list(enabled = TRUE),
-    sample_quality = list(enabled = TRUE, detection_p_cutoff = 0.05,
-                          sample_failure_rate = 0.2)
+    sample_quality = list(
+      enabled = TRUE, detection_p_cutoff = 0.05,
+      sample_failure_rate = 0.2
+    )
   ), auto_unbox = TRUE))
 
-  expect_true(cfg$det_p$enabled);          expect_equal(cfg$det_p$cutoff, 0.02)
-  expect_true(cfg$bead_count$enabled);     expect_equal(cfg$bead_count$bead_cutoff, 0.1)
+  expect_true(cfg$det_p$enabled)
+  expect_equal(cfg$det_p$cutoff, 0.02)
+  expect_true(cfg$bead_count$enabled)
+  expect_equal(cfg$bead_count$bead_cutoff, 0.1)
   expect_true(cfg$non_cpg$enabled)
-  expect_true(cfg$snp$enabled);            expect_equal(cfg$snp$maf_cutoff, 0.05)
+  expect_true(cfg$snp$enabled)
+  expect_equal(cfg$snp$maf_cutoff, 0.05)
   expect_true(cfg$multi_hit$enabled)
   expect_true(cfg$xy_chromosomes$enabled)
-  expect_true(cfg$sample_quality$enabled); expect_equal(cfg$sample_quality$sample_failure_rate, 0.2)
+  expect_true(cfg$sample_quality$enabled)
+  expect_equal(cfg$sample_quality$sample_failure_rate, 0.2)
 })
 
 test_that("parse_filter_config rejects out-of-range cutoffs", {
   # Ranges mirror the frontend constraints; anything outside must abort.
   skip_if_not_loaded()
   expect_fatal(parse_filter_config(toJSON(list(det_p = list(enabled = TRUE, cutoff = 0.5)),
-                                           auto_unbox = TRUE)), "det_p.cutoff")
+    auto_unbox = TRUE
+  )), "det_p.cutoff")
   expect_fatal(parse_filter_config(toJSON(list(snp = list(enabled = TRUE, maf_cutoff = 0.6)),
-                                           auto_unbox = TRUE)), "snp.maf_cutoff")
+    auto_unbox = TRUE
+  )), "snp.maf_cutoff")
   # bead_count.bead_cutoff is validated against [0, 1]; 1.5 is out of range.
   expect_fatal(parse_filter_config(toJSON(list(bead_count = list(enabled = TRUE, bead_cutoff = 1.5)),
-                                           auto_unbox = TRUE)), "bead_count.bead_cutoff")
+    auto_unbox = TRUE
+  )), "bead_count.bead_cutoff")
   # sample_quality.sample_failure_rate must be within [0.05, 0.2].
-  expect_fatal(parse_filter_config(toJSON(list(sample_quality = list(enabled = TRUE,
-                                           sample_failure_rate = 0.5)), auto_unbox = TRUE)),
-               "sample_failure_rate")
+  expect_fatal(
+    parse_filter_config(toJSON(list(sample_quality = list(
+      enabled = TRUE,
+      sample_failure_rate = 0.5
+    )), auto_unbox = TRUE)),
+    "sample_failure_rate"
+  )
   # sample_quality.detection_p_cutoff must be within [0.01, 0.05].
-  expect_fatal(parse_filter_config(toJSON(list(sample_quality = list(enabled = TRUE,
-                                           detection_p_cutoff = 0.5)), auto_unbox = TRUE)),
-               "detection_p_cutoff")
+  expect_fatal(
+    parse_filter_config(toJSON(list(sample_quality = list(
+      enabled = TRUE,
+      detection_p_cutoff = 0.5
+    )), auto_unbox = TRUE)),
+    "detection_p_cutoff"
+  )
 })
 
 test_that("parse_filter_config accepts a valid bead_cutoff of 0.99 (range is [0,1])", {
   # Guards against the misconception that bead_cutoff is capped at 0.1.
   skip_if_not_loaded()
   cfg <- parse_filter_config(toJSON(list(bead_count = list(enabled = TRUE, bead_cutoff = 0.99)),
-                                    auto_unbox = TRUE))
+    auto_unbox = TRUE
+  ))
   expect_true(cfg$bead_count$enabled)
   expect_equal(cfg$bead_count$bead_cutoff, 0.99)
 })
 
 test_that("parse_filter_config aborts on malformed JSON", {
   skip_if_not_loaded()
-  expect_fatal(parse_filter_config('{ "det_p": { "enabled": true, "cutoff": INVALID } '),
-               "could not be read")
+  expect_fatal(
+    parse_filter_config('{ "det_p": { "enabled": true, "cutoff": INVALID } '),
+    "could not be read"
+  )
 })
 
 # ── read_samplesheet() ────────────────────────────────────────────────────────
 
 test_that("read_samplesheet parses a plain CSV", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".csv"); on.exit(unlink(f))
-  writeLines(c("Sample_Name,Sentrix_ID,Sentrix_Position",
-               "S1,200000000001,R01C01"), f)
+  f <- tempfile(fileext = ".csv")
+  on.exit(unlink(f))
+  writeLines(c(
+    "Sample_Name,Sentrix_ID,Sentrix_Position",
+    "S1,200000000001,R01C01"
+  ), f)
 
   sheet <- read_samplesheet(f)
   expect_s3_class(sheet, "data.frame")
@@ -242,11 +285,14 @@ test_that("read_samplesheet parses a plain CSV", {
 
 test_that("read_samplesheet skips the Illumina [Data] preamble", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".csv"); on.exit(unlink(f))
-  writeLines(c("[Header]", "Investigator,Someone", "", "[Data]",
-               "Sample_Name,Sentrix_ID,Sentrix_Position",
-               "S1,200000000001,R01C01",
-               "S2,200000000001,R02C01"), f)
+  f <- tempfile(fileext = ".csv")
+  on.exit(unlink(f))
+  writeLines(c(
+    "[Header]", "Investigator,Someone", "", "[Data]",
+    "Sample_Name,Sentrix_ID,Sentrix_Position",
+    "S1,200000000001,R01C01",
+    "S2,200000000001,R02C01"
+  ), f)
 
   sheet <- read_samplesheet(f)
   expect_equal(nrow(sheet), 2L)
@@ -255,20 +301,24 @@ test_that("read_samplesheet skips the Illumina [Data] preamble", {
 
 test_that("read_samplesheet trims column names and drops fully-empty rows", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".csv"); on.exit(unlink(f))
-  writeLines(c(" Sample_Name , Sentrix_ID , Sentrix_Position ",
-               "S1,200000000001,R01C01",
-               ",,"), f)
+  f <- tempfile(fileext = ".csv")
+  on.exit(unlink(f))
+  writeLines(c(
+    " Sample_Name , Sentrix_ID , Sentrix_Position ",
+    "S1,200000000001,R01C01",
+    ",,"
+  ), f)
 
   sheet <- read_samplesheet(f)
   expect_equal(colnames(sheet), c("Sample_Name", "Sentrix_ID", "Sentrix_Position"))
-  expect_equal(nrow(sheet), 1L)   # the empty row is removed
+  expect_equal(nrow(sheet), 1L) # the empty row is removed
 })
 
 test_that("read_samplesheet aborts on a truly empty file", {
   skip_if_not_loaded()
-  f <- tempfile(fileext = ".csv"); on.exit(unlink(f))
-  file.create(f)   # 0 bytes -> readLines() returns character(0)
+  f <- tempfile(fileext = ".csv")
+  on.exit(unlink(f))
+  file.create(f) # 0 bytes -> readLines() returns character(0)
   expect_fatal(read_samplesheet(f), "empty")
 })
 
@@ -280,22 +330,28 @@ test_that("validate_sample_sheet accepts each supported column layout", {
   expect_not_fatal(validate_sample_sheet(data.frame(
     Sample_Name = c("A", "B"),
     Sentrix_ID = c("1", "1"), Sentrix_Position = c("R01C01", "R02C01"),
-    stringsAsFactors = FALSE)))
+    stringsAsFactors = FALSE
+  )))
   # Basename layout.
   expect_not_fatal(validate_sample_sheet(data.frame(
-    Basename = c("chip_R01C01", "chip_R02C01"), stringsAsFactors = FALSE)))
+    Basename = c("chip_R01C01", "chip_R02C01"), stringsAsFactors = FALSE
+  )))
   # Sample_ID layout.
   expect_not_fatal(validate_sample_sheet(data.frame(
-    Sample_ID = c("s1", "s2"), stringsAsFactors = FALSE)))
+    Sample_ID = c("s1", "s2"), stringsAsFactors = FALSE
+  )))
 })
 
 test_that("validate_sample_sheet rejects an empty sheet and missing columns", {
   skip_if_not_loaded()
   expect_fatal(validate_sample_sheet(data.frame(
     Sample_Name = character(0), Sentrix_ID = character(0),
-    Sentrix_Position = character(0))), "no data rows")
-  expect_fatal(validate_sample_sheet(data.frame(foo = 1:2, bar = 3:4)),
-               "missing required columns")
+    Sentrix_Position = character(0)
+  )), "no data rows")
+  expect_fatal(
+    validate_sample_sheet(data.frame(foo = 1:2, bar = 3:4)),
+    "missing required columns"
+  )
 })
 
 test_that("validate_sample_sheet rejects duplicate identifiers in every layout", {
@@ -304,11 +360,14 @@ test_that("validate_sample_sheet rejects duplicate identifiers in every layout",
   expect_fatal(validate_sample_sheet(data.frame(
     Sample_Name = c("A", "B"),
     Sentrix_ID = c("1", "1"), Sentrix_Position = c("R01C01", "R01C01"),
-    stringsAsFactors = FALSE)), "Duplicate")
+    stringsAsFactors = FALSE
+  )), "Duplicate")
   expect_fatal(validate_sample_sheet(data.frame(
-    Basename = c("x", "x"), stringsAsFactors = FALSE)), "Duplicate")
+    Basename = c("x", "x"), stringsAsFactors = FALSE
+  )), "Duplicate")
   expect_fatal(validate_sample_sheet(data.frame(
-    Sample_ID = c("1", "1"), stringsAsFactors = FALSE)), "Duplicate")
+    Sample_ID = c("1", "1"), stringsAsFactors = FALSE
+  )), "Duplicate")
 })
 
 # ── prepare_targets() ─────────────────────────────────────────────────────────
@@ -322,7 +381,8 @@ test_that("validate_sample_sheet rejects duplicate identifiers in every layout",
 #' @param channels Which channels to create per id (default both).
 #' @return The job directory path.
 make_fake_idat_dir <- function(ids, channels = c("Grn", "Red")) {
-  d <- tempfile("job_fake_"); dir.create(d)
+  d <- tempfile("job_fake_")
+  dir.create(d)
   for (id in ids) for (ch in channels) file.create(file.path(d, sprintf("%s_%s.idat", id, ch)))
   d
 }
@@ -332,14 +392,16 @@ test_that("prepare_targets builds absolute Basenames and passes with complete pa
   d <- make_fake_idat_dir(c("200000000001_R01C01", "200000000001_R02C01"))
   on.exit(unlink(d, recursive = TRUE))
 
-  sheet <- data.frame(Sample_Name = c("A", "B"),
-                      Sentrix_ID = c("200000000001", "200000000001"),
-                      Sentrix_Position = c("R01C01", "R02C01"),
-                      stringsAsFactors = FALSE)
+  sheet <- data.frame(
+    Sample_Name = c("A", "B"),
+    Sentrix_ID = c("200000000001", "200000000001"),
+    Sentrix_Position = c("R01C01", "R02C01"),
+    stringsAsFactors = FALSE
+  )
 
   out <- prepare_targets(sheet, d)
   expect_true("Basename" %in% colnames(out))
-  expect_true(all(startsWith(out$Basename, d)))          # made absolute
+  expect_true(all(startsWith(out$Basename, d))) # made absolute
   expect_equal(basename(out$Basename[1]), "200000000001_R01C01")
 })
 
@@ -348,17 +410,23 @@ test_that("prepare_targets makes a relative Basename column absolute", {
   d <- make_fake_idat_dir("200000000001_R01C01")
   on.exit(unlink(d, recursive = TRUE))
 
-  sheet <- data.frame(Sample_Name = "A", Basename = "200000000001_R01C01",
-                      stringsAsFactors = FALSE)
+  sheet <- data.frame(
+    Sample_Name = "A", Basename = "200000000001_R01C01",
+    stringsAsFactors = FALSE
+  )
   out <- prepare_targets(sheet, d)
   expect_equal(out$Basename[1], file.path(d, "200000000001_R01C01"))
 })
 
 test_that("prepare_targets aborts when the directory holds no IDAT files", {
   skip_if_not_loaded()
-  d <- tempfile("job_noidat_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
-  sheet <- data.frame(Sample_Name = "A", Sentrix_ID = "200000000001",
-                      Sentrix_Position = "R01C01", stringsAsFactors = FALSE)
+  d <- tempfile("job_noidat_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  sheet <- data.frame(
+    Sample_Name = "A", Sentrix_ID = "200000000001",
+    Sentrix_Position = "R01C01", stringsAsFactors = FALSE
+  )
   expect_fatal(prepare_targets(sheet, d), "No IDAT files")
 })
 
@@ -367,46 +435,61 @@ test_that("prepare_targets aborts when a sample's IDATs are absent", {
   skip_if_not_loaded()
   d <- make_fake_idat_dir("999999999999_R09C09")
   on.exit(unlink(d, recursive = TRUE))
-  sheet <- data.frame(Sample_Name = "A", Sentrix_ID = "200000000001",
-                      Sentrix_Position = "R01C01", stringsAsFactors = FALSE)
+  sheet <- data.frame(
+    Sample_Name = "A", Sentrix_ID = "200000000001",
+    Sentrix_Position = "R01C01", stringsAsFactors = FALSE
+  )
   expect_fatal(prepare_targets(sheet, d), "No IDAT files found for sample")
 })
 
 test_that("prepare_targets aborts on an incomplete Grn/Red pair", {
   skip_if_not_loaded()
-  d <- make_fake_idat_dir("200000000001_R01C01", channels = "Grn")  # missing _Red
+  d <- make_fake_idat_dir("200000000001_R01C01", channels = "Grn") # missing _Red
   on.exit(unlink(d, recursive = TRUE))
-  sheet <- data.frame(Sample_Name = "A", Sentrix_ID = "200000000001",
-                      Sentrix_Position = "R01C01", stringsAsFactors = FALSE)
+  sheet <- data.frame(
+    Sample_Name = "A", Sentrix_ID = "200000000001",
+    Sentrix_Position = "R01C01", stringsAsFactors = FALSE
+  )
   expect_fatal(prepare_targets(sheet, d), "Missing IDAT pair")
 })
 
 test_that("prepare_targets aborts when neither Basename nor Sentrix columns exist", {
   skip_if_not_loaded()
-  d <- make_fake_idat_dir("200000000001_R01C01"); on.exit(unlink(d, recursive = TRUE))
-  expect_fatal(prepare_targets(data.frame(Sample_Name = "A", stringsAsFactors = FALSE), d),
-               "Basename")
+  d <- make_fake_idat_dir("200000000001_R01C01")
+  on.exit(unlink(d, recursive = TRUE))
+  expect_fatal(
+    prepare_targets(data.frame(Sample_Name = "A", stringsAsFactors = FALSE), d),
+    "Basename"
+  )
 })
 
 # ── Pure probe filters ────────────────────────────────────────────────────────
 
 test_that("detp_failed_probes flags probes exceeding the cutoff in any sample", {
   skip_if_not_loaded()
-  m <- matrix(c(0.001, 0.02,      # p1 fails in s2
-                0.001, 0.001),    # p2 passes everywhere
-              nrow = 2, byrow = TRUE,
-              dimnames = list(c("p1", "p2"), c("s1", "s2")))
+  m <- matrix(
+    c(
+      0.001, 0.02, # p1 fails in s2
+      0.001, 0.001
+    ), # p2 passes everywhere
+    nrow = 2, byrow = TRUE,
+    dimnames = list(c("p1", "p2"), c("s1", "s2"))
+  )
   expect_equal(detp_failed_probes(m, 0.01), "p1")
-  expect_equal(detp_failed_probes(NULL), character(0))   # no matrix -> nothing removed
+  expect_equal(detp_failed_probes(NULL), character(0)) # no matrix -> nothing removed
 })
 
 test_that("beadcount_failed_probes flags probes failing in too many samples", {
   skip_if_not_loaded()
-  m <- matrix(c(0.5, 0.5,     # p1 fails (p>0.01) in 100% of samples
-                0.001, 0.5,   # p2 fails in 50%
-                0.001, 0.001) ,# p3 never fails
-              nrow = 3, byrow = TRUE,
-              dimnames = list(c("p1", "p2", "p3"), c("s1", "s2")))
+  m <- matrix(
+    c(
+      0.5, 0.5, # p1 fails (p>0.01) in 100% of samples
+      0.001, 0.5, # p2 fails in 50%
+      0.001, 0.001
+    ), # p3 never fails
+    nrow = 3, byrow = TRUE,
+    dimnames = list(c("p1", "p2", "p3"), c("s1", "s2"))
+  )
   # bead_cutoff 0.75: only p1 (100% > 75%) is removed.
   expect_equal(beadcount_failed_probes(m, 0.75), "p1")
   expect_equal(beadcount_failed_probes(NULL), character(0))
@@ -421,9 +504,11 @@ test_that("non_cpg_probes selects only ch.* (non-CpG) probe ids", {
 
 test_that("snp_probes selects probes at/above the MAF cutoff and tolerates missing columns", {
   skip_if_not_loaded()
-  ann <- data.frame(CpG_maf = c(0.10, 0.01, NA),
-                    row.names = c("cg1", "cg2", "cg3"))
-  expect_equal(snp_probes(ann, 0.05), "cg1")            # 0.10 >= 0.05
+  ann <- data.frame(
+    CpG_maf = c(0.10, 0.01, NA),
+    row.names = c("cg1", "cg2", "cg3")
+  )
+  expect_equal(snp_probes(ann, 0.05), "cg1") # 0.10 >= 0.05
   expect_equal(snp_probes(NULL, 0.05), character(0))
   # No MAF columns -> filter is skipped (with a warning), removing nothing.
   ann_no_maf <- data.frame(other = 1:2, row.names = c("cg1", "cg2"))
@@ -433,20 +518,24 @@ test_that("snp_probes selects probes at/above the MAF cutoff and tolerates missi
 
 test_that("xy_probes selects chrX/chrY probes and tolerates missing chr", {
   skip_if_not_loaded()
-  ann <- data.frame(chr = c("chr1", "chrX", "chrY"),
-                    row.names = c("cg1", "cgX", "cgY"), stringsAsFactors = FALSE)
+  ann <- data.frame(
+    chr = c("chr1", "chrX", "chrY"),
+    row.names = c("cg1", "cgX", "cgY"), stringsAsFactors = FALSE
+  )
   expect_setequal(xy_probes(ann), c("cgX", "cgY"))
   expect_equal(xy_probes(NULL), character(0))
-  expect_equal(xy_probes(data.frame(other = 1, row.names = "cg1")), character(0))  # no chr column
+  expect_equal(xy_probes(data.frame(other = 1, row.names = "cg1")), character(0)) # no chr column
 })
 
 test_that("multi_hit_probes reads the probe list and skips gracefully when absent", {
   skip_if_not_loaded()
-  d <- tempfile("job_mh_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
-  expect_equal(suppressMessages(multi_hit_probes(d)), character(0))   # no file
+  d <- tempfile("job_mh_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  expect_equal(suppressMessages(multi_hit_probes(d)), character(0)) # no file
 
   writeLines(c("cg0001", "  cg0002  ", "", "cg0003"), file.path(d, "multi_hit_probes.txt"))
-  expect_equal(multi_hit_probes(d), c("cg0001", "cg0002", "cg0003"))  # trimmed, blanks dropped
+  expect_equal(multi_hit_probes(d), c("cg0001", "cg0002", "cg0003")) # trimmed, blanks dropped
 })
 
 # ── apply_probe_filter() orchestration ────────────────────────────────────────
@@ -463,7 +552,7 @@ test_that("apply_probe_filter records stats and removes probes when enabled", {
   expect_true(res$stats$det_p$enabled)
   expect_equal(res$stats$det_p$removed, 1L)
   expect_equal(res$stats$det_p$after, 2L)
-  expect_equal(res$stats$det_p$cutoff, 0.01)   # extra merged into stats
+  expect_equal(res$stats$det_p$cutoff, 0.01) # extra merged into stats
 })
 
 test_that("apply_probe_filter is a no-op that records disabled state", {
@@ -473,7 +562,7 @@ test_that("apply_probe_filter is a no-op that records disabled state", {
     key = "snp", label = "SNP", enabled = FALSE,
     remove_fn = function() stop("must not be called"), pct_start = 75, pct_end = 80
   )
-  expect_equal(res$probe_keep, c("a", "b", "c"))   # unchanged
+  expect_equal(res$probe_keep, c("a", "b", "c")) # unchanged
   expect_false(res$stats$snp$enabled)
   expect_equal(res$stats$snp$removed, 0L)
   expect_equal(res$stats$snp$after, 3L)
@@ -487,7 +576,8 @@ test_that("apply_probe_filter aborts if a step would remove every probe", {
       key = "det_p", label = "Detection P-Value", enabled = TRUE,
       remove_fn = function() c("a", "b"), pct_start = 30, pct_end = 35
     ),
-    "No probes remaining")
+    "No probes remaining"
+  )
 })
 
 
@@ -501,12 +591,16 @@ test_that("apply_probe_filter aborts if a step would remove every probe", {
 #' @return list(dir, ids) with up to `n` ids, or NULL if none are available.
 discover_idat_fixture <- function(n = 3L) {
   grn <- list.files("/app/jobs", pattern = "_Grn\\.idat$", recursive = TRUE, full.names = TRUE)
-  if (length(grn) == 0L) return(NULL)
+  if (length(grn) == 0L) {
+    return(NULL)
+  }
   for (d in unique(dirname(grn))) {
     ids <- sub("_Grn\\.idat$", "", basename(list.files(d, pattern = "_Grn\\.idat$")))
-    ids <- ids[file.exists(file.path(d, paste0(ids, "_Red.idat")))]        # complete pairs
-    ids <- ids[grepl("^.+_R[0-9]+C[0-9]+$", ids)]                          # parseable barcodes
-    if (length(ids) >= n) return(list(dir = d, ids = head(sort(unique(ids)), n)))
+    ids <- ids[file.exists(file.path(d, paste0(ids, "_Red.idat")))] # complete pairs
+    ids <- ids[grepl("^.+_R[0-9]+C[0-9]+$", ids)] # parseable barcodes
+    if (length(ids) >= n) {
+      return(list(dir = d, ids = head(sort(unique(ids)), n)))
+    }
   }
   NULL
 }
@@ -515,8 +609,10 @@ IDAT_FIXTURE <- if (file.exists(SCRIPT_PATH)) discover_idat_fixture(3L) else NUL
 
 skip_if_no_idat <- function(min_samples = 2L) {
   skip_if_not(file.exists(SCRIPT_PATH), "init_filter.R not found (run inside the container)")
-  skip_if(is.null(IDAT_FIXTURE) || length(IDAT_FIXTURE$ids) < min_samples,
-          sprintf("No IDAT fixture with >= %d complete pairs under /app/jobs", min_samples))
+  skip_if(
+    is.null(IDAT_FIXTURE) || length(IDAT_FIXTURE$ids) < min_samples,
+    sprintf("No IDAT fixture with >= %d complete pairs under /app/jobs", min_samples)
+  )
 }
 
 #' Build a fresh job directory: copy the chosen IDATs and a synthesised sheet.
@@ -530,20 +626,23 @@ skip_if_no_idat <- function(min_samples = 2L) {
 #' @param filter_json Optional filter_settings.json content.
 #' @return list(job_dir, sample_sheet).
 make_job_dir <- function(ids, copy_idats = TRUE, sample_sheet = NULL, filter_json = NULL) {
-  job <- tempfile("job_init_"); dir.create(job)
+  job <- tempfile("job_init_")
+  dir.create(job)
   if (copy_idats) {
     files <- file.path(IDAT_FIXTURE$dir, paste0(rep(ids, each = 2), c("_Grn.idat", "_Red.idat")))
     file.copy(files, job)
   }
   if (is.null(sample_sheet)) {
     parts <- regmatches(ids, regexec("^(.+)_(R[0-9]+C[0-9]+)$", ids))
-    sid   <- vapply(parts, `[`, character(1), 2L)
-    pos   <- vapply(parts, `[`, character(1), 3L)
-    df <- data.frame(Sample_Name      = paste0("S", seq_along(ids)),
-                     Sentrix_ID       = sid,
-                     Sentrix_Position = pos,
-                     Sample_Group     = rep(c("A", "B"), length.out = length(ids)),
-                     stringsAsFactors = FALSE)
+    sid <- vapply(parts, `[`, character(1), 2L)
+    pos <- vapply(parts, `[`, character(1), 3L)
+    df <- data.frame(
+      Sample_Name = paste0("S", seq_along(ids)),
+      Sentrix_ID = sid,
+      Sentrix_Position = pos,
+      Sample_Group = rep(c("A", "B"), length.out = length(ids)),
+      stringsAsFactors = FALSE
+    )
     sample_sheet <- file.path(job, "SampleSheet.csv")
     write.csv(df, sample_sheet, row.names = FALSE)
   }
@@ -562,9 +661,12 @@ run_init_filter <- function(sample_sheet, job_dir) {
   ))
   status <- attr(out, "status") %||% 0L
   logs <- Filter(Negate(is.null), lapply(
-    out[grepl("^\\s*\\{", out)], function(l) tryCatch(fromJSON(l), error = function(e) NULL)))
-  list(status = as.integer(status), lines = out,
-       text = paste(out, collapse = "\n"), logs = logs)
+    out[grepl("^\\s*\\{", out)], function(l) tryCatch(fromJSON(l), error = function(e) NULL)
+  ))
+  list(
+    status = as.integer(status), lines = out,
+    text = paste(out, collapse = "\n"), logs = logs
+  )
 }
 
 #' All progress `message` strings emitted by a run.
@@ -576,7 +678,7 @@ progress_messages <- function(res) {
 
 test_that("default run exits 0 and writes a valid filtered RGChannelSet + stats", {
   skip_if_no_idat(2L)
-  fx  <- make_job_dir(head(IDAT_FIXTURE$ids, 2L))
+  fx <- make_job_dir(head(IDAT_FIXTURE$ids, 2L))
   on.exit(unlink(fx$job_dir, recursive = TRUE), add = TRUE)
 
   res <- run_init_filter(fx$sample_sheet, fx$job_dir)
@@ -604,8 +706,10 @@ test_that("default run exits 0 and writes a valid filtered RGChannelSet + stats"
   expect_true(file.exists(qc_path), info = "qc_report.json not written")
   qc <- jsonlite::fromJSON(qc_path)
   expect_true(all(c("beta_mean", "beta_sd", "n_samples", "n_probes") %in% names(qc)))
-  expect_gte(qc$beta_mean, 0); expect_lte(qc$beta_mean, 1)   # methylation fraction
-  expect_gt(qc$n_samples, 0L); expect_gt(qc$n_probes, 0L)
+  expect_gte(qc$beta_mean, 0)
+  expect_lte(qc$beta_mean, 1) # methylation fraction
+  expect_gt(qc$n_samples, 0L)
+  expect_gt(qc$n_probes, 0L)
 })
 
 # ── Filter activation & statistics ────────────────────────────────────────────
@@ -621,7 +725,7 @@ test_that("all enabled filters are logged ACTIVE and probe counts never increase
     xy_chromosomes = list(enabled = TRUE)
   ), auto_unbox = TRUE)
 
-  fx  <- make_job_dir(head(IDAT_FIXTURE$ids, 2L), filter_json = all_on)
+  fx <- make_job_dir(head(IDAT_FIXTURE$ids, 2L), filter_json = all_on)
   on.exit(unlink(fx$job_dir, recursive = TRUE), add = TRUE)
   res <- run_init_filter(fx$sample_sheet, fx$job_dir)
   expect_equal(res$status, 0L, info = res$text)
@@ -630,12 +734,13 @@ test_that("all enabled filters are logged ACTIVE and probe counts never increase
   # Each enabled filter leaves an ACTIVE trace (English labels emitted as `message`).
   for (lbl in c("Detection P-Value", "Bead Count", "Non-CpG", "SNP", "Multi-Hit", "XY Chromosomes")) {
     expect_true(any(grepl(sprintf("\\[FILTER\\] %s ACTIVE", lbl), msgs)),
-                info = paste("missing ACTIVE log for:", lbl))
+      info = paste("missing ACTIVE log for:", lbl)
+    )
   }
 
   # Probe counts are monotonically non-increasing across the enabled steps.
   stats <- fromJSON(file.path(fx$job_dir, "filter_stats.json"))
-  prev  <- stats$total_start
+  prev <- stats$total_start
   for (step in c("det_p", "bead_count", "non_cpg", "snp", "multi_hit", "xy_chromosomes")) {
     if (!is.null(stats[[step]]) && isTRUE(stats[[step]]$enabled)) {
       expect_lte(stats[[step]]$after, prev)
@@ -654,14 +759,15 @@ test_that("disabled filters are explicitly logged INACTIVE", {
     xy_chromosomes = list(enabled = FALSE)
   ), auto_unbox = TRUE)
 
-  fx  <- make_job_dir(head(IDAT_FIXTURE$ids, 2L), filter_json = partial)
+  fx <- make_job_dir(head(IDAT_FIXTURE$ids, 2L), filter_json = partial)
   on.exit(unlink(fx$job_dir, recursive = TRUE), add = TRUE)
-  res  <- run_init_filter(fx$sample_sheet, fx$job_dir)
+  res <- run_init_filter(fx$sample_sheet, fx$job_dir)
   msgs <- progress_messages(res)
 
   for (lbl in c("Bead Count", "SNP", "XY Chromosomes")) {
     expect_true(any(grepl(sprintf("\\[FILTER\\] %s INACTIVE", lbl), msgs)),
-                info = paste("missing INACTIVE log for:", lbl))
+      info = paste("missing INACTIVE log for:", lbl)
+    )
   }
 })
 
@@ -673,7 +779,7 @@ test_that("sample-quality filtering runs and is reported in the stats", {
     remove_failed_samples = TRUE, enable_pca_outlier_detection = TRUE
   )), auto_unbox = TRUE)
 
-  fx  <- make_job_dir(head(IDAT_FIXTURE$ids, 3L), filter_json = cfg)
+  fx <- make_job_dir(head(IDAT_FIXTURE$ids, 3L), filter_json = cfg)
   on.exit(unlink(fx$job_dir, recursive = TRUE), add = TRUE)
   res <- run_init_filter(fx$sample_sheet, fx$job_dir)
   expect_equal(res$status, 0L, info = res$text)
@@ -687,16 +793,21 @@ test_that("sample-quality filtering runs and is reported in the stats", {
 
 test_that("a missing sample sheet exits 1 with a structured error", {
   skip_if_not(file.exists(SCRIPT_PATH), "init_filter.R not found")
-  d <- tempfile("job_nosheet_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_nosheet_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   res <- run_init_filter("/does/not/exist.csv", d)
   expect_equal(res$status, 1L)
   expect_false(any(grepl("^Error in |Execution halted", res$lines)),
-               info = "error should be handled by emit_error(), not a raw R traceback")
+    info = "error should be handled by emit_error(), not a raw R traceback"
+  )
 })
 
 test_that("malformed filter_settings.json exits 1 without crashing", {
   skip_if_not(file.exists(SCRIPT_PATH), "init_filter.R not found")
-  d <- tempfile("job_badjson_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_badjson_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   writeLines('{ "det_p": { "enabled": true, "cutoff": INVALID }', file.path(d, "filter_settings.json"))
   sheet <- file.path(d, "SampleSheet.csv")
   writeLines(c("Sample_Name,Sentrix_ID,Sentrix_Position", "S1,200000000001,R01C01"), sheet)
@@ -711,10 +822,11 @@ test_that("out-of-range cutoffs exit 1 (det_p and snp)", {
   sheet_lines <- c("Sample_Name,Sentrix_ID,Sentrix_Position", "S1,200000000001,R01C01")
 
   for (bad in list(
-    toJSON(list(det_p = list(enabled = TRUE, cutoff = 0.5)),   auto_unbox = TRUE),
-    toJSON(list(snp   = list(enabled = TRUE, maf_cutoff = 0.6)), auto_unbox = TRUE)
+    toJSON(list(det_p = list(enabled = TRUE, cutoff = 0.5)), auto_unbox = TRUE),
+    toJSON(list(snp = list(enabled = TRUE, maf_cutoff = 0.6)), auto_unbox = TRUE)
   )) {
-    d <- tempfile("job_badcut_"); dir.create(d)
+    d <- tempfile("job_badcut_")
+    dir.create(d)
     writeLines(sheet_lines, file.path(d, "SampleSheet.csv"))
     writeLines(bad, file.path(d, "filter_settings.json"))
     res <- run_init_filter(file.path(d, "SampleSheet.csv"), d)
@@ -725,11 +837,15 @@ test_that("out-of-range cutoffs exit 1 (det_p and snp)", {
 
 test_that("a duplicate sample sheet is rejected with exit 1", {
   skip_if_not(file.exists(SCRIPT_PATH), "init_filter.R not found")
-  d <- tempfile("job_dupsheet_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_dupsheet_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   sheet <- file.path(d, "SampleSheet.csv")
-  writeLines(c("Sample_Name,Sentrix_ID,Sentrix_Position",
-               "A,200000000001,R01C01",
-               "B,200000000001,R01C01"), sheet)   # same array twice
+  writeLines(c(
+    "Sample_Name,Sentrix_ID,Sentrix_Position",
+    "A,200000000001,R01C01",
+    "B,200000000001,R01C01"
+  ), sheet) # same array twice
   res <- run_init_filter(sheet, d)
   expect_equal(res$status, 1L)
   expect_true(any(grepl("Duplicate", res$lines)))
@@ -737,7 +853,9 @@ test_that("a duplicate sample sheet is rejected with exit 1", {
 
 test_that("a sample sheet without required columns is rejected with exit 1", {
   skip_if_not(file.exists(SCRIPT_PATH), "init_filter.R not found")
-  d <- tempfile("job_badcols_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_badcols_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   sheet <- file.path(d, "SampleSheet.csv")
   writeLines(c("foo,bar,baz", "1,2,3"), sheet)
   res <- run_init_filter(sheet, d)

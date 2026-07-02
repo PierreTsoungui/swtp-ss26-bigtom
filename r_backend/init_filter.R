@@ -106,11 +106,11 @@ assert_in_range <- function(value, lo, hi, name) {
 parse_filter_config <- function(json_str) {
   # Defaults: every filter disabled; cutoffs match the frontend defaults.
   cfg <- list(
-    det_p          = list(enabled = FALSE, cutoff = 0.01),
-    bead_count     = list(enabled = FALSE, bead_cutoff = 0.05),
-    non_cpg        = list(enabled = FALSE),
-    snp            = list(enabled = FALSE, maf_cutoff = 0.05),
-    multi_hit      = list(enabled = FALSE),
+    det_p = list(enabled = FALSE, cutoff = 0.01),
+    bead_count = list(enabled = FALSE, bead_cutoff = 0.05),
+    non_cpg = list(enabled = FALSE),
+    snp = list(enabled = FALSE, maf_cutoff = 0.05),
+    multi_hit = list(enabled = FALSE),
     xy_chromosomes = list(enabled = FALSE),
     sample_quality = list(
       enabled                      = FALSE,
@@ -137,14 +137,16 @@ parse_filter_config <- function(json_str) {
   # --- Merge each section onto the defaults ---
   if (!is.null(raw$det_p)) {
     cfg$det_p$enabled <- isTRUE(as.logical(raw$det_p[["enabled"]]))
-    if (!is.null(raw$det_p[["cutoff"]]))
+    if (!is.null(raw$det_p[["cutoff"]])) {
       cfg$det_p$cutoff <- as.numeric(raw$det_p[["cutoff"]])
+    }
   }
 
   if (!is.null(raw$bead_count)) {
     cfg$bead_count$enabled <- isTRUE(as.logical(raw$bead_count[["enabled"]]))
-    if (!is.null(raw$bead_count[["bead_cutoff"]]))
+    if (!is.null(raw$bead_count[["bead_cutoff"]])) {
       cfg$bead_count$bead_cutoff <- as.numeric(raw$bead_count[["bead_cutoff"]])
+    }
   }
 
   if (!is.null(raw$non_cpg)) {
@@ -153,8 +155,9 @@ parse_filter_config <- function(json_str) {
 
   if (!is.null(raw$snp)) {
     cfg$snp$enabled <- isTRUE(as.logical(raw$snp[["enabled"]]))
-    if (!is.null(raw$snp[["maf_cutoff"]]))
+    if (!is.null(raw$snp[["maf_cutoff"]])) {
       cfg$snp$maf_cutoff <- as.numeric(raw$snp[["maf_cutoff"]])
+    }
   }
 
   if (!is.null(raw$multi_hit)) {
@@ -168,22 +171,26 @@ parse_filter_config <- function(json_str) {
   if (!is.null(raw$sample_quality)) {
     sq <- raw$sample_quality
     cfg$sample_quality$enabled <- isTRUE(as.logical(sq[["enabled"]]))
-    if (!is.null(sq[["detection_p_cutoff"]]))
+    if (!is.null(sq[["detection_p_cutoff"]])) {
       cfg$sample_quality$detection_p_cutoff <- as.numeric(sq[["detection_p_cutoff"]])
-    if (!is.null(sq[["sample_failure_rate"]]))
+    }
+    if (!is.null(sq[["sample_failure_rate"]])) {
       cfg$sample_quality$sample_failure_rate <- as.numeric(sq[["sample_failure_rate"]])
-    if (!is.null(sq[["remove_failed_samples"]]))
+    }
+    if (!is.null(sq[["remove_failed_samples"]])) {
       cfg$sample_quality$remove_failed_samples <- isTRUE(as.logical(sq[["remove_failed_samples"]]))
-    if (!is.null(sq[["enable_pca_outlier_detection"]]))
+    }
+    if (!is.null(sq[["enable_pca_outlier_detection"]])) {
       cfg$sample_quality$enable_pca_outlier_detection <- isTRUE(as.logical(sq[["enable_pca_outlier_detection"]]))
+    }
   }
 
   # --- Validation (ranges mirror the frontend constraints) ---
-  assert_in_range(cfg$det_p$cutoff,                       0.01, 0.05, "det_p.cutoff")
-  assert_in_range(cfg$bead_count$bead_cutoff,             0.0,  1.0,  "bead_count.bead_cutoff")
-  assert_in_range(cfg$snp$maf_cutoff,                     0.0,  0.5,  "snp.maf_cutoff")
-  assert_in_range(cfg$sample_quality$detection_p_cutoff,  0.01, 0.05, "sample_quality.detection_p_cutoff")
-  assert_in_range(cfg$sample_quality$sample_failure_rate, 0.05, 0.2,  "sample_quality.sample_failure_rate")
+  assert_in_range(cfg$det_p$cutoff, 0.01, 0.05, "det_p.cutoff")
+  assert_in_range(cfg$bead_count$bead_cutoff, 0.0, 1.0, "bead_count.bead_cutoff")
+  assert_in_range(cfg$snp$maf_cutoff, 0.0, 0.5, "snp.maf_cutoff")
+  assert_in_range(cfg$sample_quality$detection_p_cutoff, 0.01, 0.05, "sample_quality.detection_p_cutoff")
+  assert_in_range(cfg$sample_quality$sample_failure_rate, 0.05, 0.2, "sample_quality.sample_failure_rate")
 
   # Echo the effective configuration to the log for traceability.
   emit_progress(4, sprintf("[CONFIG] det_p:          enabled=%-5s cutoff=%.4f", cfg$det_p$enabled, cfg$det_p$cutoff))
@@ -192,12 +199,14 @@ parse_filter_config <- function(json_str) {
   emit_progress(4, sprintf("[CONFIG] snp:            enabled=%-5s maf_cutoff=%.4f", cfg$snp$enabled, cfg$snp$maf_cutoff))
   emit_progress(4, sprintf("[CONFIG] multi_hit:      enabled=%s", cfg$multi_hit$enabled))
   emit_progress(4, sprintf("[CONFIG] xy_chromosomes: enabled=%s", cfg$xy_chromosomes$enabled))
-  emit_progress(4, sprintf("[CONFIG] sample_quality: enabled=%-5s detection_p_cutoff=%.4f sample_failure_rate=%.4f remove_failed=%s pca_outlier=%s",
-                           cfg$sample_quality$enabled,
-                           cfg$sample_quality$detection_p_cutoff,
-                           cfg$sample_quality$sample_failure_rate,
-                           cfg$sample_quality$remove_failed_samples,
-                           cfg$sample_quality$enable_pca_outlier_detection))
+  emit_progress(4, sprintf(
+    "[CONFIG] sample_quality: enabled=%-5s detection_p_cutoff=%.4f sample_failure_rate=%.4f remove_failed=%s pca_outlier=%s",
+    cfg$sample_quality$enabled,
+    cfg$sample_quality$detection_p_cutoff,
+    cfg$sample_quality$sample_failure_rate,
+    cfg$sample_quality$remove_failed_samples,
+    cfg$sample_quality$enable_pca_outlier_detection
+  ))
 
   cfg
 }
@@ -220,7 +229,7 @@ read_samplesheet <- function(path) {
 
   # [Data] section (Illumina format): everything before it is preamble.
   data_start <- grep("^\\[Data\\]", raw)
-  skip_n     <- if (length(data_start) > 0L) data_start[1L] else 0L
+  skip_n <- if (length(data_start) > 0L) data_start[1L] else 0L
 
   sheet <- tryCatch(
     read.csv(path, skip = skip_n, stringsAsFactors = FALSE, check.names = FALSE),
@@ -245,8 +254,8 @@ validate_sample_sheet <- function(sheet) {
     emit_error("Sample sheet has no data rows")
   }
 
-  has_standard  <- all(c("Sample_Name", "Sentrix_ID", "Sentrix_Position") %in% colnames(sheet))
-  has_basename  <- "Basename"  %in% colnames(sheet)
+  has_standard <- all(c("Sample_Name", "Sentrix_ID", "Sentrix_Position") %in% colnames(sheet))
+  has_basename <- "Basename" %in% colnames(sheet)
   has_sample_id <- "Sample_ID" %in% colnames(sheet)
 
   if (!has_standard && !has_basename && !has_sample_id) {
@@ -293,7 +302,6 @@ validate_sample_sheet <- function(sheet) {
 #' @param job_dir Directory containing the IDAT files.
 #' @return The sample sheet with an absolute \code{Basename} column added.
 prepare_targets <- function(sheet, job_dir) {
-
   # 1. Resolve Basename (absolute path prefix, no extension).
   if (!"Basename" %in% colnames(sheet)) {
     if (all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(sheet))) {
@@ -332,7 +340,7 @@ prepare_targets <- function(sheet, job_dir) {
 
   # 4. Every expected sample id must have IDAT files on disk.
   expected_ids <- basename(as.character(sheet$Basename))
-  missing_ids  <- setdiff(expected_ids, found_ids)
+  missing_ids <- setdiff(expected_ids, found_ids)
   if (length(missing_ids) > 0L) {
     missing_labels <- sample_labels[expected_ids %in% missing_ids]
     emit_error(paste0(
@@ -365,7 +373,9 @@ prepare_targets <- function(sheet, job_dir) {
 #' @param cutoff Detection p-value threshold.
 #' @return Character vector of probe IDs to remove.
 detp_failed_probes <- function(det_p, cutoff = 0.01) {
-  if (is.null(det_p)) return(character(0))
+  if (is.null(det_p)) {
+    return(character(0))
+  }
   rownames(det_p)[apply(det_p, 1L, function(x) any(x > cutoff, na.rm = TRUE))]
 }
 
@@ -382,7 +392,9 @@ detp_failed_probes <- function(det_p, cutoff = 0.01) {
 #' @param bead_cutoff Maximum tolerated fraction of failing samples (0–1).
 #' @return Character vector of probe IDs to remove.
 beadcount_failed_probes <- function(det_p, bead_cutoff = 0.05) {
-  if (is.null(det_p)) return(character(0))
+  if (is.null(det_p)) {
+    return(character(0))
+  }
   tryCatch(
     rownames(det_p)[apply(det_p, 1L, function(x) mean(x > 0.01, na.rm = TRUE) > bead_cutoff)],
     error = function(e) {
@@ -397,7 +409,9 @@ beadcount_failed_probes <- function(det_p, bead_cutoff = 0.05) {
 #' @param ann Annotation data frame (rownames = probe IDs), or \code{NULL}.
 #' @return Character vector of probe IDs to remove.
 non_cpg_probes <- function(ann) {
-  if (is.null(ann)) return(character(0))
+  if (is.null(ann)) {
+    return(character(0))
+  }
   rownames(ann)[grepl("^ch\\.", rownames(ann))]
 }
 
@@ -410,7 +424,9 @@ non_cpg_probes <- function(ann) {
 #' @param maf_cutoff Minor allele frequency threshold (0–0.5).
 #' @return Character vector of probe IDs to remove.
 snp_probes <- function(ann, maf_cutoff = 0.05) {
-  if (is.null(ann)) return(character(0))
+  if (is.null(ann)) {
+    return(character(0))
+  }
   maf_cols <- intersect(c("CpG_maf", "SBE_maf", "Probe_maf"), colnames(ann))
   if (length(maf_cols) == 0L) {
     warning("SNP filter: no MAF annotation columns found - filter skipped")
@@ -427,7 +443,9 @@ snp_probes <- function(ann, maf_cutoff = 0.05) {
 #' @param ann Annotation data frame (with a \code{chr} column), or \code{NULL}.
 #' @return Character vector of probe IDs to remove.
 xy_probes <- function(ann) {
-  if (is.null(ann) || is.null(ann$chr)) return(character(0))
+  if (is.null(ann) || is.null(ann$chr)) {
+    return(character(0))
+  }
   rownames(ann)[!is.na(ann$chr) & ann$chr %in% c("chrX", "chrY")]
 }
 
@@ -468,13 +486,15 @@ apply_probe_filter <- function(probe_keep, total_start, stats, key, label,
   if (isTRUE(enabled)) {
     detail <- if (length(extra) > 0L) {
       paste0(" (", paste(names(extra), unlist(extra), sep = " = ", collapse = ", "), ")")
-    } else ""
+    } else {
+      ""
+    }
     emit_progress(pct_start, sprintf("[FILTER] %s ACTIVE%s", label, detail))
 
-    before     <- length(probe_keep)
+    before <- length(probe_keep)
     probe_keep <- setdiff(probe_keep, remove_fn())
     assert_probes_remain(length(probe_keep), label)
-    removed    <- before - length(probe_keep)
+    removed <- before - length(probe_keep)
 
     stats[[key]] <- c(
       list(enabled = TRUE, removed = removed, after = length(probe_keep)),
@@ -519,7 +539,7 @@ filter_sample_quality <- function(rgset, cfg_sq, det_p = NULL) {
   # Remove samples whose detection-failure rate exceeds the threshold.
   if (isTRUE(cfg_sq$remove_failed_samples)) {
     failure_rates <- colMeans(det_p > cfg_sq$detection_p_cutoff, na.rm = TRUE)
-    bad_samples   <- names(failure_rates)[failure_rates > cfg_sq$sample_failure_rate]
+    bad_samples <- names(failure_rates)[failure_rates > cfg_sq$sample_failure_rate]
     if (length(bad_samples) > 0L) {
       emit_progress(26, sprintf(
         "[SAMPLE QC] Removing %d sample(s) due to high failure rate: %s",
@@ -532,37 +552,40 @@ filter_sample_quality <- function(rgset, cfg_sq, det_p = NULL) {
   # PCA-based outlier detection on beta values (extract_beta preprocesses the
   # RGChannelSet, which has no direct getBeta method).
   if (isTRUE(cfg_sq$enable_pca_outlier_detection)) {
-    tryCatch({
-      beta_mat  <- extract_beta(rgset)
-      keep_cols <- setdiff(colnames(beta_mat), removed_samples)
+    tryCatch(
+      {
+        beta_mat <- extract_beta(rgset)
+        keep_cols <- setdiff(colnames(beta_mat), removed_samples)
 
-      if (length(keep_cols) >= 3L) {
-        beta_sub      <- beta_mat[, keep_cols, drop = FALSE]
-        beta_complete <- beta_sub[complete.cases(beta_sub), , drop = FALSE]
+        if (length(keep_cols) >= 3L) {
+          beta_sub <- beta_mat[, keep_cols, drop = FALSE]
+          beta_complete <- beta_sub[complete.cases(beta_sub), , drop = FALSE]
 
-        if (nrow(beta_complete) > 10L) {
-          pca_res <- prcomp(t(beta_complete), center = TRUE, scale. = FALSE)
-          scores  <- pca_res$x[, seq_len(min(2L, ncol(pca_res$x))), drop = FALSE]
-          center  <- colMeans(scores)
-          cov_mat <- cov(scores)
+          if (nrow(beta_complete) > 10L) {
+            pca_res <- prcomp(t(beta_complete), center = TRUE, scale. = FALSE)
+            scores <- pca_res$x[, seq_len(min(2L, ncol(pca_res$x))), drop = FALSE]
+            center <- colMeans(scores)
+            cov_mat <- cov(scores)
 
-          if (det(cov_mat) > 1e-10) {
-            distances <- mahalanobis(scores, center, cov_mat)
-            threshold <- qchisq(0.975, df = ncol(scores))
-            outliers  <- rownames(scores)[distances > threshold]
-            if (length(outliers) > 0L) {
-              emit_progress(27, sprintf(
-                "[SAMPLE QC] PCA outliers detected (%d): %s",
-                length(outliers), paste(outliers, collapse = ", ")
-              ))
-              removed_samples <- union(removed_samples, outliers)
+            if (det(cov_mat) > 1e-10) {
+              distances <- mahalanobis(scores, center, cov_mat)
+              threshold <- qchisq(0.975, df = ncol(scores))
+              outliers <- rownames(scores)[distances > threshold]
+              if (length(outliers) > 0L) {
+                emit_progress(27, sprintf(
+                  "[SAMPLE QC] PCA outliers detected (%d): %s",
+                  length(outliers), paste(outliers, collapse = ", ")
+                ))
+                removed_samples <- union(removed_samples, outliers)
+              }
             }
           }
         }
+      },
+      error = function(e) {
+        warning("PCA outlier detection could not be completed. Continuing without this check.")
       }
-    }, error = function(e) {
-      warning("PCA outlier detection could not be completed. Continuing without this check.")
-    })
+    )
   }
 
   keep_samples <- setdiff(colnames(rgset), removed_samples)
@@ -588,7 +611,6 @@ filter_sample_quality <- function(rgset, cfg_sq, det_p = NULL) {
 #' @param cfg Parsed filter configuration.
 #' @return List with \code{filtered_rgset} and \code{filter_stats}.
 run_filtering <- function(rgset, job_dir, cfg) {
-
   emit_progress(22, "Computing detection p-values...")
   det_p <- tryCatch(detectionP(rgset), error = function(e) NULL)
 
@@ -596,8 +618,8 @@ run_filtering <- function(rgset, job_dir, cfg) {
   if (isTRUE(cfg$sample_quality$enabled)) {
     emit_progress(24, "[FILTER] Sample Quality ACTIVE")
     samples_before <- ncol(rgset)
-    sq_result      <- filter_sample_quality(rgset, cfg$sample_quality, det_p = det_p)
-    rgset          <- sq_result$rgset
+    sq_result <- filter_sample_quality(rgset, cfg$sample_quality, det_p = det_p)
+    rgset <- sq_result$rgset
 
     # Keep the detection matrix aligned with the surviving samples.
     if (!is.null(det_p)) det_p <- det_p[, colnames(rgset), drop = FALSE]
@@ -627,29 +649,31 @@ run_filtering <- function(rgset, job_dir, cfg) {
   emit_progress(29, "Converting RGChannelSet to MethylSet...")
   mset <- preprocessRaw(rgset)
 
-  total_start  <- nrow(mset)
-  probe_keep   <- rownames(mset)
+  total_start <- nrow(mset)
+  probe_keep <- rownames(mset)
   filter_stats <- list(total_start = total_start)
   emit_progress(29, paste("Starting filtering with", total_start, "probes"))
 
   # ── Detection-based probe filters (operate on det_p) ────────────────────────
   step <- apply_probe_filter(
     probe_keep, total_start, filter_stats, "det_p", "Detection P-Value",
-    enabled   = cfg$det_p$enabled,
+    enabled = cfg$det_p$enabled,
     remove_fn = function() detp_failed_probes(det_p, cfg$det_p$cutoff),
     pct_start = 30, pct_end = 35,
-    extra     = list(cutoff = cfg$det_p$cutoff)
+    extra = list(cutoff = cfg$det_p$cutoff)
   )
-  probe_keep <- step$probe_keep; filter_stats <- step$stats
+  probe_keep <- step$probe_keep
+  filter_stats <- step$stats
 
   step <- apply_probe_filter(
     probe_keep, total_start, filter_stats, "bead_count", "Bead Count",
-    enabled   = cfg$bead_count$enabled,
+    enabled = cfg$bead_count$enabled,
     remove_fn = function() beadcount_failed_probes(det_p, cfg$bead_count$bead_cutoff),
     pct_start = 40, pct_end = 50,
-    extra     = list(bead_cutoff = cfg$bead_count$bead_cutoff)
+    extra = list(bead_cutoff = cfg$bead_count$bead_cutoff)
   )
-  probe_keep <- step$probe_keep; filter_stats <- step$stats
+  probe_keep <- step$probe_keep
+  filter_stats <- step$stats
 
   # ── Annotation-based probe filters ──────────────────────────────────────────
   emit_progress(60, "Loading annotation")
@@ -658,41 +682,45 @@ run_filtering <- function(rgset, job_dir, cfg) {
 
   step <- apply_probe_filter(
     probe_keep, total_start, filter_stats, "non_cpg", "Non-CpG",
-    enabled   = cfg$non_cpg$enabled,
+    enabled = cfg$non_cpg$enabled,
     remove_fn = function() non_cpg_probes(ann),
     pct_start = 66, pct_end = 70
   )
-  probe_keep <- step$probe_keep; filter_stats <- step$stats
+  probe_keep <- step$probe_keep
+  filter_stats <- step$stats
 
   step <- apply_probe_filter(
     probe_keep, total_start, filter_stats, "snp", "SNP",
-    enabled   = cfg$snp$enabled,
+    enabled = cfg$snp$enabled,
     remove_fn = function() snp_probes(ann, cfg$snp$maf_cutoff),
     pct_start = 75, pct_end = 80,
-    extra     = list(maf_cutoff = cfg$snp$maf_cutoff)
+    extra = list(maf_cutoff = cfg$snp$maf_cutoff)
   )
-  probe_keep <- step$probe_keep; filter_stats <- step$stats
+  probe_keep <- step$probe_keep
+  filter_stats <- step$stats
 
   step <- apply_probe_filter(
     probe_keep, total_start, filter_stats, "multi_hit", "Multi-Hit",
-    enabled   = cfg$multi_hit$enabled,
+    enabled = cfg$multi_hit$enabled,
     remove_fn = function() multi_hit_probes(job_dir),
     pct_start = 82, pct_end = 85
   )
-  probe_keep <- step$probe_keep; filter_stats <- step$stats
+  probe_keep <- step$probe_keep
+  filter_stats <- step$stats
 
   step <- apply_probe_filter(
     probe_keep, total_start, filter_stats, "xy_chromosomes", "XY Chromosomes",
-    enabled   = cfg$xy_chromosomes$enabled,
+    enabled = cfg$xy_chromosomes$enabled,
     remove_fn = function() xy_probes(ann),
     pct_start = 88, pct_end = 90
   )
-  probe_keep <- step$probe_keep; filter_stats <- step$stats
+  probe_keep <- step$probe_keep
+  filter_stats <- step$stats
 
   # ── Totals ──────────────────────────────────────────────────────────────────
   filter_stats$sample_quality <- sq_stats
-  filter_stats$total_end      <- length(probe_keep)
-  filter_stats$total_removed  <- total_start - length(probe_keep)
+  filter_stats$total_end <- length(probe_keep)
+  filter_stats$total_removed <- total_start - length(probe_keep)
 
   list(filtered_rgset = rgset, filter_stats = filter_stats)
 }
@@ -712,42 +740,45 @@ run_filtering <- function(rgset, job_dir, cfg) {
 run_biological_qc <- function(filtered_rgset, job_dir) {
   emit_progress(92, "Performing biological QC...")
 
-  tryCatch({
-    # extract_beta preprocesses the RGChannelSet (no direct getBeta method).
-    beta <- extract_beta(filtered_rgset)
+  tryCatch(
+    {
+      # extract_beta preprocesses the RGChannelSet (no direct getBeta method).
+      beta <- extract_beta(filtered_rgset)
 
-    beta_mean <- mean(beta, na.rm = TRUE)
-    beta_sd   <- sd(beta, na.rm = TRUE)
-    emit_progress(93, sprintf("Beta distribution: mean=%.4f, sd=%.4f", beta_mean, beta_sd))
+      beta_mean <- mean(beta, na.rm = TRUE)
+      beta_sd <- sd(beta, na.rm = TRUE)
+      emit_progress(93, sprintf("Beta distribution: mean=%.4f, sd=%.4f", beta_mean, beta_sd))
 
-    beta_outliers <- sum(beta < -0.1 | beta > 1.1, na.rm = TRUE)
-    if (beta_outliers > 0L) {
-      warning(sprintf("Found %d beta values outside expected range [0,1]", beta_outliers))
-    }
-
-    if (ncol(beta) >= 2L) {
-      cor_matrix <- cor(beta, use = "pairwise.complete.obs")
-      median_cor <- median(cor_matrix[lower.tri(cor_matrix)], na.rm = TRUE)
-      emit_progress(94, sprintf("Median sample correlation: %.4f", median_cor))
-      if (!is.na(median_cor) && median_cor < 0.5) {
-        warning("Low median sample correlation (< 0.5) - possible batch effect or data quality issues")
+      beta_outliers <- sum(beta < -0.1 | beta > 1.1, na.rm = TRUE)
+      if (beta_outliers > 0L) {
+        warning(sprintf("Found %d beta values outside expected range [0,1]", beta_outliers))
       }
-    }
 
-    qc_data <- list(
-      beta_mean = beta_mean,
-      beta_sd   = beta_sd,
-      n_samples = ncol(beta),
-      n_probes  = nrow(beta)
-    )
-    write(
-      toJSON(qc_data, auto_unbox = TRUE, pretty = TRUE),
-      file.path(job_dir, "qc_report.json")
-    )
-    emit_progress(95, "Biological QC completed successfully")
-  }, error = function(e) {
-    warning("Biological quality control could not be completed. Continuing with analysis.")
-  })
+      if (ncol(beta) >= 2L) {
+        cor_matrix <- cor(beta, use = "pairwise.complete.obs")
+        median_cor <- median(cor_matrix[lower.tri(cor_matrix)], na.rm = TRUE)
+        emit_progress(94, sprintf("Median sample correlation: %.4f", median_cor))
+        if (!is.na(median_cor) && median_cor < 0.5) {
+          warning("Low median sample correlation (< 0.5) - possible batch effect or data quality issues")
+        }
+      }
+
+      qc_data <- list(
+        beta_mean = beta_mean,
+        beta_sd   = beta_sd,
+        n_samples = ncol(beta),
+        n_probes  = nrow(beta)
+      )
+      write(
+        toJSON(qc_data, auto_unbox = TRUE, pretty = TRUE),
+        file.path(job_dir, "qc_report.json")
+      )
+      emit_progress(95, "Biological QC completed successfully")
+    },
+    error = function(e) {
+      warning("Biological quality control could not be completed. Continuing with analysis.")
+    }
+  )
 
   invisible(TRUE)
 }
@@ -828,7 +859,7 @@ main <- function(sample_sheet_path, job_dir) {
     error = function(e) emit_error(conditionMessage(e))
   )
   filtered_rgset <- result$filtered_rgset
-  filter_stats   <- result$filter_stats
+  filter_stats <- result$filter_stats
 
   # Biological QC (non-fatal).
   run_biological_qc(filtered_rgset, job_dir)

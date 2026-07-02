@@ -35,31 +35,46 @@ library(testthat)
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
 
 SCRIPT_PATH <- "/app/r_backend/dmp.R"
-DMP_COLUMNS <- c("ID", "CHR", "POS", "GENE", "FEATURE", "CGI", "ADJ_P",
-                 "GROUP1_AVG", "GROUP2_AVG", "DELTA_BETA", "LOG_FC", "DMR_ID")
+DMP_COLUMNS <- c(
+  "ID", "CHR", "POS", "GENE", "FEATURE", "CGI", "ADJ_P",
+  "GROUP1_AVG", "GROUP2_AVG", "DELTA_BETA", "LOG_FC", "DMR_ID"
+)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Setup: source functions + catchable emit_error() double
 # ══════════════════════════════════════════════════════════════════════════════
 
-dmp_loaded <- tryCatch({
-  suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
-  assign("emit_error", function(message) {
-    stop(structure(class = c("dmp_fatal", "error", "condition"),
-                   list(message = as.character(message), call = NULL)))
-  }, envir = globalenv())
-  assign("emit_progress", function(percent, message) invisible(NULL), envir = globalenv())
-  exists("build_dmp_output") && exists("link_dmrs")
-}, error = function(e) FALSE)
+dmp_loaded <- tryCatch(
+  {
+    suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
+    assign("emit_error", function(message) {
+      stop(structure(
+        class = c("dmp_fatal", "error", "condition"),
+        list(message = as.character(message), call = NULL)
+      ))
+    }, envir = globalenv())
+    assign("emit_progress", function(percent, message) invisible(NULL), envir = globalenv())
+    exists("build_dmp_output") && exists("link_dmrs")
+  },
+  error = function(e) FALSE
+)
 
 skip_if_not_loaded <- function() {
-  skip_if_not(isTRUE(dmp_loaded),
-              paste("dmp.R could not be sourced (run in the r_worker container):", SCRIPT_PATH))
+  skip_if_not(
+    isTRUE(dmp_loaded),
+    paste("dmp.R could not be sourced (run in the r_worker container):", SCRIPT_PATH)
+  )
 }
 
 expect_fatal <- function(expr, regexp = NULL) {
-  cnd <- tryCatch({ force(expr); NULL }, dmp_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    dmp_fatal = function(c) c
+  )
   expect_false(is.null(cnd), info = "expected a fatal emit_error() but none was raised")
   if (!is.null(regexp) && !is.null(cnd)) expect_match(conditionMessage(cnd), regexp, ignore.case = TRUE)
   invisible(cnd)
@@ -80,10 +95,14 @@ mk_dmp_inputs <- function() {
     adj.P.Val = c(0.02, 0.9), row.names = c("cg1", "cg2"), stringsAsFactors = FALSE
   )
   # Case columns high, control columns low -> positive Delta Beta.
-  beta <- matrix(c(0.8, 0.7,  0.2, 0.1,     # cg1: case ~0.75, ctrl ~0.15
-                   0.4, 0.5,  0.5, 0.6),    # cg2: case ~0.45, ctrl ~0.55
-                 nrow = 2, byrow = TRUE,
-                 dimnames = list(c("cg1", "cg2"), c("caseA", "caseB", "ctrlA", "ctrlB")))
+  beta <- matrix(
+    c(
+      0.8, 0.7, 0.2, 0.1, # cg1: case ~0.75, ctrl ~0.15
+      0.4, 0.5, 0.5, 0.6
+    ), # cg2: case ~0.45, ctrl ~0.55
+    nrow = 2, byrow = TRUE,
+    dimnames = list(c("cg1", "cg2"), c("caseA", "caseB", "ctrlA", "ctrlB"))
+  )
   pheno <- factor(c("Case", "Case", "Ctrl", "Ctrl"), levels = c("Ctrl", "Case"))
   list(dmp_table = dmp_table, beta = beta, pheno = pheno)
 }
@@ -102,7 +121,7 @@ test_that("build_dmp_output assembles the canonical schema with deterministic De
   expect_equal(out$GROUP1_AVG, c(mean(c(0.8, 0.7)), mean(c(0.4, 0.5))))
   expect_equal(out$GROUP2_AVG, c(mean(c(0.2, 0.1)), mean(c(0.5, 0.6))))
   expect_equal(out$DELTA_BETA, out$GROUP1_AVG - out$GROUP2_AVG)
-  expect_true(all(out$DMR_ID == "-"))               # no DMRs linked yet
+  expect_true(all(out$DMR_ID == "-")) # no DMRs linked yet
   expect_true(all(is.finite(out$LOG_FC)))
 })
 
@@ -115,49 +134,65 @@ test_that("build_dmp_output errors when no p-value column is recognizable", {
 
 test_that("build_dmp_output falls back to empty strings for absent annotation columns", {
   skip_if_not_loaded()
-  dt <- data.frame(CHR = "1", MAPINFO = 100, P.Value = 0.04, row.names = "cg1",
-                   stringsAsFactors = FALSE)   # no gene/feature/cgi
+  dt <- data.frame(
+    CHR = "1", MAPINFO = 100, P.Value = 0.04, row.names = "cg1",
+    stringsAsFactors = FALSE
+  ) # no gene/feature/cgi
   beta <- matrix(c(0.8, 0.2), nrow = 1, dimnames = list("cg1", c("caseA", "ctrlA")))
   # need >=1 col per group; add a second sample each to compute means
-  beta <- matrix(c(0.8, 0.9, 0.2, 0.1), nrow = 1,
-                 dimnames = list("cg1", c("caseA", "caseB", "ctrlA", "ctrlB")))
+  beta <- matrix(c(0.8, 0.9, 0.2, 0.1),
+    nrow = 1,
+    dimnames = list("cg1", c("caseA", "caseB", "ctrlA", "ctrlB"))
+  )
   ph <- factor(c("Case", "Case", "Ctrl", "Ctrl"), levels = c("Ctrl", "Case"))
   out <- build_dmp_output(dt, beta, ph, "Case", "Ctrl")
   expect_equal(out$GENE, "")
   expect_equal(out$FEATURE, "")
   expect_equal(out$CGI, "")
-  expect_equal(out$ADJ_P, 0.04)                     # picked P.Value fallback
+  expect_equal(out$ADJ_P, 0.04) # picked P.Value fallback
 })
 
 # ── link_dmrs() ───────────────────────────────────────────────────────────────
 
 #' A DMP data.frame with the columns link_dmrs needs.
 mk_dmp_df <- function(chr, pos) {
-  data.frame(CHR = as.character(chr), POS = pos, DMR_ID = rep("-", length(pos)),
-             stringsAsFactors = FALSE)
+  data.frame(
+    CHR = as.character(chr), POS = pos, DMR_ID = rep("-", length(pos)),
+    stringsAsFactors = FALSE
+  )
 }
 
 test_that("link_dmrs is a no-op when there is no dmr_results.rds", {
   skip_if_not_loaded()
-  d <- tempfile("job_nolink_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_nolink_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   out <- link_dmrs(mk_dmp_df(c("1", "1"), c(100, 200)), d)
   expect_true(all(out$DMR_ID == "-"))
 })
 
 test_that("link_dmrs is a no-op for an empty DMR table", {
   skip_if_not_loaded()
-  d <- tempfile("job_emptylink_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
-  saveRDS(data.frame(ID = character(0), CHR = character(0), START = numeric(0), STOP = numeric(0)),
-          file.path(d, "dmr_results.rds"))
+  d <- tempfile("job_emptylink_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  saveRDS(
+    data.frame(ID = character(0), CHR = character(0), START = numeric(0), STOP = numeric(0)),
+    file.path(d, "dmr_results.rds")
+  )
   out <- link_dmrs(mk_dmp_df("1", 100), d)
   expect_true(all(out$DMR_ID == "-"))
 })
 
 test_that("link_dmrs tags CpGs inside a region and leaves the rest as '-'", {
   skip_if_not_loaded()
-  d <- tempfile("job_link_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
-  saveRDS(data.frame(ID = "DMR_1", CHR = "1", START = 100, STOP = 200, stringsAsFactors = FALSE),
-          file.path(d, "dmr_results.rds"))
+  d <- tempfile("job_link_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  saveRDS(
+    data.frame(ID = "DMR_1", CHR = "1", START = 100, STOP = 200, stringsAsFactors = FALSE),
+    file.path(d, "dmr_results.rds")
+  )
   # cg at 150/chr1 overlaps; 300/chr1 outside; 150/chr2 wrong chromosome.
   out <- link_dmrs(mk_dmp_df(c("1", "1", "2"), c(150, 300, 150)), d)
   expect_equal(out$DMR_ID, c("DMR_1", "-", "-"))
@@ -165,13 +200,19 @@ test_that("link_dmrs tags CpGs inside a region and leaves the rest as '-'", {
 
 test_that("link_dmrs assigns the first overlapping region and tolerates NA positions", {
   skip_if_not_loaded()
-  d <- tempfile("job_link2_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
-  saveRDS(data.frame(ID = c("DMR_A", "DMR_B"), CHR = c("1", "1"),
-                     START = c(100, 120), STOP = c(200, 300), stringsAsFactors = FALSE),
-          file.path(d, "dmr_results.rds"))
+  d <- tempfile("job_link2_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  saveRDS(
+    data.frame(
+      ID = c("DMR_A", "DMR_B"), CHR = c("1", "1"),
+      START = c(100, 120), STOP = c(200, 300), stringsAsFactors = FALSE
+    ),
+    file.path(d, "dmr_results.rds")
+  )
   out <- link_dmrs(mk_dmp_df(c("1", "1"), c(150, NA)), d)
-  expect_true(out$DMR_ID[1] %in% c("DMR_A", "DMR_B"))   # first overlap wins
-  expect_equal(out$DMR_ID[2], "-")                       # NA position stays unlinked
+  expect_true(out$DMR_ID[1] %in% c("DMR_A", "DMR_B")) # first overlap wins
+  expect_equal(out$DMR_ID[2], "-") # NA position stays unlinked
 })
 
 
@@ -185,40 +226,47 @@ test_that("link_dmrs assigns the first overlapping region and tolerates NA posit
 discover_dmp_fixtures <- function(signal_delta = 0.03, flat_delta = 0.015) {
   cand <- list()
   for (d in list.dirs("/app/jobs", recursive = FALSE)) {
-    beta <- file.path(d, "beta.rds"); sh <- file.path(d, "SampleSheet.csv"); at <- file.path(d, "array_type.txt")
+    beta <- file.path(d, "beta.rds")
+    sh <- file.path(d, "SampleSheet.csv")
+    at <- file.path(d, "array_type.txt")
     if (!all(file.exists(c(beta, sh, at)))) next
     ln <- tryCatch(readLines(sh, warn = FALSE), error = function(e) character(0))
-    ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-    s  <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
-                   error = function(e) NULL)
+    ds <- grep("^\\[Data\\]", ln)
+    skip_n <- if (length(ds)) ds[1] else 0
+    s <- tryCatch(read.csv(sh, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
     if (is.null(s) || !all(c("Sentrix_ID", "Sentrix_Position", "Sample_Group") %in% colnames(s))) next
     aid <- paste0(s$Sentrix_ID, "_", s$Sentrix_Position)
     if (anyDuplicated(aid) || length(unique(s$Sample_Group)) != 2L) next
-    cand[[length(cand) + 1L]] <- list(beta = beta, sheet = sh, at = at, s = s, aid = aid,
-                                      size = file.info(beta)$size)
+    cand[[length(cand) + 1L]] <- list(
+      beta = beta, sheet = sh, at = at, s = s, aid = aid,
+      size = file.info(beta)$size
+    )
   }
   cand <- cand[order(vapply(cand, function(x) x$size, numeric(1)))]
-  signal <- NULL; degenerate <- NULL
+  signal <- NULL
+  degenerate <- NULL
   for (c in cand) {
     if (!is.null(signal) && !is.null(degenerate)) break
     b <- tryCatch(readRDS(c$beta), error = function(e) NULL)
     if (is.null(b) || !is.matrix(b)) next
     grp <- setNames(c$s$Sample_Group, c$aid)[colnames(b)]
-    lv  <- unique(grp)
+    lv <- unique(grp)
     if (anyNA(grp) || length(lv) != 2L) next
     set.seed(1)
-    idx   <- sample(nrow(b), min(3000L, nrow(b)))
+    idx <- sample(nrow(b), min(3000L, nrow(b)))
     delta <- median(abs(rowMeans(b[idx, grp == lv[1], drop = FALSE]) -
-                        rowMeans(b[idx, grp == lv[2], drop = FALSE])), na.rm = TRUE)
+      rowMeans(b[idx, grp == lv[2], drop = FALSE])), na.rm = TRUE)
     fx <- list(beta = c$beta, sheet = c$sheet, at = c$at)
-    if (is.null(signal)     && is.finite(delta) && delta >= signal_delta) signal     <- fx
-    if (is.null(degenerate) && is.finite(delta) && delta <= flat_delta)   degenerate <- fx
+    if (is.null(signal) && is.finite(delta) && delta >= signal_delta) signal <- fx
+    if (is.null(degenerate) && is.finite(delta) && delta <= flat_delta) degenerate <- fx
   }
   list(signal = signal, degenerate = degenerate)
 }
 
 FIXTURES <- if (file.exists(SCRIPT_PATH)) discover_dmp_fixtures() else list(signal = NULL, degenerate = NULL)
-FIXTURE  <- FIXTURES$signal
+FIXTURE <- FIXTURES$signal
 
 skip_if_no_fixture <- function() {
   skip_if_not(file.exists(SCRIPT_PATH), "dmp.R not found")
@@ -232,23 +280,32 @@ run_dmp <- function(beta = FIXTURE$beta, samples = FIXTURE$sheet, adjPVal = "1",
   dir.create(job_dir, showWarnings = FALSE, recursive = TRUE)
   if (copy_array_type && !is.null(at)) file.copy(at, file.path(job_dir, "array_type.txt"))
   out <- suppressWarnings(system2(
-    "Rscript", c(shQuote(SCRIPT_PATH), shQuote(samples), shQuote(job_dir), shQuote(beta),
-                 adjPVal, arraytype),
+    "Rscript", c(
+      shQuote(SCRIPT_PATH), shQuote(samples), shQuote(job_dir), shQuote(beta),
+      adjPVal, arraytype
+    ),
     stdout = TRUE, stderr = TRUE
   ))
   status <- attr(out, "status") %||% 0L
-  logs <- Filter(Negate(is.null),
-                 lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL)))
-  list(status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
-       logs = logs, job_dir = job_dir)
+  logs <- Filter(
+    Negate(is.null),
+    lapply(out, function(l) tryCatch(jsonlite::fromJSON(l), error = function(e) NULL))
+  )
+  list(
+    status = as.integer(status), lines = out, stdout = paste(out, collapse = "\n"),
+    logs = logs, job_dir = job_dir
+  )
 }
 
-log_types    <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
+log_types <- function(res) unlist(lapply(res$logs, function(x) x$type %||% NULL))
 log_messages <- function(res) unlist(lapply(res$logs, function(x) x$message %||% NULL))
 
 # Memoise the (expensive) happy champ.DMP run.
 .dmp_cache <- new.env(parent = emptyenv())
-happy_run <- function() { if (is.null(.dmp_cache$res)) .dmp_cache$res <- run_dmp(); .dmp_cache$res }
+happy_run <- function() {
+  if (is.null(.dmp_cache$res)) .dmp_cache$res <- run_dmp()
+  .dmp_cache$res
+}
 
 # ── Happy path & keep-all behaviour ───────────────────────────────────────────
 
@@ -264,11 +321,13 @@ test_that("a standard run exits 0, emits 'done', and writes CSV + RDS", {
 
 test_that("the DMP table has the canonical schema with valid effect sizes", {
   skip_if_no_fixture()
-  res <- happy_run(); skip_if_not(res$status == 0L, "happy run failed")
+  res <- happy_run()
+  skip_if_not(res$status == 0L, "happy run failed")
   df <- read.csv(file.path(res$job_dir, "dmp_results.csv"), check.names = FALSE)
 
   expect_true(all(DMP_COLUMNS %in% colnames(df)),
-              info = paste("missing:", paste(setdiff(DMP_COLUMNS, colnames(df)), collapse = ", ")))
+    info = paste("missing:", paste(setdiff(DMP_COLUMNS, colnames(df)), collapse = ", "))
+  )
   expect_gt(nrow(df), 0L)
   expect_true(all(df$GROUP1_AVG >= 0 & df$GROUP1_AVG <= 1, na.rm = TRUE))
   expect_true(all(df$GROUP2_AVG >= 0 & df$GROUP2_AVG <= 1, na.rm = TRUE))
@@ -276,7 +335,7 @@ test_that("the DMP table has the canonical schema with valid effect sizes", {
   # Delta Beta is exactly GROUP1_AVG - GROUP2_AVG (deterministic effect size).
   expect_equal(df$DELTA_BETA, df$GROUP1_AVG - df$GROUP2_AVG, tolerance = 1e-6)
   expect_true(all(is.finite(df$LOG_FC)))
-  expect_true(all(df$DMR_ID == "-"))                     # no dmr_results.rds present
+  expect_true(all(df$DMR_ID == "-")) # no dmr_results.rds present
 })
 
 test_that("ALL probes are kept (TAB-01): ADJ_P is NOT filtered to <= 0.05", {
@@ -285,15 +344,17 @@ test_that("ALL probes are kept (TAB-01): ADJ_P is NOT filtered to <= 0.05", {
   # (The happy run passed adjPVal = "1"; since the argument is ignored for
   # filtering, its output already proves the keep-all contract.)
   skip_if_no_fixture()
-  res <- happy_run(); skip_if_not(res$status == 0L, "happy run failed")
+  res <- happy_run()
+  skip_if_not(res$status == 0L, "happy run failed")
   df <- read.csv(file.path(res$job_dir, "dmp_results.csv"), check.names = FALSE)
   expect_true(all(df$ADJ_P >= 0 & df$ADJ_P <= 1, na.rm = TRUE))
-  expect_gt(max(df$ADJ_P, na.rm = TRUE), 0.05)           # non-significant probes retained
+  expect_gt(max(df$ADJ_P, na.rm = TRUE), 0.05) # non-significant probes retained
 })
 
 test_that("the RDS output is a data frame consistent with the CSV", {
   skip_if_no_fixture()
-  res <- happy_run(); skip_if_not(res$status == 0L, "happy run failed")
+  res <- happy_run()
+  skip_if_not(res$status == 0L, "happy run failed")
   rds <- readRDS(file.path(res$job_dir, "dmp_results.rds"))
   csv <- read.csv(file.path(res$job_dir, "dmp_results.csv"), check.names = FALSE)
   expect_true(is.data.frame(rds))
@@ -314,7 +375,9 @@ test_that("a missing beta file is rejected with a structured error", {
 
 test_that("a corrupted beta RDS is reported cleanly (no raw crash)", {
   skip_if_no_fixture()
-  bad <- tempfile(fileext = ".rds"); writeBin(charToRaw("not an rds"), bad); on.exit(unlink(bad), add = TRUE)
+  bad <- tempfile(fileext = ".rds")
+  writeBin(charToRaw("not an rds"), bad)
+  on.exit(unlink(bad), add = TRUE)
   res <- run_dmp(beta = bad)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
   expect_equal(res$status, 1L)
@@ -340,7 +403,8 @@ test_that("an invalid arraytype is rejected", {
 
 test_that("a sample sheet without the group column is rejected", {
   skip_if_no_fixture()
-  bad <- tempfile(fileext = ".csv"); write.csv(data.frame(broken_col = c("a", "b")), bad, row.names = FALSE)
+  bad <- tempfile(fileext = ".csv")
+  write.csv(data.frame(broken_col = c("a", "b")), bad, row.names = FALSE)
   on.exit(unlink(bad), add = TRUE)
   res <- run_dmp(samples = bad)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
@@ -351,9 +415,11 @@ test_that("a sample sheet without the group column is rejected", {
 test_that("a sample/matrix count mismatch is rejected by strict alignment", {
   skip_if_no_fixture()
   ln <- readLines(FIXTURE$sheet, warn = FALSE)
-  ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-  s  <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
-  bad <- tempfile(fileext = ".csv"); write.csv(s[1, , drop = FALSE], bad, row.names = FALSE)
+  ds <- grep("^\\[Data\\]", ln)
+  skip_n <- if (length(ds)) ds[1] else 0
+  s <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
+  bad <- tempfile(fileext = ".csv")
+  write.csv(s[1, , drop = FALSE], bad, row.names = FALSE)
   on.exit(unlink(bad), add = TRUE)
   res <- run_dmp(samples = bad)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
@@ -364,10 +430,12 @@ test_that("a sample/matrix count mismatch is rejected by strict alignment", {
 test_that("a single distinct group is rejected (two comparison groups required)", {
   skip_if_no_fixture()
   ln <- readLines(FIXTURE$sheet, warn = FALSE)
-  ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-  s  <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
+  ds <- grep("^\\[Data\\]", ln)
+  skip_n <- if (length(ds)) ds[1] else 0
+  s <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
   s$Sample_Group <- "OneGroup"
-  bad <- tempfile(fileext = ".csv"); write.csv(s, bad, row.names = FALSE)
+  bad <- tempfile(fileext = ".csv")
+  write.csv(s, bad, row.names = FALSE)
   on.exit(unlink(bad), add = TRUE)
   res <- run_dmp(samples = bad)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
@@ -379,11 +447,14 @@ test_that("a group with fewer than two replicates is rejected (no fake replicati
   # dmp.R requires >= 2 samples per group and does NOT fabricate replicates.
   skip_if_no_fixture()
   ln <- readLines(FIXTURE$sheet, warn = FALSE)
-  ds <- grep("^\\[Data\\]", ln); skip_n <- if (length(ds)) ds[1] else 0
-  s  <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
+  ds <- grep("^\\[Data\\]", ln)
+  skip_n <- if (length(ds)) ds[1] else 0
+  s <- read.csv(FIXTURE$sheet, skip = skip_n, check.names = FALSE, stringsAsFactors = FALSE)
   skip_if(nrow(s) < 3L, "need >= 3 samples to build a 1-vs-rest split")
-  s$Sample_Group <- "Multi"; s$Sample_Group[1] <- "Solo"    # Solo = 1 sample
-  bad <- tempfile(fileext = ".csv"); write.csv(s, bad, row.names = FALSE)
+  s$Sample_Group <- "Multi"
+  s$Sample_Group[1] <- "Solo" # Solo = 1 sample
+  bad <- tempfile(fileext = ".csv")
+  write.csv(s, bad, row.names = FALSE)
   on.exit(unlink(bad), add = TRUE)
   res <- run_dmp(samples = bad)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
@@ -399,12 +470,14 @@ test_that("identical within-group duplicates are rejected before limma (zero var
   # message instead of the opaque limma "No sample variance".
   skip_if_not(file.exists(SCRIPT_PATH), "dmp.R not found")
   skip_if(is.null(FIXTURES$degenerate), "no degenerate (identical-duplicate) fixture available")
-  fx  <- FIXTURES$degenerate
+  fx <- FIXTURES$degenerate
   res <- run_dmp(beta = fx$beta, samples = fx$sheet, at = fx$at)
   on.exit(unlink(res$job_dir, recursive = TRUE), add = TRUE)
   expect_equal(res$status, 1L)
   expect_true(any(grepl("zero variance|identical duplicates|residual variance",
-                        log_messages(res), ignore.case = TRUE)))
+    log_messages(res),
+    ignore.case = TRUE
+  )))
 })
 
 test_that("an all-invariant beta matrix is rejected before champ.DMP", {
@@ -412,14 +485,21 @@ test_that("an all-invariant beta matrix is rejected before champ.DMP", {
   # across samples -> drop_invariant_probes removes all rows -> abort before the
   # (expensive) champ.DMP call. Runs without a real fixture (fails at cleaning).
   skip_if_not(file.exists(SCRIPT_PATH), "dmp.R not found")
-  jd <- tempfile("dmp_flat_"); dir.create(jd); on.exit(unlink(jd, recursive = TRUE), add = TRUE)
-  beta <- matrix(0.5, nrow = 100, ncol = 4,
-                 dimnames = list(paste0("cg", 1:100), paste0("206_R0", 1:4, "C01")))
-  brds <- file.path(jd, "beta.rds"); saveRDS(beta, brds)
+  jd <- tempfile("dmp_flat_")
+  dir.create(jd)
+  on.exit(unlink(jd, recursive = TRUE), add = TRUE)
+  beta <- matrix(0.5,
+    nrow = 100, ncol = 4,
+    dimnames = list(paste0("cg", 1:100), paste0("206_R0", 1:4, "C01"))
+  )
+  brds <- file.path(jd, "beta.rds")
+  saveRDS(beta, brds)
   sheet <- file.path(jd, "sheet.csv")
-  write.csv(data.frame(Sample_Name = paste0("S", 1:4), Sample_Group = rep(c("A", "B"), 2),
-                       Sentrix_ID = "206", Sentrix_Position = paste0("R0", 1:4, "C01"),
-                       stringsAsFactors = FALSE), sheet, row.names = FALSE)
+  write.csv(data.frame(
+    Sample_Name = paste0("S", 1:4), Sample_Group = rep(c("A", "B"), 2),
+    Sentrix_ID = "206", Sentrix_Position = paste0("R0", 1:4, "C01"),
+    stringsAsFactors = FALSE
+  ), sheet, row.names = FALSE)
 
   res <- run_dmp(beta = brds, samples = sheet, at = NULL, copy_array_type = FALSE, job_dir = jd)
   expect_equal(res$status, 1L)

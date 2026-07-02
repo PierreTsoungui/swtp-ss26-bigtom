@@ -57,7 +57,7 @@ MAX_PCS <- 10L
 #' used for missing values.
 PVAL_THRESHOLDS <- c(1e-10, 1e-5, 0.01, 0.05, 1.01)
 PVAL_BIN_COLORS <- c("#c0392b", "#e67e22", "#f39c12", "#f4c2c2", "#f8f8f8")
-PVAL_NA_COLOR   <- "#dddddd"
+PVAL_NA_COLOR <- "#dddddd"
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ PVAL_NA_COLOR   <- "#dddddd"
 #'   \code{n_pcs}.
 compute_principal_components <- function(beta) {
   if (nrow(beta) > MAX_PROBES_FOR_PCA) {
-    top  <- order(row_variance(beta), decreasing = TRUE)[seq_len(MAX_PROBES_FOR_PCA)]
+    top <- order(row_variance(beta), decreasing = TRUE)[seq_len(MAX_PROBES_FOR_PCA)]
     beta <- beta[top, , drop = FALSE]
   }
 
@@ -107,8 +107,8 @@ select_grouping_variables <- function(samples, n_samples) {
   candidate_cols <- setdiff(colnames(samples), "Array_ID")
   var_factors <- list()
   for (col in candidate_cols) {
-    values     <- as.character(samples[[col]])
-    nonempty   <- values[!is.na(values) & nzchar(trimws(values))]
+    values <- as.character(samples[[col]])
+    nonempty <- values[!is.na(values) & nzchar(trimws(values))]
     n_distinct <- length(unique(nonempty))
     if (n_distinct >= 2L && n_distinct < n_samples) {
       var_factors[[col]] <- as.integer(factor(values))
@@ -124,7 +124,9 @@ select_grouping_variables <- function(samples, n_samples) {
 #' @return The p-value, or \code{NA_real_} when not computable.
 association_pvalue <- function(group_vec, pc_vec) {
   group_vec <- as.factor(group_vec)
-  if (nlevels(group_vec) < 2L) return(NA_real_)
+  if (nlevels(group_vec) < 2L) {
+    return(NA_real_)
+  }
   tryCatch(kruskal.test(pc_vec ~ group_vec)$p.value, error = function(e) NA_real_)
 }
 
@@ -137,10 +139,11 @@ association_pvalue <- function(group_vec, pc_vec) {
 #'   grouping variable exists).
 compute_pvalue_matrix <- function(var_factors, pcs, n_pcs) {
   var_names <- names(var_factors)
-  n_vars    <- length(var_names)
+  n_vars <- length(var_names)
 
   pval_mat <- matrix(
-    NA_real_, nrow = max(n_vars, 1L), ncol = n_pcs,
+    NA_real_,
+    nrow = max(n_vars, 1L), ncol = n_pcs,
     dimnames = list(if (n_vars > 0L) var_names else "—", paste0("PC-", seq_len(n_pcs)))
   )
   if (n_vars > 0L) {
@@ -158,8 +161,12 @@ compute_pvalue_matrix <- function(var_factors, pcs, n_pcs) {
 #' @param p A p-value (may be NA).
 #' @return A hex colour string.
 pvalue_to_color <- function(p) {
-  if (is.na(p)) return(PVAL_NA_COLOR)
-  for (i in seq_along(PVAL_THRESHOLDS)) if (p < PVAL_THRESHOLDS[i]) return(PVAL_BIN_COLORS[i])
+  if (is.na(p)) {
+    return(PVAL_NA_COLOR)
+  }
+  for (i in seq_along(PVAL_THRESHOLDS)) if (p < PVAL_THRESHOLDS[i]) {
+    return(PVAL_BIN_COLORS[i])
+  }
   PVAL_BIN_COLORS[length(PVAL_BIN_COLORS)]
 }
 
@@ -187,29 +194,32 @@ render_svd_heatmap <- function(pval_mat, var_explained, n_pcs, n_vars, png_path,
 
   # ── Dynamic geometry (inches) ───────────────────────────────────────────────
   max_label <- max(nchar(rownames(pval_mat)), 6L)
-  cell_w    <- 1.0                                   # per PC column
-  cell_h    <- 0.52                                  # per variable row
-  left_in   <- min(3.8, 0.09 * max_label + 0.8)      # room for row labels
-  top_in    <- 1.9                                   # raised title + 2-line PC headers
-  bottom_in <- 1.25                                  # legend below the matrix
-  right_in  <- 0.7
+  cell_w <- 1.0 # per PC column
+  cell_h <- 0.52 # per variable row
+  left_in <- min(3.8, 0.09 * max_label + 0.8) # room for row labels
+  top_in <- 1.9 # raised title + 2-line PC headers
+  bottom_in <- 1.25 # legend below the matrix
+  right_in <- 0.7
   # Generous minimums so a 1-PC / 1-variable figure is never a thin sliver.
-  plot_w    <- max(n_pcs        * cell_w, 4.0)
-  plot_h    <- max(nrow(pval_mat) * cell_h, 1.8)
-  W         <- max(left_in + plot_w + right_in, 8.0) # >= 8" guarantees the legend fits
-  H         <- top_in + plot_h + bottom_in
+  plot_w <- max(n_pcs * cell_w, 4.0)
+  plot_h <- max(nrow(pval_mat) * cell_h, 1.8)
+  W <- max(left_in + plot_w + right_in, 8.0) # >= 8" guarantees the legend fits
+  H <- top_in + plot_h + bottom_in
 
   draw <- function() {
     par(mai = c(bottom_in, left_in, top_in, right_in), xpd = FALSE)
-    plot(0, 0, type = "n",
-         xlim = c(0.5, n_pcs + 0.5), ylim = c(0.5, nrow(pval_mat) + 0.5),
-         axes = FALSE, xlab = "", ylab = "")
+    plot(0, 0,
+      type = "n",
+      xlim = c(0.5, n_pcs + 0.5), ylim = c(0.5, nrow(pval_mat) + 0.5),
+      axes = FALSE, xlab = "", ylab = ""
+    )
 
     for (r in seq_len(nrow(pval_mat))) {
-      yrow <- nrow(pval_mat) - r + 1                 # first variable on top
+      yrow <- nrow(pval_mat) - r + 1 # first variable on top
       for (cc in seq_len(n_pcs)) {
         rect(cc - 0.5, yrow - 0.5, cc + 0.5, yrow + 0.5,
-             col = color_mat[r, cc], border = "white", lwd = 1.2)
+          col = color_mat[r, cc], border = "white", lwd = 1.2
+        )
         p <- pval_mat[r, cc]
         if (n_vars == 0L) {
           next
@@ -222,32 +232,42 @@ render_svd_heatmap <- function(pval_mat, var_explained, n_pcs, n_vars, png_path,
       }
     }
 
-    axis(3, at = seq_len(n_pcs),
-         labels = paste0("PC-", seq_len(n_pcs), "\n(", var_explained, "%)"),
-         tick = FALSE, las = 1, cex.axis = 0.95, line = -0.5)
-    axis(2, at = nrow(pval_mat):1, labels = rownames(pval_mat),
-         tick = FALSE, las = 2, cex.axis = 1.0, line = -0.5)
+    axis(3,
+      at = seq_len(n_pcs),
+      labels = paste0("PC-", seq_len(n_pcs), "\n(", var_explained, "%)"),
+      tick = FALSE, las = 1, cex.axis = 0.95, line = -0.5
+    )
+    axis(2,
+      at = nrow(pval_mat):1, labels = rownames(pval_mat),
+      tick = FALSE, las = 2, cex.axis = 1.0, line = -0.5
+    )
 
     # Title raised clear of the PC-column headers.
     mtext("SVD association  (variables × principal components)",
-          side = 3, line = 3.6, font = 2, cex = 1.3, xpd = NA)
+      side = 3, line = 3.6, font = 2, cex = 1.3, xpd = NA
+    )
 
     if (n_vars == 0L) {
       text(mean(c(0.5, n_pcs + 0.5)), mean(c(0.5, nrow(pval_mat) + 0.5)),
-           "No grouping variables found in the sample sheet.", cex = 1.0, col = "#555555")
+        "No grouping variables found in the sample sheet.",
+        cex = 1.0, col = "#555555"
+      )
     }
 
-    legend(x = grconvertX(0.5, "ndc", "user"), y = grconvertY(0.02, "ndc", "user"),
-           xjust = 0.5, yjust = 0, horiz = TRUE, bty = "n", xpd = NA, cex = 0.9,
-           legend = c("p<1e-10", "p<1e-5", "p<0.01", "p<0.05", "p>=0.05"),
-           fill = PVAL_BIN_COLORS, border = "white")
+    legend(
+      x = grconvertX(0.5, "ndc", "user"), y = grconvertY(0.02, "ndc", "user"),
+      xjust = 0.5, yjust = 0, horiz = TRUE, bty = "n", xpd = NA, cex = 0.9,
+      legend = c("p<1e-10", "p<1e-5", "p<0.01", "p<0.05", "p>=0.05"),
+      fill = PVAL_BIN_COLORS, border = "white"
+    )
   }
 
   # Write PNG (mandatory) + vector PDF (best-effort) from the single draw routine.
   # A PNG failure is fatal for this step; a PDF failure only disables the download.
   tryCatch(
     render_png_and_pdf(
-      png_path, draw_fn = draw, width = W, height = H, res = 200, units = "in",
+      png_path,
+      draw_fn = draw, width = W, height = H, res = 200, units = "in",
       pdf_path = pdf_path,
       on_pdf_error = function(msg) emit_progress(96, paste0("PDF export skipped: ", msg))
     ),
@@ -278,11 +298,11 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
     emit_error("Insufficient arguments. Usage: Rscript batch_svd.R <beta_path> <sample_sheet_path> <job_dir> [<png_name>]")
   }
 
-  beta_path         <- normalizePath(args[1], mustWork = FALSE)
+  beta_path <- normalizePath(args[1], mustWork = FALSE)
   sample_sheet_path <- normalizePath(args[2], mustWork = FALSE)
-  job_dir           <- normalizePath(args[3], mustWork = FALSE)
-  png_name          <- if (length(args) >= 4L) args[4] else "svd_plot.png"
-  pdf_name          <- sub("\\.png$", ".pdf", png_name, ignore.case = TRUE)
+  job_dir <- normalizePath(args[3], mustWork = FALSE)
+  png_name <- if (length(args) >= 4L) args[4] else "svd_plot.png"
+  pdf_name <- sub("\\.png$", ".pdf", png_name, ignore.case = TRUE)
 
   dir.create(job_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -304,21 +324,21 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   )
   # Intersect alignment: keep only samples present in both, reordering together.
   aligned <- align_samples_to_matrix(beta, samples_raw, mode = "intersect", min_common = 2L)
-  beta    <- aligned$beta
+  beta <- aligned$beta
   samples <- aligned$samples
   n_samples <- ncol(beta)
   emit_progress(50, sprintf("Aligned %d samples between dataset and sample sheet", n_samples))
 
   emit_progress(70, "Computing Singular Value Decomposition (SVD) principal components")
-  pca_res       <- compute_principal_components(beta)
-  pcs           <- pca_res$pcs
+  pca_res <- compute_principal_components(beta)
+  pcs <- pca_res$pcs
   var_explained <- pca_res$var_explained
-  n_pcs         <- pca_res$n_pcs
+  n_pcs <- pca_res$n_pcs
 
   emit_progress(85, "Selecting grouping variables and testing associations")
   var_factors <- select_grouping_variables(samples, n_samples)
-  n_vars      <- length(var_factors)
-  pval_mat    <- compute_pvalue_matrix(var_factors, pcs, n_pcs)
+  n_vars <- length(var_factors)
+  pval_mat <- compute_pvalue_matrix(var_factors, pcs, n_pcs)
 
   emit_progress(95, "Rendering SVD heatmap (PNG + PDF)")
   png_path <- file.path(job_dir, png_name)

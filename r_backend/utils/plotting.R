@@ -35,7 +35,7 @@
 #' @return Invisibly \code{TRUE} on success; errors propagate.
 #' @keywords internal
 .render_to_device <- function(open_device, draw_fn) {
-  open_device()                                   # may error -> nothing to clean up
+  open_device() # may error -> nothing to clean up
   dev <- grDevices::dev.cur()
   on.exit(
     if (grDevices::dev.cur() == dev && dev != 1L) grDevices::dev.off(),
@@ -68,11 +68,11 @@ render_png_and_pdf <- function(png_path, draw_fn, width, height, res = 200,
   units <- match.arg(units)
   stopifnot(
     is.function(draw_fn),
-    length(width)  == 1L, is.finite(width),  width  > 0,
+    length(width) == 1L, is.finite(width),  width > 0,
     length(height) == 1L, is.finite(height), height > 0,
-    length(res)    == 1L, is.finite(res),    res    > 0
+    length(res) == 1L, is.finite(res),    res > 0
   )
-  if (is.null(pdf_path))     pdf_path     <- sub("\\.png$", ".pdf", png_path, ignore.case = TRUE)
+  if (is.null(pdf_path)) pdf_path <- sub("\\.png$", ".pdf", png_path, ignore.case = TRUE)
   if (is.null(on_pdf_error)) on_pdf_error <- function(msg) message("PDF export failed: ", msg)
 
   # Prefer the cairo PNG backend (consistent anti-aliasing, headless-safe); fall
@@ -82,8 +82,10 @@ render_png_and_pdf <- function(png_path, draw_fn, width, height, res = 200,
   # ── PNG (primary; mandatory) ────────────────────────────────────────────────
   .render_to_device(
     open_device = function() {
-      grDevices::png(png_path, width = width, height = height,
-                     units = units, res = res, type = png_type)
+      grDevices::png(png_path,
+        width = width, height = height,
+        units = units, res = res, type = png_type
+      )
     },
     draw_fn = draw_fn
   )
@@ -92,29 +94,32 @@ render_png_and_pdf <- function(png_path, draw_fn, width, height, res = 200,
   }
 
   # ── PDF (vector; best-effort) ───────────────────────────────────────────────
-  pdf_w <- if (units == "in") width  else width  / res
+  pdf_w <- if (units == "in") width else width / res
   pdf_h <- if (units == "in") height else height / res
-  pdf_ok <- tryCatch({
-    .render_to_device(
-      open_device = function() {
-        # cairo_pdf gives true vector output with proper fonts; fall back to the
-        # base pdf() device if cairo is missing or fails to open.
-        if (isTRUE(capabilities("cairo"))) {
-          tryCatch(
-            grDevices::cairo_pdf(pdf_path, width = pdf_w, height = pdf_h),
-            error = function(e) grDevices::pdf(pdf_path, width = pdf_w, height = pdf_h)
-          )
-        } else {
-          grDevices::pdf(pdf_path, width = pdf_w, height = pdf_h)
-        }
-      },
-      draw_fn = draw_fn
-    )
-    TRUE
-  }, error = function(e) {
-    on_pdf_error(conditionMessage(e))
-    FALSE
-  })
+  pdf_ok <- tryCatch(
+    {
+      .render_to_device(
+        open_device = function() {
+          # cairo_pdf gives true vector output with proper fonts; fall back to the
+          # base pdf() device if cairo is missing or fails to open.
+          if (isTRUE(capabilities("cairo"))) {
+            tryCatch(
+              grDevices::cairo_pdf(pdf_path, width = pdf_w, height = pdf_h),
+              error = function(e) grDevices::pdf(pdf_path, width = pdf_w, height = pdf_h)
+            )
+          } else {
+            grDevices::pdf(pdf_path, width = pdf_w, height = pdf_h)
+          }
+        },
+        draw_fn = draw_fn
+      )
+      TRUE
+    },
+    error = function(e) {
+      on_pdf_error(conditionMessage(e))
+      FALSE
+    }
+  )
 
   invisible(list(png_path = png_path, pdf_path = pdf_path, pdf_ok = pdf_ok))
 }

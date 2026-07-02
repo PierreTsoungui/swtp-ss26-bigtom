@@ -29,36 +29,55 @@ library(testthat)
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
 
 SCRIPT_PATH <- "/app/r_backend/normalize.R"
-METHODS     <- c("noob", "quantile", "swan", "funnorm")
+METHODS <- c("noob", "quantile", "swan", "funnorm")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Setup: source functions + catchable emit_error() double
 # ══════════════════════════════════════════════════════════════════════════════
 
-normalize_loaded <- tryCatch({
-  suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
-  assign("emit_error", function(message) {
-    stop(structure(class = c("normalize_fatal", "error", "condition"),
-                   list(message = as.character(message), call = NULL)))
-  }, envir = globalenv())
-  exists("assert_valid_beta") && exists("load_filtered_rgset")
-}, error = function(e) FALSE)
+normalize_loaded <- tryCatch(
+  {
+    suppressWarnings(suppressMessages(source(SCRIPT_PATH)))
+    assign("emit_error", function(message) {
+      stop(structure(
+        class = c("normalize_fatal", "error", "condition"),
+        list(message = as.character(message), call = NULL)
+      ))
+    }, envir = globalenv())
+    exists("assert_valid_beta") && exists("load_filtered_rgset")
+  },
+  error = function(e) FALSE
+)
 
 skip_if_not_loaded <- function() {
-  skip_if_not(isTRUE(normalize_loaded),
-              paste("normalize.R could not be sourced (run in the r_worker container):", SCRIPT_PATH))
+  skip_if_not(
+    isTRUE(normalize_loaded),
+    paste("normalize.R could not be sourced (run in the r_worker container):", SCRIPT_PATH)
+  )
 }
 
 #' Assert `expr` triggers a fatal emit_error() matching `regexp`.
 expect_fatal <- function(expr, regexp = NULL) {
-  cnd <- tryCatch({ force(expr); NULL }, normalize_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    normalize_fatal = function(c) c
+  )
   expect_false(is.null(cnd), info = "expected a fatal emit_error() but none was raised")
   if (!is.null(regexp) && !is.null(cnd)) expect_match(conditionMessage(cnd), regexp, ignore.case = TRUE)
   invisible(cnd)
 }
 expect_not_fatal <- function(expr) {
-  cnd <- tryCatch({ force(expr); NULL }, normalize_fatal = function(c) c)
+  cnd <- tryCatch(
+    {
+      force(expr)
+      NULL
+    },
+    normalize_fatal = function(c) c
+  )
   expect_null(cnd, info = paste("unexpected fatal error:", if (!is.null(cnd)) conditionMessage(cnd) else ""))
 }
 
@@ -105,20 +124,26 @@ test_that("assert_valid_beta rejects beta values outside [0, 1]", {
 
 test_that("load_filtered_rgset aborts when filtered_data.rds is absent", {
   skip_if_not_loaded()
-  d <- tempfile("job_empty_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_empty_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   expect_fatal(load_filtered_rgset(d), "not found")
 })
 
 test_that("load_filtered_rgset aborts on a corrupted RDS", {
   skip_if_not_loaded()
-  d <- tempfile("job_corrupt_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_corrupt_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   writeLines("not a valid rds", file.path(d, "filtered_data.rds"))
   expect_fatal(load_filtered_rgset(d), "corrupted")
 })
 
 test_that("load_filtered_rgset aborts on the wrong object type", {
   skip_if_not_loaded()
-  d <- tempfile("job_wrongtype_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_wrongtype_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   saveRDS(matrix(runif(20), nrow = 5), file.path(d, "filtered_data.rds"))
   expect_fatal(load_filtered_rgset(d), "unexpected format")
 })
@@ -131,9 +156,13 @@ test_that("load_filtered_rgset aborts on the wrong object type", {
 #' Discover the smallest filtered_data.rds (RGChannelSet) under /app/jobs.
 #' @return Path to the fixture, or NULL when none exist.
 discover_filtered_rds <- function() {
-  rds <- list.files("/app/jobs", pattern = "^filtered_data\\.rds$",
-                    recursive = TRUE, full.names = TRUE)
-  if (!length(rds)) return(NULL)
+  rds <- list.files("/app/jobs",
+    pattern = "^filtered_data\\.rds$",
+    recursive = TRUE, full.names = TRUE
+  )
+  if (!length(rds)) {
+    return(NULL)
+  }
   rds[which.min(file.info(rds)$size)]
 }
 
@@ -143,7 +172,9 @@ FIXTURE_RDS <- if (file.exists(SCRIPT_PATH)) discover_filtered_rds() else NULL
 # sample-preservation check); NULL if the fixture cannot be read.
 INPUT_RGSET <- if (!is.null(FIXTURE_RDS)) {
   suppressWarnings(suppressMessages(tryCatch(readRDS(FIXTURE_RDS), error = function(e) NULL)))
-} else NULL
+} else {
+  NULL
+}
 
 skip_if_no_fixture <- function() {
   skip_if_not(file.exists(SCRIPT_PATH), "normalize.R not found")
@@ -152,7 +183,8 @@ skip_if_no_fixture <- function() {
 
 #' Build a job directory holding a copy of the fixture as filtered_data.rds.
 new_job_with_fixture <- function() {
-  d <- tempfile("job_norm_"); dir.create(d)
+  d <- tempfile("job_norm_")
+  dir.create(d)
   file.copy(FIXTURE_RDS, file.path(d, "filtered_data.rds"))
   d
 }
@@ -165,8 +197,10 @@ run_normalize <- function(job_dir, method) {
     stdout = TRUE, stderr = TRUE
   ))
   status <- attr(out, "status") %||% 0L
-  list(status = as.integer(status), lines = out,
-       stdout = paste(out, collapse = "\n"), job_dir = job_dir)
+  list(
+    status = as.integer(status), lines = out,
+    stdout = paste(out, collapse = "\n"), job_dir = job_dir
+  )
 }
 
 # Memoise one successful run per method (each normalization is expensive).
@@ -184,7 +218,8 @@ run_method_once <- function(method) {
 
 test_that("load_filtered_rgset returns the RGChannelSet for a valid fixture", {
   skip_if_no_fixture()
-  d <- new_job_with_fixture(); on.exit(unlink(d, recursive = TRUE))
+  d <- new_job_with_fixture()
+  on.exit(unlink(d, recursive = TRUE))
   rg <- load_filtered_rgset(d)
   expect_true(methods::is(rg, "RGChannelSet"))
   expect_gt(ncol(rg), 0L)
@@ -193,8 +228,10 @@ test_that("load_filtered_rgset returns the RGChannelSet for a valid fixture", {
 test_that("load_filtered_rgset aborts on an empty (zero-sample) RGChannelSet", {
   skip_if_no_fixture()
   skip_if(is.null(INPUT_RGSET), "fixture RGChannelSet could not be read")
-  d <- tempfile("job_zerocol_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
-  saveRDS(INPUT_RGSET[, integer(0)], file.path(d, "filtered_data.rds"))  # 0 samples
+  d <- tempfile("job_zerocol_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  saveRDS(INPUT_RGSET[, integer(0)], file.path(d, "filtered_data.rds")) # 0 samples
   expect_fatal(load_filtered_rgset(d), "no samples or no probes")
 })
 
@@ -213,7 +250,8 @@ test_that("each normalization method produces a valid normalized_data.rds", {
     beta <- minfi::getBeta(normalized)
     expect_true(is.matrix(beta), info = paste("getBeta not a matrix for", m))
     expect_true(all(beta >= 0 & beta <= 1, na.rm = TRUE),
-                info = paste("beta out of [0,1] for", m))
+      info = paste("beta out of [0,1] for", m)
+    )
   }
 })
 
@@ -245,12 +283,13 @@ test_that("SWAN normalization is reproducible (fixed seed)", {
   res1 <- run_method_once("swan")
   expect_equal(res1$status, 0L, info = res1$stdout)
 
-  job2 <- new_job_with_fixture(); on.exit(unlink(job2, recursive = TRUE), add = TRUE)
+  job2 <- new_job_with_fixture()
+  on.exit(unlink(job2, recursive = TRUE), add = TRUE)
   res2 <- run_normalize(job2, "swan")
   expect_equal(res2$status, 0L, info = res2$stdout)
 
   b1 <- minfi::getBeta(readRDS(file.path(res1$job_dir, "normalized_data.rds")))
-  b2 <- minfi::getBeta(readRDS(file.path(job2,          "normalized_data.rds")))
+  b2 <- minfi::getBeta(readRDS(file.path(job2, "normalized_data.rds")))
   expect_identical(dim(b1), dim(b2))
   expect_equal(b1, b2, tolerance = 0)
 })
@@ -267,7 +306,8 @@ test_that("missing arguments exit non-zero with a usage error", {
 
 test_that("an invalid method is rejected before any heavy computation", {
   skip_if_no_fixture()
-  d <- new_job_with_fixture(); on.exit(unlink(d, recursive = TRUE))
+  d <- new_job_with_fixture()
+  on.exit(unlink(d, recursive = TRUE))
   res <- run_normalize(d, "invalid_method_xyz")
   expect_true(res$status != 0L)
   expect_match(res$stdout, "Invalid method")
@@ -276,7 +316,9 @@ test_that("an invalid method is rejected before any heavy computation", {
 
 test_that("a missing filtered_data.rds is reported clearly", {
   skip_if_not(file.exists(SCRIPT_PATH), "script not found")
-  d <- tempfile("job_nofile_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_nofile_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   res <- run_normalize(d, "noob")
   expect_true(res$status != 0L)
   expect_match(res$stdout, "not found")
@@ -285,7 +327,9 @@ test_that("a missing filtered_data.rds is reported clearly", {
 
 test_that("a corrupted filtered_data.rds is reported clearly", {
   skip_if_not(file.exists(SCRIPT_PATH), "script not found")
-  d <- tempfile("job_corrupt2_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_corrupt2_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   writeLines("garbage", file.path(d, "filtered_data.rds"))
   res <- run_normalize(d, "noob")
   expect_true(res$status != 0L)
@@ -295,7 +339,9 @@ test_that("a corrupted filtered_data.rds is reported clearly", {
 
 test_that("a wrong-type filtered_data.rds is reported clearly", {
   skip_if_not(file.exists(SCRIPT_PATH), "script not found")
-  d <- tempfile("job_wrong2_"); dir.create(d); on.exit(unlink(d, recursive = TRUE))
+  d <- tempfile("job_wrong2_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
   saveRDS(matrix(runif(20), nrow = 5), file.path(d, "filtered_data.rds"))
   res <- run_normalize(d, "noob")
   expect_true(res$status != 0L)
