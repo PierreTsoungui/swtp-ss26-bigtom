@@ -1,4 +1,4 @@
-import type {MethodPlotGroup, NormalizationMethod} from "../utils/types.ts";
+import type { MethodPlotGroup, NormalizationMethod } from "../utils/types.ts";
 
 /**
  * Props für die MethodCard-Komponente.
@@ -21,61 +21,85 @@ interface PlotCardProps {
  * @constructor
  */
 function MethodCard({ group, isSelected, onSelect, onImageClick }: PlotCardProps) {
-    const getPlotByKind = (kind: 'density' | 'pca') => group.plots.find((p) => p.plot_kind === kind);
-    const densityPlot = getPlotByKind('density');
-    const scatterPlot = getPlotByKind('pca');
+    const getPlotByKind = (kind: "density" | "pca") =>
+        group.plots.find((p) => p.plot_kind === kind);
+    const densityPlot = getPlotByKind("density");
+    const scatterPlot = getPlotByKind("pca");
 
     return (
-        <div className={`rounded-xl border-2 p-3 transition-all shadow-sm ${
-            isSelected ? 'border-primary bg-info-badgeBackground shadow-md' : 'border-neutral-borderDefault bg-neutral-card hover:border-neutral-borderEmphasis'
-        }`}>
+        <div
+            className={`rounded-xl border-2 p-3 shadow-sm transition-all ${
+                isSelected
+                    ? "border-primary bg-info-badgeBackground shadow-md"
+                    : "border-neutral-borderDefault bg-neutral-card hover:border-neutral-borderEmphasis"
+            }`}
+        >
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold uppercase tracking-wide">{group.method}</span>
+                <span className="text-sm font-semibold uppercase tracking-wide text-neutral-textPrimary">
+                    {group.method}
+                </span>
                 <input
                     type="radio"
                     name="normalization"
                     checked={isSelected}
                     onChange={() => onSelect(group.method)}
-                    className="h-4 w-4"
+                    aria-label={`Select ${group.method} normalization`}
+                    className="h-5 w-5 accent-primary"
                 />
             </div>
 
-            {/* Density Plot */}
             <div className="mb-3">
                 {densityPlot ? (
-                    <img
-                        src={densityPlot.url}
-                        alt={`${group.method} density`}
-                        className="w-full rounded-md border bg-neutral-card cursor-pointer hover:opacity-80 transition-opacity"
+                    <button
+                        type="button"
+                        className="block w-full rounded-md border border-neutral-borderEmphasis bg-neutral-card transition hover:border-primary hover:shadow-md focus-visible:border-primary"
                         onClick={() => onImageClick(densityPlot.url, `${group.method.toUpperCase()} - Dichteplot`)}
-                    />
+                        aria-label={`${group.method.toUpperCase()} Dichteplot Vorschau öffnen`}
+                    >
+                        <img
+                            src={densityPlot.url}
+                            alt={`${group.method} density`}
+                            className="w-full rounded-md"
+                        />
+                    </button>
                 ) : (
-                    <div className="w-full rounded-md border bg-neutral-surface h-32 flex items-center justify-center text-xs text-neutral-textDisabled">
+                    <div className="flex h-32 w-full items-center justify-center rounded-md border border-neutral-borderDefault bg-neutral-surface text-sm text-neutral-textSecondary">
                         kein Density-Plot
                     </div>
                 )}
-                <div className="text-[10px] text-neutral-textDisabled mt-1 text-center">Dichte • Klick für Vorschau</div>
+                <div className="mt-1 text-center text-sm text-neutral-textSecondary">
+                    Dichte - Klick für Vorschau
+                </div>
             </div>
 
-            {/* Scatter Plot */}
             <div>
                 {scatterPlot ? (
-                    <img
-                        src={scatterPlot.url}
-                        alt={`${group.method} scatter`}
-                        className="w-full rounded-md border bg-neutral-card cursor-pointer hover:opacity-80 transition-opacity"
+                    <button
+                        type="button"
+                        className="block w-full rounded-md border border-neutral-borderEmphasis bg-neutral-card transition hover:border-primary hover:shadow-md focus-visible:border-primary"
                         onClick={() => onImageClick(scatterPlot.url, `${group.method.toUpperCase()} - PCA Streudiagramm`)}
-                    />
+                        aria-label={`${group.method.toUpperCase()} PCA Streudiagramm Vorschau öffnen`}
+                    >
+                        <img
+                            src={scatterPlot.url}
+                            alt={`${group.method} scatter`}
+                            className="w-full rounded-md"
+                        />
+                    </button>
                 ) : (
-                    <div className="w-full rounded-md border bg-neutral-surface h-32 flex items-center justify-center text-xs text-neutral-textDisabled">
+                    <div className="flex h-32 w-full items-center justify-center rounded-md border border-neutral-borderDefault bg-neutral-surface text-sm text-neutral-textSecondary">
                         kein PCA-Plot
                     </div>
                 )}
-                <div className="text-[10px] text-neutral-textDisabled mt-1 text-center">PCA • Klick für Vorschau</div>
+                <div className="mt-1 text-center text-sm text-neutral-textSecondary">
+                    PCA - Klick für Vorschau
+                </div>
             </div>
 
-            {group.method === 'raw' && (
-                <div className="mt-3 text-xs text-neutral-textDisabled text-center">Raw-Daten (ungefiltert)</div>
+            {group.method === "raw" && (
+                <div className="mt-3 text-center text-sm text-neutral-textSecondary">
+                    Raw-Daten (ungefiltert)
+                </div>
             )}
         </div>
     );

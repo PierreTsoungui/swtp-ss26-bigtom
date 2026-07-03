@@ -106,8 +106,8 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
                         onClick={onNext}
                         disabled={nextDisabled}
                         className="inline-flex min-w-24 items-center justify-center rounded-full
-                                 bg-primary px-6 py-3 font-bold text-primary-text transition-colors
-                                 hover:bg-primary-hover disabled:bg-neutral-borderEmphasis"
+                                 border-2 border-primary bg-primary px-6 py-3 font-bold text-primary-text transition-colors
+                                 hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-neutral-textSecondary disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
                     >
                         Next
                     </button>

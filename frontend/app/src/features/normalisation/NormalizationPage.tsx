@@ -89,16 +89,16 @@ export function NormalizationPage() {
 
       <div className="mb-2 flex items-center gap-2">
         <h1 className="text-2xl font-semibold text-neutral-textPrimary">
-            Choose a normalization method
+            Normalisierungsmethode auswählen
         </h1>
         <HelpButton
           helpText={helpTexts.normalization}
-          ariaLabel="Open Help with normalization"
+          ariaLabel="Hilfe zur Normalisierung öffnen"
           dialogTitle="Normalization"
         />
       </div>
       <p className="mb-8 text-neutral-textSecondary">
-          Click a plot for an enlarged view.
+          Klicken Sie auf einen Plot, um eine vergrößerte Vorschau zu öffnen.
       </p>
 
       {/* METHOD CARDS (5 methods) */}
@@ -123,14 +123,15 @@ export function NormalizationPage() {
       {/* CONFIRM BUTTON */}
       <div className="flex justify-center">
         <button
+          type="button"
           onClick={handleConfirm}
           disabled={isDisabled}
           className={`
-            rounded-full px-10 py-3 font-bold text-primary-text
+            rounded-full border-2 px-10 py-3 font-bold
             transition-colors
             ${isDisabled
-              ? "cursor-not-allowed bg-neutral-borderEmphasis"
-              : "bg-primary hover:bg-primary-hover"
+              ? "cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary"
+              : "border-primary bg-primary text-primary-text hover:bg-primary-hover"
             }
           `}
         >

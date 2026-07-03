@@ -4,8 +4,24 @@ import ArrowRightIcon from '@mui/icons-material/ArrowRight';
 import type {DmpFilters, DmrFilters} from "../hooks/useTableFilters.ts";
 
 
+type FilterOption = {
+  value: string;
+  label: string;
+};
+
+type FilterDefinition = {
+  key: keyof DmpFilters | keyof DmrFilters;
+  label: string;
+  type: "select" | "number" | "text";
+  group?: string;
+  options?: FilterOption[];
+  step?: number;
+  min?: number;
+  max?: number;
+};
+
 // Filter-Definitionen pro Tabelle
-const FILTER_DEFINITIONS = {
+const FILTER_DEFINITIONS: Record<"dmp" | "dmr", FilterDefinition[]> = {
   dmp: [
     { key: "chr", label: "Chromosom", type: "select", options: getChromosomeOptions() },
     { key: "start", label: "Start Position", type: "number", group: "positional" },
@@ -75,9 +91,13 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
 
   const filterDefs = FILTER_DEFINITIONS[table];
 
-  const handleChange = (key: string, value: string) => {
+  const handleChange = (key: keyof DmpFilters | keyof DmrFilters, value: string) => {
     onChange(key as keyof T, value);
   };
+
+  const getFilterValue = (key: keyof DmpFilters | keyof DmrFilters): string =>
+    String(filters[key as keyof T] ?? "");
+
   return (
     <div className="mb-4">
       {/* Toggle Button */}
@@ -113,7 +133,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
                   <div key={filterDef.key}>
                     {filterDef.type === "select" ? (
                         <select
-                            value={(filters as any)[filterDef.key] || ""}
+                            value={getFilterValue(filterDef.key)}
                             onChange={(e) => handleChange(filterDef.key, e.target.value)}
                             className="w-full border border-neutral-borderEmphasis p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         >
@@ -128,11 +148,11 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
                         <input
                             type={filterDef.type}
                             placeholder={filterDef.label}
-                            value={(filters as any)[filterDef.key] || ""}
+                            value={getFilterValue(filterDef.key)}
                             onChange={(e) => handleChange(filterDef.key, e.target.value)}
-                            step={(filterDef as any).step}
-                            min={(filterDef as any).min}
-                            max={(filterDef as any).max}
+                            step={filterDef.step}
+                            min={filterDef.min}
+                            max={filterDef.max}
                             className="w-full border border-neutral-borderEmphasis p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                     )}
@@ -145,7 +165,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
               <button
                   onClick={onApply}
                   disabled={!hasFilters}
-                  className="px-4 py-2 bg-primary text-primary-text rounded-md text-sm font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-md border-2 border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-text transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-neutral-textSecondary disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
               >
                 Apply
               </button>

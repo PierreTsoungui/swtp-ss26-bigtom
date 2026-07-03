@@ -16,11 +16,11 @@ export function AppFooter() {
             href="https://www.thm.de/site/impressum.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-neutral-textSecondary hover:text-primary-hover"
+            className="font-medium text-neutral-textSecondary underline-offset-4 hover:text-primary-hover hover:underline"
           >
             Imprint
           </a>
-          <Link to="/datenschutz" className="font-medium text-neutral-textSecondary hover:text-primary-hover">
+          <Link to="/datenschutz" className="font-medium text-neutral-textSecondary underline-offset-4 hover:text-primary-hover hover:underline">
             Privacy Policy
           </Link>
           <span>© 2026 BigTom</span>

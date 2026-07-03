@@ -20,30 +20,36 @@ const IdatUpload: React.FC<IdatUploadProps> = ({ idatFiles, idatErrors, handleId
 
     return (
         <div className="flex flex-col gap-2">
-            <label className="cursor-pointer bg-secondary text-secondary-text hover:bg-secondary-hover
-                            rounded-full p-4 px-8 text-center">
+            <label
+                htmlFor="idat-file-input"
+                className="cursor-pointer rounded-full bg-secondary p-4 px-8 text-center font-semibold text-secondary-text hover:bg-secondary-hover focus-within:outline focus-within:outline-3 focus-within:outline-offset-3 focus-within:outline-primary"
+            >
                 IDAT-Dateien auswählen
                 <input
+                    id="idat-file-input"
                     type="file"
-                    className="hidden"
+                    className="sr-only"
                     multiple
                     accept=".idat"
                     onChange={handleIdatChange}
                 />
             </label>
-            <label className="cursor-pointer bg-secondary text-secondary-text hover:bg-secondary-hover
-                            rounded-full p-4 px-8 text-center">
+            <label
+                htmlFor="idat-folder-input"
+                className="cursor-pointer rounded-full bg-secondary p-4 px-8 text-center font-semibold text-secondary-text hover:bg-secondary-hover focus-within:outline focus-within:outline-3 focus-within:outline-offset-3 focus-within:outline-primary"
+            >
                 IDAT-Ordner auswählen
                 <input
+                    id="idat-folder-input"
                     type="file"
-                    className="hidden"
+                    className="sr-only"
                     multiple
                     accept=".idat"
                     webkitdirectory=""
                     onChange={handleIdatChange}
                 />
             </label>
-            <p className="text-sm"><b>Erlaubte Dateien:</b> *.idat</p>
+            <p className="text-sm text-neutral-textPrimary"><b>Erlaubte Dateien:</b> *.idat</p>
             <p className="text-sm text-neutral-textSecondary">
                 {idatFiles.length > 0 &&
                     `${idatFiles.length} Dateien (${pairCount} Paare)`}

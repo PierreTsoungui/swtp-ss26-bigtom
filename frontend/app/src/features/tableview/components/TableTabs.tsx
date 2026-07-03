@@ -10,6 +10,7 @@ export function TableTabs({ activeTab, onChange }: Props) {
     <div className="flex items-end justify-between gap-4 border-b border-neutral-borderDefault">
       <div className="flex gap-6" role="tablist">  
         <button
+          type="button"
           role="tab"  
           aria-selected={activeTab === "dmp"}  
           onClick={() => onChange("dmp")}
@@ -24,6 +25,7 @@ export function TableTabs({ activeTab, onChange }: Props) {
           DMP Analysis
         </button>
         <button
+          type="button"
           role="tab"  
           aria-selected={activeTab === "dmr"}  
           onClick={() => onChange("dmr")}
@@ -41,7 +43,7 @@ export function TableTabs({ activeTab, onChange }: Props) {
       <div className="pb-2">
         <HelpButton
           helpText={activeTab === "dmp" ? helpTexts.dmp : helpTexts.dmr}
-          ariaLabel={`Open help for ${activeTab.toUpperCase()} analysis`}
+          ariaLabel={`Hilfe zur ${activeTab.toUpperCase()}-Analyse öffnen`}
           dialogTitle={activeTab === "dmp" ? "DMP Analysis" : "DMR Analysis"}
         />
       </div>

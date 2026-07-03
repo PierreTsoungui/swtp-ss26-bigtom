@@ -1,197 +1,73 @@
-import {
-  render,
-  screen,
-  fireEvent,
-} from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { TablePagination } from "./TablePagination";
 
-import {
-  describe,
-  it,
-  expect,
-  vi,
-} from "vitest";
+describe("TablePagination", () => {
+  it("renders page information", () => {
+    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={() => {}} />);
 
-import { TablePagination }
-from "./TablePagination";
+    expect(screen.getByText("Seite 1 von 10")).toBeInTheDocument();
+  });
 
-describe(
-  "TablePagination",
-  () => {
+  it("calls next page", () => {
+    const onPageChange = vi.fn();
 
-    it(
-      "renders page information",
-      () => {
-        render(
-          <TablePagination
-            page={1}
-            totalPages={10}
-            pageSize={100}
-            onPageChange={
-              () => {}
-            }
-          />
-        );
+    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={onPageChange} />);
 
-        expect(
-          screen.getByText(
-            "Page 1 of 10"
-          )
-        ).toBeInTheDocument();
-      }
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Zur nächsten Seite" }));
 
-    it(
-      "calls next page",
-      () => {
-        const fn = vi.fn();
+    expect(onPageChange).toHaveBeenCalledWith(2);
+  });
 
-        render(
-          <TablePagination
-            page={1}
-            totalPages={10}
-            pageSize={100}
-            onPageChange={
-              fn
-            }
-          />
-        );
+  it("calls previous page", () => {
+    const onPageChange = vi.fn();
 
-        fireEvent.click(
-          screen.getByText(
-            "Next"
-          )
-        );
+    render(<TablePagination page={2} totalPages={10} pageSize={100} onPageChange={onPageChange} />);
 
-        expect(fn)
-          .toHaveBeenCalledWith(
-            2
-          );
-      }
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Zur vorherigen Seite" }));
 
-    it(
-      "calls previous page",
-      () => {
-        const fn = vi.fn();
+    expect(onPageChange).toHaveBeenCalledWith(1);
+  });
 
-        render(
-          <TablePagination
-            page={2}
-            totalPages={10}
-            pageSize={100}
-            onPageChange={
-              fn
-            }
-          />
-        );
+  it("disables first and previous buttons on first page", () => {
+    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={() => {}} />);
 
-        fireEvent.click(
-          screen.getByText(
-            "Previous"
-          )
-        );
+    expect(screen.getByRole("button", { name: "Zur ersten Seite" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Zur vorherigen Seite" })).toBeDisabled();
+  });
 
-        expect(fn)
-          .toHaveBeenCalledWith(
-            1
-          );
-      }
-    );
+  it("disables next and last buttons on last page", () => {
+    render(<TablePagination page={10} totalPages={10} pageSize={100} onPageChange={() => {}} />);
 
-    it(
-      "disables previous button on first page",
-      () => {
-        render(
-          <TablePagination
-            page={1}
-            totalPages={10}
-            pageSize={100}
-            onPageChange={
-              () => {}
-            }
-          />
-        );
+    expect(screen.getByRole("button", { name: "Zur nächsten Seite" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Zur letzten Seite" })).toBeDisabled();
+  });
 
-        expect(
-          screen.getByText(
-            "Previous"
-          )
-        ).toBeDisabled();
-      }
-    );
+  it("calls page number button", () => {
+    const onPageChange = vi.fn();
 
-    it(
-      "disables next button on last page",
-      () => {
-        render(
-          <TablePagination
-            page={10}
-            totalPages={10}
-            pageSize={100}
-            onPageChange={
-              () => {}
-            }
-          />
-        );
+    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={onPageChange} />);
 
-        expect(
-          screen.getByText(
-            "Next"
-          )
-        ).toBeDisabled();
-      }
-    );
-    it("calls page number button", () => {
-    const fn = vi.fn();
+    fireEvent.click(screen.getByRole("button", { name: "Seite 5" }));
 
-    render(
-        <TablePagination
-        page={1}
-        totalPages={10}
-        pageSize={100}
-        onPageChange={fn}
-        />
-    );
+    expect(onPageChange).toHaveBeenCalledWith(5);
+  });
 
-    fireEvent.click(
-        screen.getByText("5")
-    );
+  it("marks the current page semantically", () => {
+    render(<TablePagination page={5} totalPages={10} pageSize={100} onPageChange={() => {}} />);
 
-    expect(fn).toHaveBeenCalledWith(5);
-    });
+    expect(screen.getByRole("button", { name: "Seite 5", current: "page" })).toBeInTheDocument();
+  });
 
-    it("shows page size", () => {
-    render(
-        <TablePagination
-        page={1}
-        totalPages={10}
-        pageSize={100}
-        onPageChange={() => {}}
-        />
-    );
+  it("shows page size", () => {
+    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={() => {}} />);
 
-    expect(
-        screen.getByText(
-        "100 entries/page"
-        )
-    ).toBeInTheDocument();
-    });
+    expect(screen.getByText("100 Einträge pro Seite")).toBeInTheDocument();
+  });
 
-    it("renders correct page number", () => {
-    render(
-        <TablePagination
-        page={5}
-        totalPages={10}
-        pageSize={100}
-        onPageChange={() => {}}
-        />
-    );
+  it("renders correct page number", () => {
+    render(<TablePagination page={5} totalPages={10} pageSize={100} onPageChange={() => {}} />);
 
-    expect(
-        screen.getByText(
-        "Page 5 of 10"
-        )
-    ).toBeInTheDocument();
-    });
-  }
-);
+    expect(screen.getByText("Seite 5 von 10")).toBeInTheDocument();
+  });
+});

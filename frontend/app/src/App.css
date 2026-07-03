@@ -1,3 +1,14 @@
 @import "tailwindcss";
 
 @config "../tailwind.config.ts";
+
+@layer base {
+  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 3px solid theme(colors.primary.DEFAULT);
+    outline-offset: 3px;
+  }
+
+  :where(button, input, select, textarea) {
+    font: inherit;
+  }
+}

@@ -4,13 +4,28 @@ import HelpButton from "../components/HelpButton";
 
 describe("HelpButton", () => {
   it("opens the dialog and displays the configured help text", () => {
-    render(<HelpButton helpText="Configured workflow help." />);
+    render(
+      <HelpButton
+        helpText="Configured workflow help."
+        ariaLabel="Hilfe zum Upload öffnen"
+      />,
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe öffnen" }));
+    const helpButton = screen.getByRole("button", { name: "Hilfe zum Upload öffnen" });
+    expect(helpButton.tagName).toBe("BUTTON");
+    expect(helpButton).toHaveAttribute("aria-haspopup", "dialog");
+    expect(helpButton).toHaveAttribute("aria-expanded", "false");
+
+    helpButton.focus();
+    expect(helpButton).toHaveFocus();
+
+    fireEvent.click(helpButton);
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(helpButton).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Configured workflow help.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Schließen" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Hilfe schließen" })).toHaveFocus();
+    expect(helpButton).not.toHaveAccessibleName("?");
   });
 
   it("does not submit a surrounding form", () => {
@@ -31,9 +46,16 @@ describe("HelpButton", () => {
   });
 
   it("closes with Escape and restores focus to the trigger", () => {
-    render(<HelpButton helpText="Keyboard help." />);
+    render(
+      <HelpButton
+        helpText="Keyboard help."
+        ariaLabel="Hilfe zur Qualitätsfilterung öffnen"
+      />,
+    );
 
-    const helpButton = screen.getByRole("button", { name: "Hilfe öffnen" });
+    const helpButton = screen.getByRole("button", {
+      name: "Hilfe zur Qualitätsfilterung öffnen",
+    });
     fireEvent.click(helpButton);
     fireEvent.keyDown(document, { key: "Escape" });
 

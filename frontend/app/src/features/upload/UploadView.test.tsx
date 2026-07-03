@@ -30,9 +30,10 @@ describe("UploadView", () => {
     it("Button ist am Anfang deaktiviert", () => {
         renderUploadView();
 
-        const button = screen.getByRole("button", { name: /analyse starten/i });
+        const button = screen.getByRole("button", { name: /start analysis/i });
 
         expect(button).toBeDisabled();
+        expect(button).not.toHaveAttribute("aria-disabled");
     });
 
     it("ignoriert Nicht-IDAT-Dateien beim Ordnerimport", () => {
@@ -55,6 +56,30 @@ describe("UploadView", () => {
         expect(screen.getByText("run/sample_Red.idat")).toBeInTheDocument();
         expect(screen.queryByText("run/readme.txt")).not.toBeInTheDocument();
         expect(screen.queryByText("run/report.pdf")).not.toBeInTheDocument();
+    });
+
+    it("hält Datei-Eingaben tastaturfokussierbar und mit sichtbaren Labels verbunden", () => {
+        renderUploadView();
+
+        const idatInput = screen.getByLabelText(/IDAT-Dateien/i);
+        const folderInput = screen.getByLabelText(/IDAT-Ordner/i);
+        const sampleSheetInput = screen.getByLabelText(/Sample Sheet/i);
+
+        expect(idatInput).toHaveAttribute("type", "file");
+        expect(folderInput).toHaveAttribute("type", "file");
+        expect(sampleSheetInput).toHaveAttribute("type", "file");
+        expect(idatInput).toHaveAttribute("id", "idat-file-input");
+        expect(folderInput).toHaveAttribute("id", "idat-folder-input");
+        expect(sampleSheetInput).toHaveAttribute("id", "sample-sheet-input");
+
+        idatInput.focus();
+        expect(idatInput).toHaveFocus();
+
+        folderInput.focus();
+        expect(folderInput).toHaveFocus();
+
+        sampleSheetInput.focus();
+        expect(sampleSheetInput).toHaveFocus();
     });
 
     it("validiert fehlende IDAT-Paare weiterhin", () => {
@@ -111,7 +136,7 @@ describe("UploadView", () => {
             },
         });
 
-        expect(screen.getByRole("button", { name: /analyse starten/i })).toBeEnabled();
+        expect(screen.getByRole("button", { name: /start analysis/i })).toBeEnabled();
     });
 
     it("zeigt die Upload-Hilfe aus der Spezifikation", () => {

@@ -103,7 +103,7 @@ export function BatchForm({
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Batch Variable <span className="text-danger">*</span>
                 </label>
-                <p className="text-xs text-neutral-textSecondary">
+                <p className="text-sm text-neutral-textSecondary">
                     Technischer Faktor der korrigiert werden soll
                 </p>
 
@@ -130,7 +130,7 @@ export function BatchForm({
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Covariates (Optional)
                 </label>
-                <p className="text-xs text-neutral-textSecondary">
+                <p className="text-sm text-neutral-textSecondary">
                     Biologische Gruppen die NICHT verändert werden dürfen. Mehrfachauswahl möglich.
                 </p>
 
@@ -172,10 +172,10 @@ export function BatchForm({
                 <button
                     type="submit"
                     disabled={!batchVariable || isLoading}
-                    className={`flex-1 px-6 py-3 rounded-lg font-semibold transition ${
+                    className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors ${
                         batchVariable && !isLoading
-                            ? "bg-primary text-primary-text hover:bg-primary-hover"
-                            : "bg-neutral-borderEmphasis text-neutral-textSecondary cursor-not-allowed"
+                            ? "border-primary bg-primary text-primary-text hover:bg-primary-hover"
+                            : "cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary"
                     }`}
                 >
                     {/* 5. Text ändert sich nur, wenn HIER geklickt wurde */}
@@ -190,10 +190,10 @@ export function BatchForm({
                             onSkip();
                         }}
                         disabled={isLoading}
-                        className={`flex-1 px-6 py-3 rounded-lg font-semibold border-2 border-neutral-borderEmphasis transition-colors duration-200 ease-in-out ${
+                        className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors duration-200 ease-in-out ${
                             isLoading
-                                ? 'bg-neutral-card text-neutral-textDisabled cursor-not-allowed opacity-50'
-                                : 'text-neutral-textSecondary bg-neutral-card hover:bg-neutral-surface hover:border-neutral-textDisabled active:bg-neutral-borderDefault'
+                                ? 'cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary'
+                                : 'border-neutral-textSecondary bg-neutral-card text-neutral-textSecondary hover:bg-neutral-surface hover:text-neutral-textPrimary active:bg-neutral-borderDefault'
                         }`}
                     >
                         {/* 7. Text ändert sich nur, wenn HIER geklickt wurde */}

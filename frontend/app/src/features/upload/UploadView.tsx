@@ -106,7 +106,7 @@ function UploadView() : JSX.Element {
         <h1 className="text-4xl font-bold text-center">Upload</h1>
         <HelpButton
           helpText={helpTexts.upload}
-          ariaLabel="Open upload help"
+          ariaLabel="Hilfe zum Upload öffnen"
           dialogTitle="Upload Raw Data & Sample Information"
         />
       </div>
