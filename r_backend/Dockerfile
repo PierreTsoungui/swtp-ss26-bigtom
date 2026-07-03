@@ -55,6 +55,10 @@ RUN R -e "install.packages(c( \
 RUN R -e "remotes::install_github('YuanTian1991/ChAMPdata', upgrade='never')" \
     && R -e "remotes::install_github('YuanTian1991/ChAMP', upgrade='never')"
 
+# EPIC v2 Annotation nach dem ChAMP-GitHub-Override nochmals explizit sicherstellen.
+# Das Paket ist groß; ein höherer Timeout verhindert abgebrochene Mirror-Downloads.
+RUN R -e "options(timeout=1200); BiocManager::install('IlluminaHumanMethylationEPICv2anno.20a1.hg38', update=FALSE, ask=FALSE, force=TRUE); if (!requireNamespace('IlluminaHumanMethylationEPICv2anno.20a1.hg38', quietly=TRUE)) stop('EPICv2 annotation package installation failed')"
+
 WORKDIR /app
 
 # Automatischer Funktionstest JETZT ganz am Ende (prüft die gepatchte GitHub-Version!).
