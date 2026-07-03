@@ -109,7 +109,7 @@ export function NormalizationPage() {
             onClose={() => setError(null)}
         />
 
-      {/* Interaktiver PCA-Viewer (Farben, Labels, PNG-Export) */}
+      {/* Interactive PCA-Viewer */}
       {pcaMethod && pcaMethod.pca && (
         <PcaViewer
           method={pcaMethod.method}
@@ -128,7 +128,7 @@ export function NormalizationPage() {
           Click a plot for an enlarged view.
       </p>
 
-      {/* METHOD CARDS (RAW links, dann Normalisierungsmethoden) */}
+      {/* METHOD CARDS (RAW left, then other methods) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-10">
         {orderedMethods.map((method) => (
             <MethodCard
@@ -141,7 +141,7 @@ export function NormalizationPage() {
         ))}
       </div>
 
-      {/* Ladebalken */}
+      {/* Loadingscreen */}
       {isNormalising && jobStatus && (
           <div className="mb-5">
             <Progressbar jobStatus={jobStatus} showNextButton={false} onNext={() => {}} />
@@ -151,14 +151,15 @@ export function NormalizationPage() {
       {/* CONFIRM BUTTON */}
       <div className="flex justify-center">
         <button
+          type="button"
           onClick={handleConfirm}
           disabled={isDisabled}
           className={`
-            rounded-full px-10 py-3 font-bold text-primary-text
+            rounded-full border-2 px-10 py-3 font-bold
             transition-colors
             ${isDisabled
-              ? "cursor-not-allowed bg-neutral-borderEmphasis"
-              : "bg-primary hover:bg-primary-hover"
+              ? "cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary"
+              : "border-primary bg-primary text-primary-text hover:bg-primary-hover"
             }
           `}
         >

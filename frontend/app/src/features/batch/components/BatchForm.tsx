@@ -27,7 +27,6 @@ interface BatchFormProps {
     onSkip?: (selection?: GroupSelection) => void;
 }
 
-
 /**
  * A configuration interface for identifying and correcting technical batch effects.
  *
@@ -136,7 +135,7 @@ export function BatchForm({
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Batch variable — technical factor to remove <span className="text-danger">*</span>
                 </label>
-                <p className="text-xs text-neutral-textSecondary">
+                <p className="text-sm text-neutral-textSecondary">
                     Its effect is removed from the data (e.g. chip / Sentrix_ID, plate). You decide
                     which column is technical — open the preview if unsure.
                 </p>
@@ -164,7 +163,7 @@ export function BatchForm({
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Covariates — biological signal to protect (optional)
                 </label>
-                <p className="text-xs text-neutral-textSecondary">
+                <p className="text-sm text-neutral-textSecondary">
                     Preserved, never removed — typically your comparison group (the column may have
                     any name). Multiple selections allowed.
                 </p>
@@ -266,10 +265,10 @@ export function BatchForm({
                 <button
                     type="submit"
                     disabled={!batchVariable || isLoading}
-                    className={`flex-1 px-6 py-3 rounded-lg font-semibold transition ${
+                    className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors ${
                         batchVariable && !isLoading
-                            ? "bg-primary text-primary-text hover:bg-primary-hover"
-                            : "bg-neutral-borderEmphasis text-neutral-textSecondary cursor-not-allowed"
+                            ? "border-primary bg-primary text-primary-text hover:bg-primary-hover"
+                            : "cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary"
                     }`}
                 >
                     {/* 5. Text ändert sich nur, wenn HIER geklickt wurde */}
@@ -288,10 +287,10 @@ export function BatchForm({
                             );
                         }}
                         disabled={isLoading || (columns.length > 0 && !analysisReady)}
-                        className={`flex-1 px-6 py-3 rounded-lg font-semibold border-2 border-neutral-borderEmphasis transition-colors duration-200 ease-in-out ${
+                        className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors duration-200 ease-in-out ${
                             isLoading || (columns.length > 0 && !analysisReady)
-                                ? 'bg-neutral-card text-neutral-textDisabled cursor-not-allowed opacity-50'
-                                : 'text-neutral-textSecondary bg-neutral-card hover:bg-neutral-surface hover:border-neutral-textDisabled active:bg-neutral-borderDefault'
+                                ? 'cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary'
+                                : 'border-neutral-textSecondary bg-neutral-card text-neutral-textSecondary hover:bg-neutral-surface hover:text-neutral-textPrimary active:bg-neutral-borderDefault'
                         }`}
                     >
                         {/* 7. Text change only when clicked here */}

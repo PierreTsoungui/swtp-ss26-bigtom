@@ -48,28 +48,32 @@ export function TablePagination({
   };
 
   return (
-    <div className="flex items-center justify-between mt-4">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
       <div className="text-sm text-neutral-textSecondary">
         {pageSize} records per page
       </div>
 
-      <div className="flex items-center gap-2">
+      <nav className="flex items-center gap-2" aria-label="Seitennavigation">
         {/* First page */}
         <button
+          type="button"
           onClick={() => onPageChange(1)}
           disabled={page === 1}
-          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
+          className="min-h-10 rounded-md border border-neutral-textSecondary px-3 py-1 text-sm transition-colors hover:bg-neutral-background disabled:cursor-not-allowed disabled:border-neutral-borderEmphasis disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
           title="First page"
+          aria-label="To first page"
         >
           «
         </button>
 
         {/* Previous page */}
         <button
+          type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
+          className="min-h-10 rounded-md border border-neutral-textSecondary px-3 py-1 text-sm transition-colors hover:bg-neutral-background disabled:cursor-not-allowed disabled:border-neutral-borderEmphasis disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
           title="Previous page"
+          aria-label="To previous page"
         >
           ‹
         </button>
@@ -78,12 +82,15 @@ export function TablePagination({
         {getPageNumbers().map((pageNumber) => (
           <button
             key={pageNumber}
+            type="button"
             onClick={() => onPageChange(pageNumber)}
+            aria-label={`Page ${pageNumber}`}
+            aria-current={pageNumber === page ? "page" : undefined}
             className={`
-              px-3 py-1 border rounded-md text-sm transition-colors
+              min-h-10 px-3 py-1 border rounded-md text-sm transition-colors
               ${pageNumber === page
                 ? "bg-primary text-primary-text border-primary"
-                : "border-neutral-borderEmphasis hover:bg-neutral-background"
+                : "border-neutral-textSecondary hover:bg-neutral-background"
               }
             `}
           >
@@ -93,24 +100,28 @@ export function TablePagination({
 
         {/* Next page */}
         <button
+          type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
+          className="min-h-10 rounded-md border border-neutral-textSecondary px-3 py-1 text-sm transition-colors hover:bg-neutral-background disabled:cursor-not-allowed disabled:border-neutral-borderEmphasis disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
           title="Next page"
+          aria-label="To next page"
         >
           ›
         </button>
 
         {/* Last page */}
         <button
+          type="button"
           onClick={() => onPageChange(totalPages)}
           disabled={page === totalPages}
-          className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
+          className="min-h-10 rounded-md border border-neutral-textSecondary px-3 py-1 text-sm transition-colors hover:bg-neutral-background disabled:cursor-not-allowed disabled:border-neutral-borderEmphasis disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
           title="Last page"
+          aria-label="To last page"
         >
           »
         </button>
-      </div>
+      </nav>
 
       <div className="text-sm text-neutral-textSecondary">
         Page {page} of {totalPages}

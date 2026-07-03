@@ -1,14 +1,21 @@
 import {
-    type BeadCountFilterType, DEFAULT_FILTER_SETTINGS,
+    type BeadCountFilterType,
+    DEFAULT_FILTER_SETTINGS,
     type DetPFilterType,
-    type FilterSettings, type MultiHitFilterType,
-    type NonCpgFilterType, type SampleQualityFilterType, type SnpFilterType, type XYChromosomesFilterType
+    type FilterSettings,
+    type MultiHitFilterType,
+    type NonCpgFilterType,
+    type SampleQualityFilterType,
+    type SnpFilterType,
+    type XYChromosomesFilterType,
 } from "../utils/types.ts";
 import {
     Accordion,
     AccordionDetails,
-    AccordionSummary, IconButton, Tooltip,
-    Typography
+    AccordionSummary,
+    IconButton,
+    Tooltip,
+    Typography,
 } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {DetPValueFilter} from "./FilterComponents/DetPValueFilter.tsx";
@@ -29,7 +36,7 @@ type FilterPanelProps = {
     filterSettings: FilterSettings;
     /** Callback fired when any individual filter setting is updated. */
     onFilterSettingsChange: (settings: FilterSettings) => void;
-}
+};
 
 /**
  * A centralized control panel for configuring preprocessing and quality control filters.
@@ -42,7 +49,6 @@ type FilterPanelProps = {
  * React's rendering cycle and the `useUploadFlow` state machine.
  */
 function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProps) {
-
     const handleDetPChange = (updated: DetPFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
@@ -58,62 +64,63 @@ function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProp
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                bead_count: updated
-            }
-        })
-    }
+                bead_count: updated,
+            },
+        });
+    };
 
     const handleNonCpgChange = (updated: NonCpgFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                non_cpg: updated
-            }
-        })
-    }
+                non_cpg: updated,
+            },
+        });
+    };
 
     const handleSnpChange = (updated: SnpFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                snp: updated
-            }
-        })
-    }
+                snp: updated,
+            },
+        });
+    };
+
     const handleMultiHitChange = (updated: MultiHitFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                multi_hit: updated
-            }
-        })
-    }
+                multi_hit: updated,
+            },
+        });
+    };
 
     const handleXYChromosomesChange = (updated: XYChromosomesFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                xy_chromosomes: updated
-            }
-        })
-    }
+                xy_chromosomes: updated,
+            },
+        });
+    };
 
     const handleSampleQualityChange = (updated: SampleQualityFilterType) => {
         onFilterSettingsChange({
             ...filterSettings,
             filter_settings: {
                 ...filterSettings.filter_settings,
-                sample_quality: updated
-            }
-        })
-    }
+                sample_quality: updated,
+            },
+        });
+    };
 
     return (
-        <div className="w-full mt-2">
+        <div className="max-w-4/6 mx-auto mt-2">
             <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-lg font-semibold">Quality Filtering</h2>
                 <HelpButton topic="filtering" ariaLabel="Hilfe zur Filterung öffnen" />

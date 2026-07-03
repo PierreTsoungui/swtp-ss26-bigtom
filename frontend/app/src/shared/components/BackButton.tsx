@@ -7,11 +7,14 @@ import type {JSX} from "react";
  * It utilizes the `useNavigate` hook from react-router-dom to access the browser's history stack.
  */
 function BackButton(): JSX.Element {
-    let navigate = useNavigate();
+    const navigate = useNavigate();
     return (
         <button
-            className="flex items-center gap-1 text-neutral-textSecondary hover:text-neutral-textPrimary transition-colors"
-            onClick={() => navigate(-1)}
+            type="button"
+            className="flex items-center gap-1 rounded-md text-neutral-textSecondary transition-colors hover:text-neutral-textPrimary"
+            onClick={() => {
+                void navigate(-1);
+            }}
         >
                 <ArrowBackIcon /> Back
         </button>

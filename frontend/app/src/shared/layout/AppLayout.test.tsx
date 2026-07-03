@@ -33,8 +33,11 @@ describe("AppLayout", () => {
     for (let step = 1; step <= 5; step += 1) {
       expect(within(stepIndicator).getByText(String(step))).toBeInTheDocument();
     }
+    expect(within(stepIndicator).getByText("✓")).toBeInTheDocument();
 
-    expect(within(stepIndicator).getByText("2")).toHaveAttribute("aria-current", "step");
+    const currentStep = within(stepIndicator).getByText("2").closest("li");
+    expect(currentStep).toHaveAttribute("aria-current", "step");
+    expect(within(stepIndicator).queryByText("Aktuell")).not.toBeInTheDocument();
     expect(within(stepIndicator).getByText("Upload")).toBeInTheDocument();
     expect(within(stepIndicator).getByText("Filter")).toBeInTheDocument();
     expect(within(stepIndicator).getByText("Normalization")).toBeInTheDocument();

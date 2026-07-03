@@ -356,7 +356,7 @@ export function LandingPage() {
         <div className="mx-auto max-w-7xl">
           <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
             <div>
-              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-primary">
+              <p className="mb-4 text-sm font-bold uppercase tracking-wide text-primary">
                 Full methylation analysis
               </p>
               <h1 className="max-w-4xl text-4xl font-bold tracking-tight text-neutral-textPrimary lg:text-6xl">
@@ -397,7 +397,7 @@ export function LandingPage() {
       <section id="workflow" aria-labelledby="workflow-title" className="px-6 py-16">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary">
               Analysis workflow
             </p>
             <h2 id="workflow-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
@@ -436,7 +436,7 @@ export function LandingPage() {
       >
         <div className="mx-auto max-w-7xl">
           <div className="max-w-4xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-tertiary-hover">
+            <p className="text-sm font-semibold uppercase tracking-wide text-tertiary-hover">
               Getting started
             </p>
             <h2 id="beginner-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
@@ -468,7 +468,7 @@ export function LandingPage() {
       <section id="help" aria-labelledby="help-title" className="px-6 py-16">
         <div className="mx-auto max-w-5xl">
           <div className="text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary">
               Help & FAQ
             </p>
             <h2 id="help-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
@@ -493,14 +493,14 @@ export function LandingPage() {
                   <h3 id={categoryId} className="mb-3 text-lg font-semibold text-neutral-textPrimary">
                     {category.title}
                   </h3>
-                  <div className="divide-y divide-slate-200">
+                  <div className="divide-y divide-neutral-borderDefault">
                     {category.questions.map((item) => (
                       <details key={item.question} className="group py-3">
-                        <summary className="cursor-pointer list-none rounded-md pr-2 font-medium text-neutral-textSecondary">
+                        <summary className="cursor-pointer list-none rounded-md pr-2 font-medium text-neutral-textPrimary">
                           {item.question}
                         </summary>
 
-                        <p className="mt-3 text-sm leading-6 text-slate-500">
+                        <p className="mt-3 text-sm leading-6 text-neutral-textSecondary">
                           {item.answer}
                         </p>
                       </details>
@@ -514,16 +514,16 @@ export function LandingPage() {
       </section>
 
       {/* SECTION: NEW BIOLOGICAL GLOSSARY */}
-      <section id="glossary" aria-labelledby="glossary-title" className="border-t border-slate-200 bg-white px-6 py-16">
+      <section id="glossary" aria-labelledby="glossary-title" className="border-t border-neutral-borderDefault bg-neutral-card px-6 py-16">
         <div className="mx-auto max-w-5xl">
           <div className="text-center">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
+            <p className="text-sm font-semibold uppercase tracking-wide text-success">
               Knowledge Base
             </p>
-            <h2 id="glossary-title" className="mt-2 text-3xl font-bold text-slate-950">
+            <h2 id="glossary-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
               Biological & Technical Glossary
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-600">
+            <p className="mx-auto mt-4 max-w-2xl leading-7 text-neutral-textSecondary">
               Quickly look up specific scientific terms, parameters, and algorithms used throughout the pipeline steps.
             </p>
           </div>
@@ -532,13 +532,13 @@ export function LandingPage() {
             {biologyDictionary.map((item) => (
               <div
                 key={item.term}
-                className="rounded-xl border border-slate-100 bg-slate-50 p-5 transition hover:shadow-md"
+                className="rounded-xl border border-neutral-borderDefault bg-neutral-background p-5 transition hover:border-neutral-borderEmphasis hover:shadow-md"
               >
                 <div className="flex items-center gap-2">
-                  <BookIcon className="text-emerald-600 h-5 w-5" fontSize="small" />
-                  <h4 className="font-bold text-slate-950">{item.term}</h4>
+                  <BookIcon className="h-5 w-5 text-success" fontSize="small" />
+                  <h4 className="font-bold text-neutral-textPrimary">{item.term}</h4>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{item.definition}</p>
+                <p className="mt-2 text-sm leading-6 text-neutral-textSecondary">{item.definition}</p>
               </div>
             ))}
           </div>

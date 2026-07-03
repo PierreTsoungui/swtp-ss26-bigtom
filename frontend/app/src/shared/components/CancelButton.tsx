@@ -23,7 +23,7 @@ function CancelButton({ onCancel, disabled = false, }: CancelButtonProps) : JSX.
             <button
                 onClick={onCancel}
                 disabled={disabled}
-                className="bg-danger hover:bg-danger-hover text-danger-text font-bold py-3 px-10 rounded-full transition-colors"
+                className="rounded-full border-2 border-danger bg-danger px-10 py-3 font-bold text-danger-text transition-colors hover:bg-danger-hover disabled:cursor-not-allowed disabled:border-neutral-textSecondary disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
             >
                 Cancel
             </button>

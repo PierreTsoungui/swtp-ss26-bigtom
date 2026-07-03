@@ -271,7 +271,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
               <button
                   onClick={onApply}
                   disabled={!hasFilters || hasErrors}
-                  className="px-4 py-2 bg-primary text-primary-text rounded-md text-sm font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-md border-2 border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-text transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-neutral-textSecondary disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
               >
                 Apply
               </button>
