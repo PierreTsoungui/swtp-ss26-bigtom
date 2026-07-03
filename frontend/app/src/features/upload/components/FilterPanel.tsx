@@ -19,8 +19,7 @@ import MultiHitFilter from "./FilterComponents/MultiHitFilter.tsx";
 import XYChromosomesFilter from "./FilterComponents/XYChromosomesFilter.tsx";
 import {SampleQuality} from "./FilterComponents/SampleQuality.tsx";
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import HelpButton from "../../analysis/components/HelpButton.tsx";
-import { helpTexts } from "../../../shared/utils/help/helpTexts.ts";
+import HelpButton from "../../../shared/help/HelpButton.tsx";
 
 /**
  * Props for the FilterPanel component.
@@ -117,11 +116,7 @@ function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProp
         <div className="w-full mt-2">
             <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-lg font-semibold">Quality Filtering</h2>
-                <HelpButton
-                    helpText={helpTexts.filtering}
-                    ariaLabel="Hilfe zur Filterung öffnen"
-                    dialogTitle="Quality Filtering"
-                />
+                <HelpButton topic="filtering" ariaLabel="Hilfe zur Filterung öffnen" />
             </div>
             <Accordion defaultExpanded>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="filter-settings-content" id="filter-settings-header">

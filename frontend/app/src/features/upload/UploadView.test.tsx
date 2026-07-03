@@ -27,7 +27,7 @@ describe("UploadView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open upload help" }));
 
     expect(
-      screen.getByText(/For every biological sample, two files are required/i),
+      screen.getByText(/The raw data must consist of Illumina IDAT files/i),
     ).toBeInTheDocument();
   });
 });

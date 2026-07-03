@@ -1,5 +1,4 @@
-import HelpButton from "../../analysis/components/HelpButton";
-import { helpTexts } from "../../../shared/utils/help/helpTexts";
+import HelpButton from "../../../shared/help/HelpButton";
 
 /**
  * Props for the TableTabs component.
@@ -53,9 +52,8 @@ export function TableTabs({ activeTab, onChange }: Props) {
       </div>
       <div className="pb-2">
         <HelpButton
-          helpText={activeTab === "dmp" ? helpTexts.dmp : helpTexts.dmr}
-          ariaLabel={`Open help for ${activeTab.toUpperCase()} analysis`}
-          dialogTitle={activeTab === "dmp" ? "DMP Analysis" : "DMR Analysis"}
+          topic={activeTab}
+          ariaLabel={activeTab === "dmp" ? "Hilfe zur DMP-Analyse öffnen" : "Hilfe zur DMR-Analyse öffnen"}
         />
       </div>
     </div>

@@ -1,77 +1,239 @@
-library(minfi)
+#!/usr/bin/env Rscript
+# r_backend/normalize.R
+#
+#' Normalization step of the methylation-analysis pipeline.
+#'
+#' Loads the sample-filtered \code{RGChannelSet} produced by \code{init_filter.R}
+#' and applies the user-selected normalization method, then validates and
+#' persists the result for the downstream steps (batch correction, DMP/DMR,
+#' heatmap).
+#'
+#' The script is array-agnostic: \pkg{minfi} detects the platform (450K,
+#' EPIC v1, EPIC v2) automatically from the data and uses the matching
+#' annotation, so no array-specific handling is required here.
+#'
+#' @section Usage:
+#' \code{Rscript normalize.R <job_dir> <method>}
+#'
+#' @section Arguments:
+#' \describe{
+#'   \item{job_dir}{Directory containing \code{filtered_data.rds}; the output is
+#'     written here as \code{normalized_data.rds}.}
+#'   \item{method}{One of \code{noob}, \code{quantile}, \code{swan},
+#'     \code{funnorm} (see \code{\link{NORMALIZATION_METHODS}}).}
+#' }
+#'
+#' @section Output:
+#' \code{normalized_data.rds} — the full normalized minfi object (a
+#' \code{MethylSet} for NOOB/SWAN, a \code{GenomicRatioSet} for
+#' QUANTILE/FUNNORM). The whole object is saved so downstream steps keep all
+#' annotations and metadata.
+#'
+#' @section Progress protocol:
+#' Progress/errors are emitted via \code{utils/progress.R} as single-line JSON
+#' (\code{{"type":"progress",...}}, \code{{"type":"error",...}},
+#' \code{{"type":"done",...}}).
 
-# ── Progress Vertrag einbinden ───────────────────────────────────────────────
+
+# ── Environment setup ─────────────────────────────────────────────────────────
+# Single-threaded, serial, reproducible execution (see utils/runtime.R). The
+# container ships a single-threaded preprocessCore because multi-threaded
+# normalization (QUANTILE/FUNNORM) can core-dump here.
+source("/app/r_backend/utils/runtime.R")
+configure_runtime()
+
+suppressPackageStartupMessages({
+  library(minfi)
+})
+
+# Shared progress emitters and beta helpers (extract_beta).
 source("/app/r_backend/utils/progress.R")
+source("/app/r_backend/utils/beta.R")
 
-# ── Argumente einlesen ──────────────────────────────────────────────────────
-args <- commandArgs(trailingOnly = TRUE)
 
-if (length(args) < 2) {
-  emit_error("Zu wenige Argumente. Erwartet: <job_dir> <method>")
-}
+# ── Normalization method registry ─────────────────────────────────────────────
 
-job_dir <- args[1]
-method  <- args[2]
-
-VALID_METHODS <- c("noob", "quantile", "swan", "funnorm")
-
-if (!method %in% VALID_METHODS) {
-  emit_error(sprintf(
-    "Ungültige Methode: %s. Erlaubt: %s",
-    method, paste(VALID_METHODS, collapse = ", ")
-  ))
-}
-
-# Gemäß Entwickler-Checkliste Punkt 2: Initialisierung melden
-emit_progress(0, "Starte Normalisierung")
-
-# ── filtered_data.rds laden ─────────────────────────────────────────────────
-rds_path = file.path(job_dir, "filtered_data.rds")
-
-if (!file.exists(rds_path)) {
-  emit_error(sprintf(
-    "filtered_data.rds nicht gefunden in: %s",
-    job_dir
-  ))
-}
-
-emit_progress(10, "Lade gefilterte Daten")
-raw_data <- readRDS(rds_path)
-
-# ── Normalisierung ──────────────────────────────────────────────────────────
-emit_progress(30, paste("Normalisiere mit Methode:", method))
-
-# Fixed seed for reproducibility: preprocessSWAN() randomly subsets probes and is
-# otherwise non-deterministic — without a seed, two runs of the same data produce
-# slightly different beta values, which then propagate into the DMP/DMR averages,
-# Δβ magnitudes and p-values. The other methods are deterministic; seeding is
-# harmless for them.
-set.seed(42)
-
-normalized <- switch(method,
-  "noob"     = preprocessNoob(raw_data),
-  "quantile" = preprocessQuantile(raw_data),
-  "swan"     = preprocessSWAN(raw_data),
-  "funnorm"  = preprocessFunnorm(raw_data)
+#' Registry of supported normalization methods.
+#'
+#' Maps a method id to a function \code{function(rgset) -> normalized object}.
+#' This is the single extension point: adding a method means adding one entry
+#' here; nothing else in the script changes.
+#'
+#' Biological notes:
+#' \itemize{
+#'   \item \code{noob} — Normal-exponential out-of-band background + dye-bias
+#'     correction (robust default).
+#'   \item \code{quantile} — Stratified quantile normalization.
+#'   \item \code{swan} — Subset-quantile within-array normalization; balances
+#'     Infinium Type I/II probe designs.
+#'   \item \code{funnorm} — Functional normalization using control probes; well
+#'     suited to datasets with large global differences (e.g. tumor vs. normal).
+#' }
+NORMALIZATION_METHODS <- list(
+  noob = function(rgset) preprocessNoob(rgset),
+  quantile = function(rgset) preprocessQuantile(rgset),
+  swan = function(rgset) {
+    # preprocessSWAN needs the per-probe design from a MethylSet; build it
+    # explicitly so the input is unambiguous.
+    preprocessSWAN(rgset, mSet = preprocessRaw(rgset))
+  },
+  funnorm = function(rgset) {
+    # nPCs must stay below the sample count; clamp for small cohorts.
+    n_pcs <- min(2L, max(1L, ncol(rgset) - 1L))
+    preprocessFunnorm(rgset, nPCs = n_pcs)
+  }
 )
 
-# ── Validierung (Sanity Check) ──────────────────────────────────────────────
-emit_progress(70, "Überprüfe Datenqualität")
-beta_check <- getBeta(normalized)
 
-if (any(beta_check < 0 | beta_check > 1, na.rm = TRUE)) {
-  emit_error("Beta-Werte ausserhalb des gueltigen Bereichs [0,1]")
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+#' Load and validate the filtered RGChannelSet.
+#'
+#' @param job_dir Directory expected to contain \code{filtered_data.rds}.
+#' @return The loaded \code{RGChannelSet}; emits a fatal error on any problem.
+load_filtered_rgset <- function(job_dir) {
+  rds_path <- file.path(job_dir, "filtered_data.rds")
+  if (!file.exists(rds_path)) {
+    emit_error(sprintf("filtered_data.rds not found in: %s", job_dir))
+  }
+
+  rgset <- tryCatch(
+    readRDS(rds_path),
+    error = function(e) {
+      emit_error("Could not read filtered_data.rds. The file may be corrupted.")
+    }
+  )
+
+  # All supported methods require the raw channel data; reject anything else
+  # with a clear message instead of failing cryptically inside minfi.
+  if (!methods::is(rgset, "RGChannelSet")) {
+    emit_error("filtered_data.rds has an unexpected format (expected an RGChannelSet). Please re-run the filtering step.")
+  }
+  if (ncol(rgset) < 1L || nrow(rgset) < 1L) {
+    emit_error("The filtered data contains no samples or no probes.")
+  }
+
+  rgset
 }
-rm(beta_check) # Speicher direkt wieder freigeben
 
-# ── Speichern ───────────────────────────────────────────────────────────────
-emit_progress(85, "Speichere normalisiertes Objekt")
+#' Apply a normalization method to an RGChannelSet.
+#'
+#' Looks the method up in \code{\link{NORMALIZATION_METHODS}} and runs it
+#' defensively so a failure produces a clear, structured error.
+#'
+#' @param rgset The raw \code{RGChannelSet}.
+#' @param method Method id (must be a key of \code{NORMALIZATION_METHODS}).
+#' @return The normalized minfi object.
+normalize_rgset <- function(rgset, method) {
+  normalize_fn <- NORMALIZATION_METHODS[[method]]
 
-# WICHTIG: Wir speichern das ganze minfi-Objekt, damit spätere Skripte 
-# alle Annotationen und Metadaten behalten!
-output_rds <- file.path(job_dir, "normalized_data.rds")
-saveRDS(normalized, output_rds)
+  # Fixed seed for reproducibility: preprocessSWAN() randomly subsets probes and
+  # is otherwise non-deterministic — without a seed, two runs of the same data
+  # produce slightly different beta values, which propagate into the DMP/DMR
+  # averages, Δβ magnitudes and p-values. The other methods are deterministic, so
+  # seeding is harmless for them.
+  set.seed(42)
 
-# Finale Erfolgsmeldung und anschließendes Done-Signal an das Backend senden
-emit_progress(100, "Normalisierung abgeschlossen")
-emit_done(method = method, output = output_rds)
+  tryCatch(
+    normalize_fn(rgset),
+    error = function(e) {
+      emit_error(sprintf("Normalization with method '%s' failed: %s", method, conditionMessage(e)))
+    }
+  )
+}
+
+#' Validate that a normalized object yields beta values in the expected range.
+#'
+#' @param normalized A normalized minfi object.
+#' @return Invisibly \code{TRUE}; emits a fatal error if beta values are invalid.
+assert_valid_beta <- function(normalized) {
+  beta <- tryCatch(
+    extract_beta(normalized),
+    error = function(e) emit_error(paste("Could not extract beta values:", conditionMessage(e)))
+  )
+
+  if (is.null(beta) || length(beta) == 0L) {
+    emit_error("Normalization produced an empty beta matrix.")
+  }
+  if (all(is.na(beta))) {
+    emit_error("Normalization produced only NA beta values.")
+  }
+  # Beta is methylation fraction and must lie within [0, 1].
+  if (any(beta < 0 | beta > 1, na.rm = TRUE)) {
+    emit_error("Beta values outside the valid range [0, 1] after normalization.")
+  }
+
+  invisible(TRUE)
+}
+
+
+# ── Main execution ────────────────────────────────────────────────────────────
+
+#' Run the normalization step for one job.
+#'
+#' Parses the CLI arguments, loads and validates the filtered data, applies the
+#' chosen method, validates the beta range, and persists the full normalized
+#' object. Fatal problems abort via \code{emit_error()}.
+#'
+#' Kept as a function so the file can be \code{source()}d for unit testing without
+#' executing the pipeline (see the run guard below).
+#'
+#' @param args Character vector \code{c(job_dir, method)} (defaults to the CLI).
+#' @return Invisibly \code{TRUE} on success.
+main <- function(args = commandArgs(trailingOnly = TRUE)) {
+  if (length(args) < 2L) {
+    emit_error("Too few arguments. Expected: <job_dir> <method>")
+  }
+  job_dir <- args[1]
+  method <- tolower(args[2])
+
+  if (!method %in% names(NORMALIZATION_METHODS)) {
+    emit_error(sprintf(
+      "Invalid method: %s. Allowed: %s",
+      method, paste(names(NORMALIZATION_METHODS), collapse = ", ")
+    ))
+  }
+
+  emit_progress(0, "Starting normalization")
+
+  # Load the filtered data.
+  emit_progress(10, "Loading filtered data")
+  rgset <- load_filtered_rgset(job_dir)
+
+  # Log the auto-detected array type for traceability (450K / EPIC / EPIC v2).
+  array_info <- tryCatch(paste(annotation(rgset), collapse = " / "), error = function(e) "unknown")
+  emit_progress(15, sprintf(
+    "Data loaded - Samples: %d, Probes: %d, Array: %s",
+    ncol(rgset), nrow(rgset), array_info
+  ))
+
+  # Normalize.
+  emit_progress(30, paste("Normalizing with method:", method))
+  normalized <- normalize_rgset(rgset, method)
+
+  # Validate.
+  emit_progress(70, "Validating data quality")
+  assert_valid_beta(normalized)
+
+  # Persist the full normalized object (keeps annotations + metadata downstream).
+  emit_progress(85, "Saving normalized object")
+  output_rds <- file.path(job_dir, "normalized_data.rds")
+  tryCatch(
+    saveRDS(normalized, output_rds),
+    error = function(e) emit_error(paste("Could not save normalized data:", conditionMessage(e)))
+  )
+  if (!file.exists(output_rds)) {
+    emit_error("Normalized data file was not created.")
+  }
+
+  emit_progress(100, "Normalization complete")
+  emit_done(method = method, output = output_rds)
+  invisible(TRUE)
+}
+
+# Run only when executed as a script (Rscript). When source()d/sys.source()d for
+# unit testing, sys.nframe() > 0, so the pipeline does not auto-run and the
+# functions above can be tested in isolation.
+if (sys.nframe() == 0L) {
+  main()
+}

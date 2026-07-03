@@ -9,7 +9,7 @@ import {
     Select,
     Typography,
 } from "@mui/material";
-import {ArrowDropDown, ZoomIn} from "@mui/icons-material";
+import {ArrowDropDown} from "@mui/icons-material";
 import {useEffect, useState} from "react";
 import {useParams} from "react-router-dom";
 
@@ -18,7 +18,8 @@ import {useHeatMapOptions} from "../../hooks/useHeatMapOptions.ts";
 import {useGenerateHeatMap} from "../../hooks/useGenerateHeatMap.ts";
 import Progressbar from "../../../../shared/components/Progressbar.tsx";
 import ErrorMessage from "../../../../shared/error-handling/components/ErrorMessage.tsx";
-import downloadHeatmap from "../../utils/downloadHeatmap.ts";
+import {PlotView, type PlotSource} from "../../../../shared/plots";
+import HelpButton from "../../../../shared/help/HelpButton.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../../../shared/utils/JobTypes.ts";
 import type {ProblemDetail} from "../../../../shared/error-handling/types/ErrorTypes.ts";
 
@@ -54,7 +55,6 @@ function HeatMap({filters, rowCount}: HeatMapProps) {
     );
 
     const [heatmapImageURL, setHeatmapImageURL] = useState<string | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [persistentError, setPersistentError] = useState<ProblemDetail | Error | string | null>(null);
     const [showError, setShowError] = useState(false);
 
@@ -85,6 +85,15 @@ function HeatMap({filters, rowCount}: HeatMapProps) {
     }, [error, persistentError, backendHeatmapError]);
 
     const displayedError = error ?? persistentError ?? backendHeatmapError ?? null;
+
+    const heatmapSource: PlotSource | null = heatmapImageURL
+        ? {
+              pngUrl: heatmapImageURL,
+              pdfUrl: `/api/v1/heatmap/${job_id}?format=pdf`,
+              title: "Heatmap",
+              downloadName: `heatmap_${job_id ?? "export"}`,
+          }
+        : null;
 
     const handleGenerate = async () => {
         if (!primaryGrouping || tooMany || noRows) {
@@ -138,11 +147,16 @@ function HeatMap({filters, rowCount}: HeatMapProps) {
 
             <AccordionDetails>
                 <div className="space-y-6">
-                    {/* Filter selection notice — the heatmap uses the table's current filters */}
-                    <p className="text-sm text-slate-500">
-                        The heatmap uses the filters currently applied to the DMP table
-                        {rowCount != null && <> — <strong>{rowCount}</strong> CpG{rowCount === 1 ? "" : "s"} selected</>}.
-                    </p>
+                    {/* Filter selection notice + contextual help for the heatmap.
+                        The help trigger lives here (not in the summary, which is
+                        itself a <button>) to keep the DOM valid — no nested buttons. */}
+                    <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm text-slate-500">
+                            The heatmap uses the filters currently applied to the DMP table
+                            {rowCount != null && <> — <strong>{rowCount}</strong> CpG{rowCount === 1 ? "" : "s"} selected</>}.
+                        </p>
+                        <HelpButton topic="heatmap" ariaLabel="Hilfe zur Heatmap öffnen" />
+                    </div>
 
                     {/* Row-limit / empty pre-checks */}
                     {tooMany && (
@@ -241,66 +255,7 @@ function HeatMap({filters, rowCount}: HeatMapProps) {
                     )}
 
                     {/* Result */}
-                    {heatmapImageURL && (
-                        <div className="space-y-4">
-                            <div
-                                className="border rounded-lg overflow-hidden bg-slate-50 cursor-pointer hover:opacity-90 transition-opacity relative group"
-                                onClick={() => setIsModalOpen(true)}
-                            >
-                                <img
-                                    src={heatmapImageURL}
-                                    alt="Heatmap preview"
-                                    className="w-full object-contain max-h-64"
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 transition-colors">
-                                    <span className="opacity-0 group-hover:opacity-100 bg-white rounded-full px-4 py-2 text-sm font-medium shadow-lg transition-opacity">
-                                        🔍 Enlarge
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 justify-end">
-                                <Button variant="outlined" startIcon={<ZoomIn/>} onClick={() => setIsModalOpen(true)}>
-                                    Enlarge
-                                </Button>
-                                <Button variant="outlined" onClick={() => downloadHeatmap(job_id ?? "", "png")}>
-                                    ⬇ Export PNG
-                                </Button>
-                                <Button variant="outlined" onClick={() => downloadHeatmap(job_id ?? "", "pdf")}>
-                                    ⬇ Export PDF
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Modal */}
-                    {isModalOpen && heatmapImageURL && (
-                        <div
-                            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-                            onClick={() => setIsModalOpen(false)}
-                        >
-                            <div
-                                className="relative bg-white rounded-xl shadow-2xl max-w-[90vw] max-h-[90vh] overflow-auto p-4"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <button
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="absolute top-2 right-2 z-10 h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center font-bold text-slate-600"
-                                >
-                                    ✕
-                                </button>
-                                <img src={heatmapImageURL} alt="Heatmap" className="max-w-full max-h-[80vh] object-contain"/>
-                                <div className="flex justify-end gap-3 mt-3">
-                                    <Button variant="outlined" onClick={() => downloadHeatmap(job_id ?? "", "png")}>
-                                        ⬇ Export PNG
-                                    </Button>
-                                    <Button variant="outlined" onClick={() => downloadHeatmap(job_id ?? "", "pdf")}>
-                                        ⬇ Export PDF
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {heatmapSource && <PlotView source={heatmapSource} maxHeightClass="max-h-64" />}
                 </div>
             </AccordionDetails>
         </Accordion>

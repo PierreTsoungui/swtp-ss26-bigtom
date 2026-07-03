@@ -5,13 +5,11 @@ import { METHOD_ORDER } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
 import Progressbar from "../../shared/components/Progressbar.tsx";
-import PlotModal from "./components/PlotModal.tsx";
 import PcaViewer from "./components/PcaViewer.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
 import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
-import HelpButton from "../analysis/components/HelpButton.tsx";
-import {helpTexts} from "../../shared/utils/help/helpTexts.ts";
+import HelpButton from "../../shared/help/HelpButton.tsx";
 import ErrorMessage from "../../shared/error-handling/components/ErrorMessage.tsx";
 
 
@@ -35,7 +33,6 @@ export function NormalizationPage() {
   const { data, isLoading, error, setError } = useNormalizationPreview(job_id ?? null);
   const [selected, setSelected] = useState<NormalizationMethod | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [pcaMethod, setPcaMethod] = useState<MethodPreview | null>(null);
   const [isNormalising, setIsNormalising] = useState(false);
 
@@ -99,16 +96,11 @@ export function NormalizationPage() {
   if (isLoading) { return <LoadingScreen message="Loading normalization previews..." /> }
   if (!data && !error) return null;
 
-  const handleDensityClick = (url: string, title: string) => {
-    setPreviewImage({ url, title });
-  };
-
   const isDisabled : boolean = !selected || isSubmitting || isNormalising;
 
   return (
 
     <main className="min-h-screen bg-neutral-background px-6 py-10">
-
         <ErrorMessage
             open={Boolean(error)}
             error={error}
@@ -116,16 +108,6 @@ export function NormalizationPage() {
             horizontal="center"
             onClose={() => setError(null)}
         />
-
-
-      {/* MODAL für vergrößerten Density-Plot */}
-      {previewImage && (
-        <PlotModal
-          imageURL={previewImage.url}
-          title={previewImage.title}
-          onClose={() => setPreviewImage(null)}
-        />
-      )}
 
       {/* Interaktiver PCA-Viewer (Farben, Labels, PNG-Export) */}
       {pcaMethod && pcaMethod.pca && (
@@ -140,11 +122,7 @@ export function NormalizationPage() {
         <h1 className="text-2xl font-semibold text-neutral-textPrimary">
             Choose a normalization method
         </h1>
-        <HelpButton
-          helpText={helpTexts.normalization}
-          ariaLabel="Open Help with normalization"
-          dialogTitle="Normalization"
-        />
+        <HelpButton topic="normalization" ariaLabel="Open Help with normalization" />
       </div>
       <p className="mb-8 text-neutral-textSecondary">
           Click a plot for an enlarged view.
@@ -158,7 +136,6 @@ export function NormalizationPage() {
                 method={method}
                 isSelected={selected === method.method}
                 onSelect={setSelected}
-                onDensityClick={handleDensityClick}
                 onPcaClick={setPcaMethod}
             />
         ))}
