@@ -2,9 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { BatchForm } from "../components/BatchForm";
 
-describe("BatchForm HelpButton", () => {
-  it("renders the batch help without submitting the form", () => {
-    const onSubmit = vi.fn();
+describe("BatchForm HelpButton Integration", () => {
+  it("renders the batch help drawer without accidentally submitting the underlying form layout", () => {
+    // Arrange
+    const onSubmitMock = vi.fn();
 
     render(
       <BatchForm
@@ -16,14 +17,19 @@ describe("BatchForm HelpButton", () => {
           ],
           available_columns: ["Sample_Plate", "Sample_Group"],
         }}
-        onSubmit={onSubmit}
+        onSubmit={onSubmitMock}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe zur Batch-Korrektur öffnen" }));
+    // Act - Click the help trigger button using the new English aria-label descriptor
+    const helpButton = screen.getByRole("button", { name: "Open batch correction help" });
+    fireEvent.click(helpButton);
 
+    // Assert - Verify English markdown contents load up successfully onto the screen canvas
     expect(screen.getByText(/What are batch effects/i)).toBeInTheDocument();
     expect(screen.getByText(/Interpreting the SVD Heatmap/i)).toBeInTheDocument();
-    expect(onSubmit).not.toHaveBeenCalled();
+    
+    // Ensure form execution remains untouched during help invocation
+    expect(onSubmitMock).not.toHaveBeenCalled();
   });
 });

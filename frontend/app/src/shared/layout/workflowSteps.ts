@@ -20,7 +20,6 @@ export function getWorkflowStepForPath(pathname: string): WorkflowStep | undefin
       if (prefix === "/") {
         return normalizedPath === "/";
       }
-
       return normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`);
     }),
   );

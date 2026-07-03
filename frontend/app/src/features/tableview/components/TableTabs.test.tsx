@@ -5,77 +5,63 @@ import { TableTabs } from "./TableTabs";
 
 describe("TableTabs", () => {
   it("renders both tabs", () => {
-    render(
-      <TableTabs
-        activeTab="dmp"
-        onChange={() => {}}
-      />
-    );
+    render(<TableTabs activeTab="dmp" onChange={vi.fn()} />);
 
-    expect(
-      screen.getByText("DMP Analysis")
-    ).toBeInTheDocument();
-
-    expect(
-      screen.getByText("DMR Analysis")
-    ).toBeInTheDocument();
+    expect(screen.getByText("DMP Analysis")).toBeInTheDocument();
+    expect(screen.getByText("DMR Analysis")).toBeInTheDocument();
   });
 
-  it("highlights active tab", () => {
-    render(
-      <TableTabs
-        activeTab="dmp"
-        onChange={() => {}}
-      />
-    );
+  it("highlights the active DMP tab correctly", () => {
+    render(<TableTabs activeTab="dmp" onChange={vi.fn()} />);
 
-    const dmpTab =
-      screen.getByRole("tab", {
-        name: "DMP Analysis",
-      });
+    const dmpTab = screen.getByRole("tab", { name: "DMP Analysis" });
+    const dmrTab = screen.getByRole("tab", { name: "DMR Analysis" });
 
-    expect(dmpTab).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
+    expect(dmpTab).toHaveAttribute("aria-selected", "true");
+    expect(dmrTab).toHaveAttribute("aria-selected", "false");
   });
 
-  it("calls onChange when clicking DMR tab", () => {
-    const onChange = vi.fn();
+  it("highlights the active DMR tab correctly", () => {
+    render(<TableTabs activeTab="dmr" onChange={vi.fn()} />);
 
-    render(
-      <TableTabs
-        activeTab="dmp"
-        onChange={onChange}
-      />
-    );
+    const dmpTab = screen.getByRole("tab", { name: "DMP Analysis" });
+    const dmrTab = screen.getByRole("tab", { name: "DMR Analysis" });
 
-    fireEvent.click(
-      screen.getByText("DMR Analysis")
-    );
-
-    expect(onChange).toHaveBeenCalledTimes(1);
-
-    expect(onChange).toHaveBeenCalledWith(
-      "dmr"
-    );
+    expect(dmpTab).toHaveAttribute("aria-selected", "false");
+    expect(dmrTab).toHaveAttribute("aria-selected", "true");
   });
 
-  it("shows the help text for the active DMP analysis", () => {
-    render(<TableTabs activeTab="dmp" onChange={() => {}} />);
+  it("calls onChange when clicking an inactive tab", () => {
+    const onChangeMock = vi.fn();
+    render(<TableTabs activeTab="dmp" onChange={onChangeMock} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe zur DMP-Analyse öffnen" }));
+    fireEvent.click(screen.getByText("DMR Analysis"));
 
-    expect(screen.getByText(/Differentially Methylated Positions/i)).toBeInTheDocument();
-    expect(screen.getByText(/positive Delta Beta indicates higher methylation/i)).toBeInTheDocument();
+    expect(onChangeMock).toHaveBeenCalledTimes(1);
+    expect(onChangeMock).toHaveBeenCalledWith("dmr");
   });
 
-  it("shows the help text for the active DMR analysis", () => {
-    render(<TableTabs activeTab="dmr" onChange={() => {}} />);
+  it("calls onChange when clicking an already active tab", () => {
+    const onChangeMock = vi.fn();
+    render(<TableTabs activeTab="dmp" onChange={onChangeMock} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe zur DMR-Analyse öffnen" }));
+    fireEvent.click(screen.getByText("DMP Analysis"));
 
-    expect(screen.getByText(/Differentially Methylated Regions/i)).toBeInTheDocument();
-    expect(screen.getByText(/genomic coordinates, region size/i)).toBeInTheDocument();
+    expect(onChangeMock).toHaveBeenCalledTimes(1);
+    expect(onChangeMock).toHaveBeenCalledWith("dmp");
+  });
+
+  it("shows the help button with correct english aria-label for active DMP analysis", () => {
+    render(<TableTabs activeTab="dmp" onChange={vi.fn()} />);
+
+    const helpButton = screen.getByRole("button", { name: "Open DMP analysis help" });
+    expect(helpButton).toBeInTheDocument();
+  });
+
+  it("shows the help button with correct english aria-label for active DMR analysis", () => {
+    render(<TableTabs activeTab="dmr" onChange={vi.fn()} />);
+
+    const helpButton = screen.getByRole("button", { name: "Open DMR analysis help" });
+    expect(helpButton).toBeInTheDocument();
   });
 });

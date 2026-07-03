@@ -389,7 +389,6 @@ export function LandingPage() {
           </ol>
         </div>
       </section>
-
       {/* SECTION: GETTING STARTED */}
       <section
         aria-labelledby="beginner-title"
@@ -410,7 +409,6 @@ export function LandingPage() {
             understand what happens during the analysis.
             </p>
           </div>
-
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {beginnerTopics.map((topic) => (
               <article key={topic.title} className="rounded-xl bg-neutral-surface p-5">
@@ -424,7 +422,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* SECTION: HELP & FAQ ACCORDION */}
       <section id="help" aria-labelledby="help-title" className="px-6 py-16">
         <div className="mx-auto max-w-5xl">
@@ -440,11 +437,9 @@ export function LandingPage() {
               application documentation evolves.
             </p>
           </div>
-
           <div className="mt-10 space-y-6">
             {faqCategories.map((category) => {
               const categoryId = `faq-${category.title.replaceAll(" ", "-").toLowerCase()}`;
-
               return (
                 <section
                   key={category.title}
@@ -460,7 +455,6 @@ export function LandingPage() {
                         <summary className="cursor-pointer list-none rounded-md pr-2 font-medium text-neutral-textSecondary">
                           {item.question}
                         </summary>
-
                         <p className="mt-3 text-sm leading-6 text-slate-500">
                           {item.answer}
                         </p>
@@ -473,7 +467,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* SECTION: NEW BIOLOGICAL GLOSSARY */}
       <section id="glossary" aria-labelledby="glossary-title" className="border-t border-slate-200 bg-white px-6 py-16">
         <div className="mx-auto max-w-5xl">
@@ -488,7 +481,6 @@ export function LandingPage() {
               Quickly look up specific scientific terms, parameters, and algorithms used throughout the pipeline steps.
             </p>
           </div>
-
           <div className="mt-10 grid gap-4 sm:grid-cols-2">
             {biologyDictionary.map((item) => (
               <div

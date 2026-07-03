@@ -1,29 +1,28 @@
-import {render, screen, waitFor, fireEvent, within} from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HeatMap from './HeatMap';
-import Progressbar from "../../../../shared/components/Progressbar.tsx";
-import {JobPhase, JobStatusValue} from "../../../../shared/utils/JobTypes.ts";
+import { JobPhase, JobStatusValue } from "../../../../shared/utils/JobTypes.ts";
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
 const mockHeatMapOptions = {
     job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
     available_columns: [
-        {name: "Sample_Group", type: "categorical", n_distinct: 2},
-        {name: "Gender", type: "categorical", n_distinct: 2},
-        {name: "Treatment", type: "categorical", n_distinct: 3},
+        { name: "Sample_Group", type: "categorical", n_distinct: 2 },
+        { name: "Gender", type: "categorical", n_distinct: 2 },
+        { name: "Treatment", type: "categorical", n_distinct: 3 },
     ],
 };
 
 const mockHeatMapResponse = {
     job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
-    phase: "downstream_analysis",
-    status: "success",
+    phase: JobPhase.HEATMAP,
+    status: JobStatusValue.COMPLETED,
     heatmap_metadata: {
         detected_cpgs: 14,
         plotted_samples: 48,
-        message: "Heatmap erfolgreich generiert.",
+        message: "Heatmap successfully generated.",
     },
 };
 
@@ -45,10 +44,10 @@ beforeEach(() => {
                 ok: true,
                 json: async () => ({
                     job_id: 'eb547f74-642d-41aa-91d2-7572c1e28516',
-                    status: 'analysis_done',
-                    phase: 'downstream_analysis',
+                    status: JobStatusValue.COMPLETED,
+                    phase: JobPhase.RESULTS,
                     progress_percent: 100,
-                    current_step: 1,
+                    current_step: "Done", // Changed from number to string to satisfy parser
                     steps_total: 6,
                     estimated_seconds_remaining: null
                 }),
@@ -79,67 +78,51 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
-const renderWithRouter = (jobId = "eb547f74-642d-41aa-91d2-7572c1e28516") =>
+const renderWithRouter = (rowCount?: number, filters = {}) =>
     render(
-        <MemoryRouter initialEntries={[`/test/${jobId}`]}>
+        <MemoryRouter initialEntries={["/test/eb547f74-642d-41aa-91d2-7572c1e28516"]}>
             <Routes>
-                <Route path="/test/:job_id" element={<HeatMap filters={{}} />} />
+                <Route path="/test/:job_id" element={<HeatMap filters={filters} rowCount={rowCount} />} />
             </Routes>
         </MemoryRouter>
     );
 
-describe('HeatMap', () => {
-    // Test 1: Grundlegendes Rendern & Snapshot
-    it("renders correctly", async () => {
-        const { container } = renderWithRouter();
+describe('HeatMap Component', () => {
+    it("renders correctly and matches snapshot", async () => {
+        const { container } = renderWithRouter(50);
         await waitFor(() => {
             expect(screen.getByText("Heatmap")).toBeInTheDocument();
         });
         expect(container).toMatchSnapshot();
     });
 
-    // Test 2: Laden der Optionen beim Mounten
-    it("loads grouping options", async () => {
-        renderWithRouter();
-
+    it("loads grouping options upon mount", async () => {
+        renderWithRouter(50);
         await waitFor(() => {
-            expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining("/options")
-            );
+            expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/options"));
         });
-
-        expect(screen.getByText("Heatmap")).toBeInTheDocument();
     });
 
+    it("validates dropdown selections and triggers heatmap generation", async () => {
+        renderWithRouter(50);
 
-    it("validates dropdowns and generates heatmap 2", async () => {
-        renderWithRouter();
-
-        // Warten bis Optionen geladen sind (Select ist nicht mehr disabled)
         await waitFor(() => {
-            expect(fetchMock).toHaveBeenCalledWith(
-                expect.stringContaining("/options")
-            );
+            expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/options"));
         });
 
-        // Accordion öffnen
-        fireEvent.click(screen.getByText("Heatmap"));
+        fireEvent.click(screen.getByRole("button", { name: /Heatmap/i }));
 
-        // Generate-Button ist disabled solange keine Hauptsortierung gewählt
         const generateButton = screen.getByRole("button", { name: /Generate Heatmap/i });
         expect(generateButton).toBeDisabled();
 
-        // Hauptsortierung öffnen und auswählen
-        fireEvent.mouseDown(screen.getAllByRole("combobox")[0]);
+        const comboboxes = screen.getAllByRole("combobox");
+        fireEvent.mouseDown(comboboxes[0]);
         await waitFor(() => {
             expect(screen.getByText("Sample_Group")).toBeInTheDocument();
         });
         fireEvent.click(screen.getByText("Sample_Group"));
 
-        // Button ist jetzt aktiv
         expect(generateButton).not.toBeDisabled();
-
-        // Heatmap generieren
         fireEvent.click(generateButton);
 
         await waitFor(() => {
@@ -149,36 +132,24 @@ describe('HeatMap', () => {
             );
         });
     });
-    
 
-    // Test 4: Anzeige von Ladezuständen während API-Aufrufen
-    it("displays loading states during API calls", async () => {
-        // Mock verzögern, um Ladezustand sichtbar zu machen
+    it("displays generic initial status when starting the heatmap", async () => {
         fetchMock.mockImplementationOnce(() =>
             new Promise(resolve => setTimeout(() => resolve({
                 ok: true,
                 json: async () => mockHeatMapOptions
-            } as Response), 100))
+            } as Response), 20))
         );
 
-        renderWithRouter();
+        renderWithRouter(50);
+        fireEvent.click(screen.getByRole("button", { name: /Heatmap/i }));
 
-        // Prüfen, ob Ladeindikator (Spinner / Text) existiert
-        expect(<Progressbar jobStatus={{
-                    job_id: "eb547f74-642d-41aa-91d2-7572c1e28516",
-                    status: JobStatusValue.RUNNING,
-                    phase: JobPhase.HEATMAP,
-                    progress_percent: 50,
-                    current_step: "Lade Heatmap...",
-        }} />).toBeTruthy();
-
-        // Warten bis Laden beendet ist
         await waitFor(() => {
-            expect(screen.queryByText(/Lade Optionen/i)).not.toBeInTheDocument();
+            expect(screen.queryByText(/Starting heatmap…/i)).not.toBeInTheDocument();
         });
     });
 
-    it("handles generation API errors gracefully", async () => {
+    it("handles backend generation errors gracefully", async () => {
         fetchMock.mockImplementation((url: string) => {
             if (url.includes('/options')) {
                 return Promise.resolve({ ok: true, json: async () => mockHeatMapOptions } as Response);
@@ -187,23 +158,31 @@ describe('HeatMap', () => {
                 return Promise.resolve({
                     ok: false,
                     status: 400,
-                    json: async () => ({ message: "API Fehler: Server-Validierung fehlgeschlagen" })
+                    json: async () => ({ message: "API Error: Server validation failed" })
                 } as Response);
             }
-            return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
+            // Feed fields expected by the validation parser to prevent log noise
+            return Promise.resolve({ 
+                ok: true, 
+                json: async () => ({ 
+                    job_id: 'eb547f74-642d-41aa-91d2-7572c1e28516', 
+                    status: JobStatusValue.FAILED, 
+                    phase: JobPhase.HEATMAP,
+                    progress_percent: 0,
+                    current_step: "Failed",
+                    steps_total: 1,
+                    estimated_seconds_remaining: null
+                }) 
+            } as Response);
         });
 
-        renderWithRouter();
-
-        // Accordion erst öffnen
+        renderWithRouter(50);
         fireEvent.click(screen.getByRole("button", { name: /Heatmap/i }));
 
-        // Warten bis Optionen geladen & Comboboxen sichtbar
         await waitFor(() => {
             expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0);
         });
 
-        // Dropdown ohne name-Filter
         fireEvent.mouseDown(screen.getAllByRole("combobox")[0]);
         const listbox = screen.getByRole("listbox");
         fireEvent.click(within(listbox).getByText("Sample_Group"));
@@ -211,8 +190,36 @@ describe('HeatMap', () => {
         fireEvent.click(screen.getByRole("button", { name: /Generate Heatmap/i }));
 
         await waitFor(() => {
-            expect(screen.getByText("API Fehler: Server-Validierung fehlgeschlagen")).toBeInTheDocument();
+            expect(screen.getByText("API Error: Server validation failed")).toBeInTheDocument();
         });
     });
 
+    it("blocks generation and displays warning when rowCount exceeds maximum threshold", async () => {
+        renderWithRouter(600);
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Heatmap/i }));
+        });
+
+        expect(screen.getByText(/exceeds the limit of 500/i)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Generate Heatmap/i })).toBeDisabled();
+    });
+
+    it("blocks generation and displays notice when rowCount is exactly zero", async () => {
+        renderWithRouter(0);
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Heatmap/i }));
+        });
+
+        expect(screen.getByText(/No CpGs match the current filter/i)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Generate Heatmap/i })).toBeDisabled();
+    });
+
+    it("verifies English help button accessibility descriptor", async () => {
+        renderWithRouter(50);
+        await act(async () => {
+            fireEvent.click(screen.getByRole("button", { name: /Heatmap/i }));
+        });
+
+        expect(screen.getByRole("button", { name: "Open heatmap help" })).toBeInTheDocument();
+    });
 });

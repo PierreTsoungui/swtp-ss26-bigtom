@@ -72,7 +72,6 @@ type FilterState = {
   dmp: DmpFilters;
   dmr: DmrFilters;
 }
-
 export function useTableFilters(onResetPage?: () => void) {
   const [draftFilters, setDraftFilters] =
     useState<FilterState>({

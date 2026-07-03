@@ -40,8 +40,9 @@ export function TableTabs({ activeTab, onChange }: Props) {
       <div className="pb-2">
         <HelpButton
           topic={activeTab}
-          ariaLabel={activeTab === "dmp" ? "Hilfe zur DMP-Analyse öffnen" : "Hilfe zur DMR-Analyse öffnen"}
+          ariaLabel={activeTab === "dmp" ? "Open DMP analysis help" : "Open DMR analysis help"}
         />
+
       </div>
     </div>
   );

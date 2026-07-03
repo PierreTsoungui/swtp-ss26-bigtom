@@ -176,7 +176,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
             onClick={onReset}
             className="text-sm text-neutral-textSecondary hover:text-neutral-textPrimary"
           >
-            Alle zurücksetzen
+            Reset all
           </button>
         )}
       </div>

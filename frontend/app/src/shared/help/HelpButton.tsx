@@ -14,7 +14,7 @@ interface HelpButtonProps {
 
     /**
      * Optional ARIA label for the trigger button.
-     * @default "Hilfe öffnen"
+     * @default "Open help"
      */
     ariaLabel?: string;
 }
@@ -23,7 +23,7 @@ interface HelpButtonProps {
  * A small "?" button that opens an accessible modal dialog with contextual,
  * Markdown-formatted help for the given {@link HelpButtonProps.topic}.
  */
-function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
+function HelpButton({ topic, ariaLabel = "Open help" }: HelpButtonProps) {
     const { title, body } = helpTopics[topic];
 
     const [open, setOpen] = useState(false);
@@ -130,7 +130,7 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                         <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-6 py-4">
                             <div>
                                 <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                                    Kontextuelle Hilfe
+                                    Contextual Help
                                 </p>
                                 <h2 id={titleId} className="mt-1 text-xl font-semibold">
                                     {title}
@@ -142,7 +142,7 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                                 type="button"
                                 onClick={closeDialog}
                                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-xl font-semibold leading-none text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
-                                aria-label="Hilfe schließen"
+                                aria-label="Close help"
                             >
                                 ×
                             </button>
@@ -158,7 +158,7 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                                 onClick={closeDialog}
                                 className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-zinc-50 shadow-sm transition-colors hover:bg-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
                             >
-                                Schließen
+                                Close
                             </button>
                         </div>
                     </div>

@@ -7,63 +7,63 @@ export function DatenschutzPage() {
               <BackButton />
           </div>
           <article className="mx-auto max-w-4xl px-6 py-10 text-neutral-textPrimary">
-              <h1 className="mb-8 text-3xl font-bold text-neutral-textPrimary">Datenschutzerklärung</h1>
+              <h1 className="mb-8 text-3xl font-bold text-neutral-textPrimary">Privacy Policy</h1>
 
               <section className="mb-6">
-                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Verantwortliche Stelle</h2>
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Controller</h2>
                   <p>
-                      Verantwortliche Stelle ist die Technische Hochschule Mittelhessen (THM).
-                      Zuständig ist der betreuende Fachbereich im Rahmen des BigTom-Projekts.
+                      The data controller is the Technische Hochschule Mittelhessen (THM).
+                      The department supervising the BigTom project is responsible.
                   </p>
               </section>
 
               <section className="mb-6">
                   <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">
-                      Welche Daten werden verarbeitet?
+                      Which data is processed?
                   </h2>
                   <p>
-                      Beim Upload werden IDAT-Dateien und ein Samplesheet entgegengenommen. Diese
-                      können Informationen zu biologischen Proben enthalten, die potenziell
-                      Rückschlüsse auf Personen erlauben. Dabei kann es sich um Patientendaten im
-                      Sinne von Art. 9 DSGVO handeln.
+                      During upload, IDAT files and a sample sheet are accepted. These
+                      may contain information on biological samples that could potentially
+                      allow conclusions to be drawn about individuals. This may include patient data
+                      within the meaning of Art. 9 GDPR.
                   </p>
               </section>
 
               <section className="mb-6">
                   <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">
-                      Wie lange werden die Daten gespeichert?
+                      How long is the data stored?
                   </h2>
                   <p>
-                      Alle hochgeladenen und verarbeiteten Daten werden ausschließlich temporär im
-                      Arbeitsspeicher bzw. in einem temporären Verzeichnis des Servers gehalten.
-                      Nach Beenden der Browser-Sitzung werden alle Daten automatisch und
-                      unwiderruflich gelöscht. Es erfolgt keine dauerhafte Speicherung.
+                      All uploaded and processed data is kept exclusively temporarily in
+                      the main memory or in a temporary directory on the server.
+                      After ending the browser session, all data is automatically and
+                      irrevocably deleted. There is no permanent storage.
                   </p>
               </section>
 
               <section className="mb-6">
                   <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">
-                      Werden Daten weitergegeben?
+                      Is data passed on to third parties?
                   </h2>
                   <p>
-                      Nein. Die Daten werden nicht an Dritte weitergegeben, nicht in einer
-                      Datenbank gespeichert und nicht protokolliert.
+                      No. The data is not passed on to third parties, is not stored in a
+                      database, and is not logged.
                   </p>
               </section>
 
               <section className="mb-6">
-                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Zugriff</h2>
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Access Restrictions</h2>
                   <p>
-                      Die Anwendung ist ausschließlich im internen Netz der THM erreichbar. Ein
-                      öffentlicher Zugriff ist nicht vorgesehen.
+                      The application is exclusively accessible within the internal network of the THM.
+                      Public access is not provided.
                   </p>
               </section>
 
               <section>
-                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Rechtsgrundlage</h2>
+                  <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Legal Basis</h2>
                   <p>
-                      Die Verarbeitung erfolgt auf Basis von Art. 6 Abs. 1 lit. e DSGVO sowie Art.
-                      9 Abs. 2 lit. j DSGVO.
+                      Processing is carried out on the basis of Art. 6 Para. 1 lit. e GDPR as well as Art.
+                      9 Para. 2 lit. j GDPR.
                   </p>
               </section>
           </article>

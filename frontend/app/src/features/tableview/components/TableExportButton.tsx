@@ -1,9 +1,7 @@
 type Props = {
   onDownload: () => void;
 };
-export function TableExportButton({
-  onDownload,
-}: Props) {
+export function TableExportButton({ onDownload, }: Props) {
   return (
     <button
       onClick={onDownload}

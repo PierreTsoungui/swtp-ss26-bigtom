@@ -1,64 +1,26 @@
-import {render,screen,fireEvent,} from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { TableExportButton } from "./TableExportButton";
 
-import {describe,expect,it,vi,} from "vitest";
+describe("TableExportButton", () => {
+  it("renders the export button with correct English text", () => {
+    // Arrange & Act
+    render(<TableExportButton onDownload={vi.fn()} />);
 
-import {TableExportButton,} from "./TableExportButton";
+    // Assert
+    expect(screen.getByRole("button", { name: /Download CSV/i })).toBeInTheDocument();
+  });
 
-describe(
-  "TableExportButton",
-  () => {
-    it(
-      "renders button",
-      () => {
-        render(
-          <TableExportButton
-            onDownload={() => {}}
-          />
-        );
+  it("triggers the onDownload callback exactly once when clicked", () => {
+    // Arrange
+    const onDownloadMock = vi.fn();
+    render(<TableExportButton onDownload={onDownloadMock} />);
 
-        expect(
-          screen.getByText(
-            "Download CSV"
-          )
-        ).toBeInTheDocument();
-      }
-    );
+    // Act
+    const button = screen.getByRole("button", { name: /Download CSV/i });
+    fireEvent.click(button);
 
-
-    it("downloads CSV on click", async () => {
-        const onDownload = vi.fn();
-
-        render(<TableExportButton onDownload={onDownload} />);
-
-        fireEvent.click(screen.getByText("Download CSV"));
-
-        expect(onDownload).toHaveBeenCalled();
-        });
-
-    it(
-      "calls onDownload",
-      () => {
-        const onDownload =
-          vi.fn();
-
-        render(
-          <TableExportButton
-            onDownload={
-              onDownload
-            }
-          />
-        );
-
-        fireEvent.click(
-          screen.getByText(
-            "Download CSV"
-          )
-        );
-
-        expect(
-          onDownload
-        ).toHaveBeenCalledTimes(1);
-      }
-    );
-  }
-);
+    // Assert
+    expect(onDownloadMock).toHaveBeenCalledTimes(1);
+  });
+});

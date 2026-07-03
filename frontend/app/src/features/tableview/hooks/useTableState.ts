@@ -20,10 +20,8 @@ export function useTableState() {
   useState<Record<"dmp" | "dmr",
     TableSortState
   >>({
-    dmp: { sort_by: null, sort_order: null },
-    dmr: { sort_by: null, sort_order: null },
+    dmp: { sort_by: null, sort_order: null }, dmr: { sort_by: null, sort_order: null },
   });
-
   const [pagination, setPagination] =
     useState<
       Record<"dmp" | "dmr",

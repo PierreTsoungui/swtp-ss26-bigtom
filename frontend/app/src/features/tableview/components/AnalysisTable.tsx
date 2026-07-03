@@ -43,7 +43,7 @@ export function AnalysisTable({ data, sorting, onSort,  onPageChange = () => {} 
   if (!data || !data.columns || !data.data) {
     return (
       <div className="text-center py-12 bg-neutral-background rounded-md border border-neutral-borderDefault">
-        <p className="text-neutral-textSecondary">Keine Daten vorhanden.</p>
+        <p className="text-neutral-textSecondary">No data available.</p>
       </div>
     );
   }

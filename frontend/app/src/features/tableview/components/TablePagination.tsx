@@ -11,7 +11,7 @@ export function TablePagination({
   pageSize,
   onPageChange,
 }: Props) {
-  // Zeige maximal 5 Seitenzahlen an
+  // Show a maximum of 5 visible page numbers
   const getPageNumbers = () => {
     const maxVisible = 5;
     const pages = [];
@@ -32,31 +32,31 @@ export function TablePagination({
   return (
     <div className="flex items-center justify-between mt-4">
       <div className="text-sm text-neutral-textSecondary">
-        {pageSize} Einträge pro Seite
+        {pageSize} entries per page
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Erste Seite */}
+        {/* First Page */}
         <button
           onClick={() => onPageChange(1)}
           disabled={page === 1}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Erste Seite"
+          title="First page"
         >
           «
         </button>
 
-        {/* Vorherige Seite */}
+        {/* Previous Page */}
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Vorherige Seite"
+          title="Previous page"
         >
           ‹
         </button>
 
-        {/* Seitenzahlen */}
+        {/* Page Numbers */}
         {getPageNumbers().map((pageNumber) => (
           <button
             key={pageNumber}
@@ -73,29 +73,29 @@ export function TablePagination({
           </button>
         ))}
 
-        {/* Nächste Seite */}
+        {/* Next Page */}
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Nächste Seite"
+          title="Next page"
         >
           ›
         </button>
 
-        {/* Letzte Seite */}
+        {/* Last Page */}
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={page === totalPages}
           className="px-3 py-1 border border-neutral-borderEmphasis rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-neutral-background transition-colors"
-          title="Letzte Seite"
+          title="Last page"
         >
           »
         </button>
       </div>
 
       <div className="text-sm text-neutral-textSecondary">
-        Seite {page} von {totalPages}
+        Page {page} of {totalPages}
       </div>
     </div>
   );

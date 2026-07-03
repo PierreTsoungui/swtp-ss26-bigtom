@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, { useEffect, useState } from "react";
 import type { BatchFormData, BatchParametersResponse, GroupSelection } from "../utils/types";
 import {
     FormControl,
@@ -14,31 +14,21 @@ import { colors } from "../../../shared/theme/colors";
 import SampleSheetPreviewModal from "./SampleSheetPreviewModal.tsx";
 
 /**
- * Props für die {@link BatchForm} Komponente.
+ * Props for the {@link BatchForm} component.
  */
 interface BatchFormProps {
-    /** Die vom Server oder der API bereitgestellten Parameter und verfügbaren Spalten. */
+    /** Parameter and columns configuration provided by the backend response payload. */
     parameters: BatchParametersResponse;
-    /** Callback-Funktion, die beim erfolgreichen Absenden des Formulars aufgerufen wird. */
+    /** Callback executed upon successful submission of batch configuration values. */
     onSubmit: (data: BatchFormData) => void;
-    /** Zeigt an, ob die Batch-Korrektur aktuell verarbeitet wird (deaktiviert Interaktionen). */
+    /** Blocks interactivity and triggers loading descriptors when true. */
     isLoading?: boolean;
-    /** Proceed to the DMP/DMR analysis with the chosen comparison (case/control). */
+    /** Triggers bypass transition forwarding chosen case/control variables. */
     onSkip?: (selection?: GroupSelection) => void;
-
-    // isSkipping?: boolean;
 }
 
 /**
- * Ein Formular zur Konfiguration und Durchführung einer Batch-Effekt-Korrektur.
- *
- * Erlaubt die Auswahl einer primären Batch-Variable (technischer Faktor) sowie optionaler
- * Covariates (biologische Gruppen), die während der Korrektur geschützt werden sollen.
- * Stellt sicher, dass die Batch-Variable nicht gleichzeitig als Covariate ausgewählt wird.
- *
- * @component
- * @param props - Die Props der Komponente gemäß {@link BatchFormProps}.
- * @returns Das gerenderte Batch-Korrektur-Formular als React-Element.
+ * Form component allowing the configuration and triggering of batch effect corrections.
  */
 export function BatchForm({
                               parameters,
@@ -49,25 +39,21 @@ export function BatchForm({
     const [batchVariable, setBatchVariable] = useState<string>("");
     const [covariates, setCovariates] = useState<string[]>([]);
     const [showPreview, setShowPreview] = useState<boolean>(false);
-
-    // 2. Lokaler State, um den aktiven Button zu tracken
     const [clickedButton, setClickedButton] = useState<"batch" | "skip" | null>(null);
 
     const columns = parameters.columns ?? [];
     const columnNames = parameters.available_columns ?? columns.map((c) => c.name);
 
-    // Label helper: "Sentrix_ID (4 groups)".
-    const levelsOf = (name: string) =>
-        columns.find((c) => c.name === name)?.levels;
-    const valuesOf = (name: string) =>
-        columns.find((c) => c.name === name)?.values ?? [];
+    // Label helpers
+    const levelsOf = (name: string) => columns.find((c) => c.name === name)?.levels;
+    const valuesOf = (name: string) => columns.find((c) => c.name === name)?.values ?? [];
 
-    // ── DMP/DMR comparison (case vs control) — chosen before "Proceed" ──────────
+    // DMP/DMR comparison state triggers
     const [analysisColumn, setAnalysisColumn] = useState<string>("");
     const [caseGroup, setCaseGroup] = useState<string>("");
     const [controlGroup, setControlGroup] = useState<string>("");
 
-    // Sensible default once the columns arrive: first column, its first two values.
+    // Initialize sensible analysis parameters as columns arrive
     useEffect(() => {
         if (!analysisColumn && columns.length > 0) {
             const first = columns[0];
@@ -88,7 +74,7 @@ export function BatchForm({
     const analysisReady =
         analysisColumn !== "" && caseGroup !== "" && controlGroup !== "" && caseGroup !== controlGroup;
 
-    // 3. Reset, sobald das Laden beendet ist
+    // Reset localized loading targets once processing clears
     useEffect(() => {
         if (!isLoading) {
             setClickedButton(null);
@@ -111,11 +97,11 @@ export function BatchForm({
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!batchVariable) {
-            alert("Bitte wählen Sie eine Batch Variable aus");
+            alert("Please select a batch variable.");
             return;
         }
 
-        setClickedButton("batch"); // 4. Setze Klick auf "batch"
+        setClickedButton("batch");
         onSubmit({ batch_variable: batchVariable, covariates });
     };
 
@@ -125,7 +111,8 @@ export function BatchForm({
         <form onSubmit={handleSubmit} className="space-y-8">
             <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-semibold">Batch Analysis &amp; Correction</h3>
-                <HelpButton topic="batchCorrection" ariaLabel="Hilfe zur Batch-Korrektur öffnen" />
+                {/* Updated English accessibility aria-label string context */}
+                <HelpButton topic="batchCorrection" ariaLabel="Open batch correction help" />
                 <button
                     type="button"
                     onClick={() => setShowPreview(true)}
@@ -135,7 +122,7 @@ export function BatchForm({
                 </button>
             </div>
 
-            {/* Batch variable — technical factor to REMOVE */}
+            {/* Batch variable select fields */}
             <div className="space-y-2">
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Batch variable — technical factor to remove <span className="text-danger">*</span>
@@ -163,7 +150,7 @@ export function BatchForm({
                 </FormControl>
             </div>
 
-            {/* Covariates — biological signal to PROTECT */}
+            {/* Covariates multi-select inputs */}
             <div className="space-y-2">
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Covariates — biological signal to protect (optional)
@@ -195,7 +182,6 @@ export function BatchForm({
                 />
             </div>
 
-            {/* Info Box */}
             <Alert
                 severity="info"
                 variant="outlined"
@@ -213,7 +199,7 @@ export function BatchForm({
                 decide.
             </Alert>
 
-            {/* Differential analysis (DMP/DMR): comparison column + case + control */}
+            {/* Differential group comparison section */}
             <div className="space-y-3 rounded-lg border border-neutral-borderDefault p-4">
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Differential analysis comparison (DMP/DMR)
@@ -265,7 +251,7 @@ export function BatchForm({
                 )}
             </div>
 
-            {/* Buttons */}
+            {/* Action buttons footer layout */}
             <div className="flex gap-4">
                 <button
                     type="submit"
@@ -276,7 +262,6 @@ export function BatchForm({
                             : "bg-neutral-borderEmphasis text-neutral-textSecondary cursor-not-allowed"
                     }`}
                 >
-                    {/* 5. Text ändert sich nur, wenn HIER geklickt wurde */}
                     {isLoading && clickedButton === "batch" ? "Batch ongoing..." : "Start Batch"}
                 </button>
 
@@ -298,7 +283,6 @@ export function BatchForm({
                                 : 'text-neutral-textSecondary bg-neutral-card hover:bg-neutral-surface hover:border-neutral-textDisabled active:bg-neutral-borderDefault'
                         }`}
                     >
-                        {/* 7. Text change only when clicked here */}
                         {isLoading && clickedButton === "skip" ? "Starting…" : "Proceed to analysis"}
                     </button>
                 )}

@@ -8,7 +8,7 @@ export function ResultsPage() {
         <h1 className="text-2xl font-semibold">Table View &amp; Data Export</h1>
         <HelpButton
           topic="tableExport"
-          ariaLabel="Hilfe zur Ergebnistabelle und zum CSV-Export öffnen"
+          ariaLabel="Open help for result table and CSV export"
         />
       </div>
       <TableContainer />

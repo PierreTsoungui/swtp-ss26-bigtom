@@ -1,31 +1,22 @@
-import {useEffect, useMemo, useState} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import type { MethodPreview, NormalizationMethod } from "./utils/types";
 import { METHOD_ORDER } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
-import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
+import { useJobPolling } from "../analysis/hooks/useJobPolling.ts";
 import Progressbar from "../../shared/components/Progressbar.tsx";
 import PcaViewer from "./components/PcaViewer.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
-import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
+import { JobPhase, type JobStatus, JobStatusValue } from "../../shared/utils/JobTypes.ts";
 import HelpButton from "../../shared/help/HelpButton.tsx";
 
-
 /**
- * Page zur Auswahl der Normalisierungsmethode.
- * Zeigt für jede Methode zwei Plots (Dichte und PCA) als Vorschau an.
- * Der Nutzer kann eine Methode auswählen und bestätigen, um die Normalisierung zu starten.
- * Während der Normalisierung wird ein Fortschrittsbalken angezeigt, bis die Batch-Seite geladen wird.
- *
- * @note Die Plots werden als URLs vom Backend geliefert und direkt eingebunden.
- *       Für eine bessere UX können die Plots angeklickt werden, um sie in einem Modal zu vergrößern.
- *
- * @returns JSX.Element
+ * Page for selecting the normalization method.
+ * Displays density and PCA previews for each available pipeline method.
  */
 export function NormalizationPage() {
   const { job_id } = useParams<{ job_id: string }>();
-  console.log("[NormalizationPage] job_id aus Params:", job_id);
   const navigate = useNavigate();
 
   const { data, isLoading, error } = useNormalizationPreview(job_id ?? null);
@@ -34,8 +25,7 @@ export function NormalizationPage() {
   const [pcaMethod, setPcaMethod] = useState<MethodPreview | null>(null);
   const [isNormalising, setIsNormalising] = useState(false);
 
-  // Feste Spaltenreihenfolge mit RAW ganz links (NRM-01); unbekannte Methoden
-  // werden hinten angehängt, damit nichts verloren geht.
+  // Enforce rigid ordering (RAW on the far left), appending unknown variants at the end
   const orderedMethods = useMemo(() => {
     const methods = data?.methods ?? [];
     return [...methods].sort(
@@ -45,16 +35,14 @@ export function NormalizationPage() {
     );
   }, [data]);
 
-  const jobStatus : JobStatus | null  = useJobPolling(isNormalising ? (job_id ?? null) : null);
+  const jobStatus: JobStatus | null = useJobPolling(isNormalising ? (job_id ?? null) : null);
 
   useEffect(() => {
-      console.log("[NormalizationPage] useEffect - jobStatus:", jobStatus?.status, "job_id:", job_id);
       if (!jobStatus) return;
       if (jobStatus.status === JobStatusValue.WAITING && jobStatus.phase === JobPhase.BATCH) {
-        console.log("Navigiere zu /batch/", job_id, "aktueller jobStatus:", jobStatus);
         navigate(`/batch/${job_id}`);
       }
-  }, [jobStatus?.status, job_id, navigate]);
+  }, [jobStatus?.status, job_id, navigate, jobStatus?.phase]);
 
   const handleConfirm = async () => {
     if (!selected || !job_id) return;
@@ -80,11 +68,11 @@ export function NormalizationPage() {
   if (error) { return <LoadingScreen message={error} /> }
   if (!data) return null;
 
-  const isDisabled : boolean = !selected || isSubmitting || isNormalising;
+  const isDisabled: boolean = !selected || isSubmitting || isNormalising;
 
   return (
     <main className="min-h-screen bg-neutral-background px-6 py-10">
-      {/* Interaktiver PCA-Viewer (Farben, Labels, PNG-Export) */}
+      {/* Interactive enlarged PCA Modal viewer */}
       {pcaMethod && pcaMethod.pca && (
         <PcaViewer
           method={pcaMethod.method}
@@ -103,7 +91,7 @@ export function NormalizationPage() {
           Click a plot for an enlarged view.
       </p>
 
-      {/* METHOD CARDS (RAW links, dann Normalisierungsmethoden) */}
+      {/* Grid containing calculated visualization cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-10">
         {orderedMethods.map((method) => (
             <MethodCard
@@ -116,14 +104,14 @@ export function NormalizationPage() {
         ))}
       </div>
 
-      {/* Ladebalken */}
+      {/* Progressbar active during live server processing execution */}
       {isNormalising && jobStatus && (
-          <div className="mb-5">
+          <div className="mb-5" data-testid="normalization-progressbar-container">
             <Progressbar jobStatus={jobStatus} showNextButton={false} onNext={() => {}} />
           </div>
       )}
 
-      {/* CONFIRM BUTTON */}
+      {/* Operational submit action triggers */}
       <div className="flex justify-center">
         <button
           onClick={handleConfirm}

@@ -1,11 +1,11 @@
-import type {ApiProblemDetail, ProblemDetail} from "../../../shared/error-handling/types/ErrorTypes.ts";
-import {useState} from "react";
+import type { ApiProblemDetail, ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes.ts";
+import { useState } from "react";
 
 /**
- * Custom Hook, der die Funktionalität zum Abbrechen eines Jobs bereitstellt.
- * @param jobId Die ID des Jobs, der abgebrochen werden soll.
- * @param onCancelSuccess Callback-Funktion, die nach erfolgreichem Abbrechen des Jobs aufgerufen wird.
- * @returns Ein Objekt mit der Funktion `cancelJob`, einem Ladezustand `isLoading` und einem Fehlerobjekt `error`.
+ * Custom Hook that provides functionality to cancel/reset a running job.
+ * @param jobId The ID of the job to be canceled.
+ * @param onCancelSuccess Callback function executed upon successful cancellation.
+ * @returns An object containing the `cancelJob` trigger function, an `isLoading` boolean state, and an `error` state.
  */
 export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
     const [isLoading, setIsLoading] = useState(false);
@@ -16,7 +16,7 @@ export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
         setError(null);
 
         try {
-            const response : Response = await fetch(`/api/v1/reset/${jobId}`, {
+            const response: Response = await fetch(`/api/v1/reset/${jobId}`, {
                 method: "POST",
             });
 
@@ -29,9 +29,9 @@ export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
         } catch {
             setError({
                 type: "http://localhost:3000/analysis/errors#connection-error",
-                title: "Verbindungsfehler",
+                title: "Connection Error",
                 status: 503,
-                detail: "Verbindung zum Server unterbrochen.",
+                detail: "The connection to the server was interrupted.",
                 instance: `/api/v1/reset/${jobId}`,
             });
         } finally {
