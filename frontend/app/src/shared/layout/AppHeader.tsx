@@ -6,6 +6,7 @@ interface AppHeaderProps {
   currentPhase: string;
   currentStepId?: number;
   isLandingPage?: boolean;
+  showStepIndicator?: boolean;
   isAnalysisActive: boolean;
   isResetting?: boolean;
   onReset: () => void;
@@ -15,6 +16,7 @@ export function AppHeader({
   currentPhase,
   currentStepId,
   isLandingPage = false,
+  showStepIndicator = true,
   isAnalysisActive,
   isResetting = false,
   onReset,
@@ -39,7 +41,7 @@ export function AppHeader({
               <p className="text-sm font-semibold uppercase tracking-wide text-neutral-textSecondary">
                 {currentPhase}
               </p>
-              <StepIndicator currentStepId={currentStepId} />
+              {showStepIndicator && <StepIndicator currentStepId={currentStepId} />}
             </div>
 
             <div className="flex justify-start lg:justify-end">
