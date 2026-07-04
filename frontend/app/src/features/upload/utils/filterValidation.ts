@@ -1,8 +1,7 @@
 /**
- * Validierungsregeln für alle Filter-Eingabefelder
- * Basierend auf den Min/Max-Angaben in types.ts
+ * Validation constraints for filter input fields.
+ * These boundaries are aligned with the technical requirements defined in `types.ts`.
  */
-
 export const FILTER_CONSTRAINTS = {
     det_p: {
         cutoff: {
@@ -50,7 +49,12 @@ export const FILTER_CONSTRAINTS = {
 };
 
 /**
- * Validiert einen numerischen Wert gegen Min/Max-Grenzen
+ * Validates a numerical value against defined minimum and maximum boundaries.
+ *
+ * @param value - The input value to validate.
+ * @param min - The lower boundary.
+ * @param max - The upper boundary.
+ * @returns An object indicating validity and an optional error message.
  */
 export function validateFilterValue(
     value: number,
@@ -73,7 +77,13 @@ export function validateFilterValue(
 }
 
 /**
- * Clamps einen Wert zwischen Min und Max
+ * Restricts a value to a defined range by returning the nearest boundary
+ * if the value is out of bounds.
+ *
+ * @param value - The value to be restricted.
+ * @param min - The minimum allowed value.
+ * @param max - The maximum allowed value.
+ * @returns The clamped numerical value.
  */
 export function clampValue(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));

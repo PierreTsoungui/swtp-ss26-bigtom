@@ -1,7 +1,28 @@
 import { useEffect, useState } from "react";
 import type {BatchParametersResponse} from "../utils/types.ts";
 
-export function useBatchParameters(jobId: string | null) {
+/**
+ * Result of the {@link useBatchParameters} hook.
+ */
+interface UseBatchParametersResult {
+    /** Available metadata columns and group values for batch correction. */
+    parameters: BatchParametersResponse | null;
+    /** Indicates if the parameter options are currently being fetched. */
+    isLoading: boolean;
+    /** Human-readable error message if the fetch fails. */
+    error: string | null;
+}
+
+/**
+ * Fetches available metadata parameters for a specific job.
+ *
+ * This data is used to populate dropdown selections for batch variables,
+ * covariates, and group comparisons (case/control).
+ *
+ * @param jobId - The unique identifier of the job. Fetching is skipped if null.
+ * @returns An object containing the parameters, loading state, and potential errors.
+ */
+export function useBatchParameters(jobId: string | null) : UseBatchParametersResult {
     const [parameters, setParameters] = useState<BatchParametersResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

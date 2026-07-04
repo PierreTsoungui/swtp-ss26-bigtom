@@ -1,12 +1,24 @@
 import { useEffect, useState } from "react";
 import type { FilteringStatsType } from "../utils/types.ts";
 
+/**
+ * Result of the {@link useFilterStats} hook.
+ */
 interface UseFilterStatsResult {
+    /** The calculated statistics for each filtering stage. */
     filterStats: FilteringStatsType | null;
+    /** Whether the statistics are currently being fetched. */
     isLoading: boolean;
+    /** Human-readable error message if the fetch failed. */
     error: string | null;
 }
 
+/**
+ * Fetches the filtering audit trail and statistics for a specific job.
+ *
+ * @param jobId - The ID of the analysis job. If null, fetching is disabled.
+ * @returns The current loading state and stats once processing is complete.
+ */
 export function useFilterStats(jobId: string | null): UseFilterStatsResult {
     const [filterStats, setFilterStats] = useState<FilteringStatsType | null>(null);
     const [isLoading, setIsLoading] = useState(false);

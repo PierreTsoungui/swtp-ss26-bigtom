@@ -2,25 +2,22 @@ import {Alert, Snackbar, type SnackbarOrigin} from "@mui/material";
 import type { ProblemDetail } from "../types/ErrorTypes";
 
 /**
- * Props, die an die ErrorMessage-Komponente übergeben werden
- * @property {boolean} open - Gibt an, ob die Fehlermeldung angezeigt werden soll.
- * @property {ProblemDetail} error - Das Fehlerobjekt, das die Details der Fehlermeldung enthält.
- * @property {SnackbarOrigin} SnackbarOrigin - Die Position, an der die Snackbar angezeigt werden soll (vertikal und horizontal).
+ * Props for the ErrorMessage component.
  */
 interface ErrorMessageProps extends SnackbarOrigin {
+  /** Indicates whether the error message should be displayed. */
   open: boolean;
+  /** The error object, string, or detail to be displayed. */
   error: ProblemDetail | Error | string | null;
+  /** Callback function fired when the component requests to be closed. */
   onClose: () => void;
 }
 
 /**
- * Komponente, die eine Fehlermeldung in Form einer Snackbar anzeigt.
- * Sie verwendet die Material-UI Snackbar-Komponente, um die Fehlermeldung anzuzeigen.
- * @property open - Gibt an, ob die Fehlermeldung angezeigt werden soll.
- * @property error - Das Fehlerobjekt, das die Details der Fehlermeldung enthält.
- * @property vertical - Die vertikale Position der Snackbar (top oder bottom).
- * @property horizontal - Die horizontale Position der Snackbar (left, center oder right).
- * @returns Die gerenderte ErrorMessage-Komponente
+ * A component that displays error messages using a Material-UI Snackbar and Alert.
+ *
+ * Automatically parses different error formats (ProblemDetail, Error object, or string)
+ * to ensure a consistent user experience.
  */
 function ErrorMessage({ open, vertical, horizontal, error, onClose }: ErrorMessageProps) {
     const message = (() => {

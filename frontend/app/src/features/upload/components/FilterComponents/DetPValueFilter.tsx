@@ -1,21 +1,33 @@
 import {Accordion, AccordionDetails, AccordionSummary, Switch, TextField, Typography, Stack} from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import type {DetPFilterType} from "../utils/types.ts";
-import {clampValue, FILTER_CONSTRAINTS, validateFilterValue} from "../utils/filterValidation.ts";
+import type {DetPFilterType} from "../../utils/types.ts";
+import {clampValue, FILTER_CONSTRAINTS, validateFilterValue} from "../../utils/filterValidation.ts";
 import React from "react";
 
+/**
+ * Props for the DetPValueFilter component.
+ */
 type DetPValueFilterProps = {
+    /** The current configuration for the Detection P-Value filtering logic. */
     value: DetPFilterType;
+    /** Callback fired when the filter state or its cutoff value changes. */
     onChange: (updated: DetPFilterType) => void;
 }
 
+/**
+ * A UI component to configure the Detection P-Value Filter.
+ * It allows users to enable/disable the filter and set a cutoff value for detection P-values.
+ *
+ * The component ensures data integrity by using the {@link clampValue} utility
+ * to keep the cutoff within the boundaries defined in {@link FILTER_CONSTRAINTS}.
+ */
 export function DetPValueFilter({ value, onChange }: DetPValueFilterProps) {
     const constraints = FILTER_CONSTRAINTS.det_p.cutoff;
     const validation = validateFilterValue(value.cutoff, constraints.min, constraints.max);
 
+    /** Updates the p-value cutoff and clamps the input to a valid numerical range. */
     const handleCutoffChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = Number(e.target.value);
-        // Wert clampen statt zu verbieten
         const clampedValue = clampValue(newValue, constraints.min, constraints.max);
         onChange({ ...value, cutoff: clampedValue });
     };

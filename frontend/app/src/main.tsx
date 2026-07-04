@@ -4,10 +4,10 @@ import App from './App.tsx'
 import { BrowserRouter } from 'react-router'
 
 /**
- * Das ist die Hauptdatei, die die React-App rendert.
- * Hier wird die App-Komponente in das HTML-Element mit der ID 'root' eingebunden.
- * Alle globalen Provider oder Kontext-Wrapper können hier hinzugefügt werden,
- * um sie in der gesamten App verfügbar zu machen.
+ * Application entry point.
+ *
+ * This file initializes the React root and wraps the application
+ * in global providers such as routing and strict mode.
  */
 createRoot(document.getElementById('root')!).render(
   <BrowserRouter>

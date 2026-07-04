@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, status
 from fastapi.responses import FileResponse
 
 from app.core.error_types import AppException, ErrorTypes
+from app.core.exceptions import JobSessionExpiredError
 from app.models.heatmap import (
     HeatmapRequest,
     HeatmapRunResponse,
@@ -30,8 +31,14 @@ def get_heatmap_options(job_id: str):
 async def run_heatmap(job_id: str, payload: HeatmapRequest):
     job_dir = heatmap_service.get_job_dir_or_404(job_id)
 
+    # The job directory can outlive its in-memory session (e.g. after a backend
+    # restart): the files are still on disk but the job manager no longer knows
+    # the job. Fail fast with a clean 410 here, before any filtering work runs,
+    # rather than letting transition_job blow up mid-way (see JobSessionExpiredError).
     current_job = job_manager.get_job(job_id)
-    if current_job and current_job.status == JobStatusValue.RUNNING.value:
+    if current_job is None:
+        raise JobSessionExpiredError(job_id)
+    if current_job.status == JobStatusValue.RUNNING.value:
         raise AppException(
             ErrorTypes.HEATMAP_NOT_ALLOWED,
             detail="Eine Pipeline läuft bereits für diesen Job.",

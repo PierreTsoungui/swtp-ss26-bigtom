@@ -5,27 +5,29 @@ import { defaultGroupColors } from "../utils/pcaColors";
 import { PlotView, type PlotSource } from "../../../shared/plots";
 
 /**
- * Props of the MethodCard component.
- * @property method      Preview of a method (density URL + PCA data).
- * @property isSelected  Whether this method is selected.
- * @property onSelect    Selection callback.
- * @property onPcaClick      Opens the interactive PCA viewer.
+ * Props for the MethodCard component.
  */
 interface MethodCardProps {
+  /** The preview data (Density URL and PCA dataset) for a specific normalization algorithm. */
   method: MethodPreview;
+  /** Indicates if this specific method is currently selected by the user. */
   isSelected: boolean;
+  /** Callback fired when the card or its select button is clicked. */
   onSelect: (method: NormalizationMethod) => void;
+  /** Callback to trigger the interactive PCA viewer overlay. */
   onPcaClick: (method: MethodPreview) => void;
 }
 
 /**
- * Card for one normalization method.
+ * A card component representing a single normalization method.
  *
- * UX: the whole card is clickable to select the method (so a click anywhere –
- * not just a tiny radio – selects it), and an explicit "Select" button at the
- * bottom makes the action unmistakable and keyboard-accessible. The two plots
- * stay independently interactive (enlarge / open the PCA viewer) by stopping
- * click propagation, so they never trigger an accidental selection.
+ * It provides a comparative overview through:
+ * 1. A static **Density Plot** (enlargeable on click).
+ * 2. A mini **PCA Plot** (opens the interactive viewer on click).
+ *
+ * To ensure a smooth UX, clicking the card body selects the method, while clicks
+ * on individual plots are intercepted (propagation stopped) to trigger their
+ * respective diagnostic tools.
  */
 function MethodCard({
   method,
@@ -58,20 +60,20 @@ function MethodCard({
   return (
     <div
       onClick={select}
-      className={`flex cursor-pointer flex-col rounded-xl border-2 p-3 shadow-sm transition-all ${
+      className={`rounded-xl border-2 p-3 shadow-sm transition-all ${
         isSelected
-          ? "border-primary bg-info-badgeBackground shadow-md ring-2 ring-primary/30"
-          : "border-neutral-borderDefault bg-neutral-card hover:border-primary/60 hover:shadow-md"
+          ? "border-primary bg-info-badgeBackground shadow-md"
+          : "border-neutral-borderDefault bg-neutral-card hover:border-neutral-borderEmphasis"
       }`}
     >
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-semibold uppercase tracking-wide">
+        <span className="text-sm font-semibold uppercase tracking-wide text-neutral-textPrimary">
           {method.method}
         </span>
         {isSelected && (
           <span
             aria-hidden
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-text"
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-text"
           >
             ✓
           </span>
@@ -92,11 +94,11 @@ function MethodCard({
             exportSize="small"
           />
         ) : (
-          <div className="flex h-32 w-full items-center justify-center rounded-md border bg-neutral-surface text-xs text-neutral-textDisabled">
+          <div className="flex h-32 w-full items-center justify-center rounded-md border border-neutral-borderDefault bg-neutral-surface text-sm text-neutral-textSecondary">
             no density plot
           </div>
         )}
-        <div className="mt-1 text-center text-[10px] text-neutral-textDisabled">
+        <div className="mt-1 text-center text-sm text-neutral-textSecondary">
           Density
         </div>
       </div>
@@ -110,7 +112,7 @@ function MethodCard({
               e.stopPropagation();
               onPcaClick(method);
             }}
-            className="block w-full overflow-hidden rounded-md border bg-white transition-opacity hover:opacity-80"
+            className="block w-full rounded-md border border-neutral-borderEmphasis bg-neutral-card transition hover:border-primary hover:shadow-md focus-visible:border-primary"
             aria-label={`Open ${method.method} PCA interactively`}
           >
             <PcaPlot
@@ -124,17 +126,17 @@ function MethodCard({
             />
           </button>
         ) : (
-          <div className="flex h-32 w-full items-center justify-center rounded-md border bg-neutral-surface px-2 text-center text-xs text-neutral-textDisabled">
+          <div className="flex h-32 w-full items-center justify-center rounded-md border border-neutral-borderDefault bg-neutral-surface text-sm text-neutral-textSecondary">
             {pca?.error ? `PCA: ${pca.error}` : "no PCA data"}
           </div>
         )}
-        <div className="mt-1 text-center text-[10px] text-neutral-textDisabled">
+        <div className="mt-1 text-center text-sm text-neutral-textSecondary">
           PCA • click to color & export
         </div>
       </div>
 
       {method.method === "raw" && (
-        <div className="mt-3 text-center text-xs text-neutral-textDisabled">
+        <div className="mt-3 text-center text-sm text-neutral-textSecondary">
           Raw data (no normalization)
         </div>
       )}

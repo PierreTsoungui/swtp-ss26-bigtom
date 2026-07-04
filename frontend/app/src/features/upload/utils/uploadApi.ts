@@ -2,8 +2,11 @@ import type { FilterSettings } from "./types";
 
 /** Mirrors the backend models in app/models/upload.py. */
 export interface FileEntryDto {
+  /** The file name (basename) of the entry. */
   name: string;
+  /** Relative path from the root of the upload (or ZIP) to this file. */
   rel_path: string;
+  /** Size of the file in bytes. */
   size_bytes: number;
 }
 

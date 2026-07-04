@@ -1,20 +1,24 @@
 /**
- * Heatmap API types. The heatmap reuses the exact same filters as the DMP table
- * (single filter source — see docs/architecture/heatmap-konzept.md), so the
- * request simply forwards the applied table filters as a flat string map.
+ * Heatmap API configuration.
+ *
+ * The heatmap logic synchronizes with the DMP (Differentially Methylated Positions)
+ * table filters to ensure data consistency across different views.
  */
 
 /**
- * Grouping parameters for the heatmap annotation bars.
+ * Grouping parameters for metadata annotation bars in the heatmap.
  */
 export type HeatMapGrouping = {
+    /** Primary metadata variable used for sample clustering/sorting. */
     primary: string;
+    /** Optional secondary variable for nested annotation. */
     secondary?: string;
 };
 
 /**
- * Request body for POST /heatmap/{job_id}.
- * `filters` mirrors the applied DMP table filters ({ filterKey: value }).
+ * Request body for generating a heatmap.
+ * @param filters - A key-value map of applied DMP table filters.
+ * @param grouping - Configuration for the horizontal annotation bars.
  */
 export type HeatMapRequest = {
     filters: Record<string, string>;
@@ -22,16 +26,19 @@ export type HeatMapRequest = {
 };
 
 /**
- * Metadata of a successfully started/generated heatmap.
+ * Technical summary of the generated heatmap.
  */
 export type HeatMapMetadata = {
+    /** Total number of CpG sites included in the plot. */
     detected_cpgs: number;
+    /** Number of biological samples successfully plotted. */
     plotted_samples: number;
+    /** Descriptive status message from the backend. */
     message: string;
 };
 
 /**
- * Successful response of POST /heatmap/{job_id}.
+ * Response returned after a successful heatmap generation request.
  */
 export type HeatMapResponse = {
     job_id: string;
@@ -41,28 +48,33 @@ export type HeatMapResponse = {
 };
 
 /**
- * A sample-sheet column offered as a heatmap annotation.
- * `type` is a hint: "categorical" | "continuous" | "identifier".
+ * Metadata column available for heatmap annotation.
  */
 export type AnnotationColumn = {
     name: string;
+    /** Data type hint: 'categorical', 'continuous', or 'identifier'. */
     type: string;
+    /** Number of unique values within the column. */
     n_distinct: number;
 };
 
 /**
- * Options for the grouping dropdowns. GET /heatmap/{job_id}/options
+ * Available metadata options for grouping and annotation.
  */
 export type HeatMapOptionsResponse = {
     job_id: string;
+    /** List of columns that can be used for the grouping dropdowns. */
     available_columns: AnnotationColumn[];
 };
 
 /**
- * Error response of POST /heatmap/{job_id}.
+ * Standardized error response for failed heatmap operations.
  */
 export type HeatMapErrorResponse = {
+    /** Short machine-readable error code. */
     error: string;
+    /** Human-readable error summary. */
     message: string;
+    /** Specific technical context or validation failure details. */
     detail?: string;
 };

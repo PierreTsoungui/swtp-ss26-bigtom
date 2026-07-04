@@ -2,19 +2,47 @@ import AnalyticsIcon from "@mui/icons-material/Analytics";
 import { Link } from "react-router";
 import { StepIndicator } from "./StepIndicator";
 
+/**
+ * Props for the AppHeader component.
+ */
 interface AppHeaderProps {
+  /** The name of the current analysis phase in header (e.g., "Filtering", "Normalization"). */
   currentPhase: string;
+  /** The ID of the active step, passed to the {@link StepIndicator}. */
   currentStepId?: number;
+  /**
+   * If true, hides progress indicators and shows a simplified layout.
+   * @default false
+   */
   isLandingPage?: boolean;
+  /**
+   * Whether to display the pipeline progress steps in the header.
+   * @default true
+   */
+  showStepIndicator?: boolean;
+  /** Whether an analysis is currently loaded or running, enabling the reset option. */
   isAnalysisActive: boolean;
+  /**
+   * Whether the reset operation is currently being processed.
+   * @default false
+   */
   isResetting?: boolean;
+  /** Callback triggered when the user confirms an application reset. */
   onReset: () => void;
 }
 
+/**
+ * The primary navigation and status header of the application.
+ *
+ * It displays the brand logo, tracks the user's progress through the
+ * analysis pipeline using a {@link StepIndicator}, and provides a
+ * global reset action.
+ */
 export function AppHeader({
   currentPhase,
   currentStepId,
   isLandingPage = false,
+  showStepIndicator = true,
   isAnalysisActive,
   isResetting = false,
   onReset,
@@ -28,7 +56,7 @@ export function AppHeader({
             : "grid gap-4 lg:grid-cols-[1fr_3fr_1fr] lg:items-center"
         }`}
       >
-        <Link to="/" className="inline-flex items-center gap-2 text-2xl font-bold text-neutral-textPrimary">
+        <Link to="/" className="inline-flex items-center gap-2 text-2xl font-bold text-neutral-textPrimary hover:text-primary-hover">
           <AnalyticsIcon fontSize="large" />
           <span>MethylAnalyzer</span>
         </Link>
@@ -39,7 +67,7 @@ export function AppHeader({
               <p className="text-sm font-semibold uppercase tracking-wide text-neutral-textSecondary">
                 {currentPhase}
               </p>
-              <StepIndicator currentStepId={currentStepId} />
+              {showStepIndicator && <StepIndicator currentStepId={currentStepId} />}
             </div>
 
             <div className="flex justify-start lg:justify-end">
@@ -47,9 +75,9 @@ export function AppHeader({
                 type="button"
                 onClick={onReset}
                 disabled={!isAnalysisActive || isResetting}
-                className="rounded-md border border-neutral-borderEmphasis px-4 py-2 text-sm font-semibold text-neutral-textSecondary transition-colors hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-neutral-borderEmphasis disabled:hover:text-neutral-textSecondary"
+                className="rounded-md border border-neutral-textSecondary bg-neutral-card px-4 py-2 text-sm font-semibold text-neutral-textSecondary transition-colors hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:border-neutral-borderEmphasis disabled:bg-neutral-surface disabled:text-neutral-textSecondary disabled:hover:border-neutral-borderEmphasis disabled:hover:text-neutral-textSecondary"
               >
-                {isResetting ? "Reset läuft..." : "Reset"}
+                {isResetting ? "Resetting..." : "Reset"}
               </button>
             </div>
           </>

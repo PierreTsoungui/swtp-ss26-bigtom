@@ -1,5 +1,11 @@
 import { Link } from "react-router";
 
+/**
+ * The global application footer.
+ *
+ * Displays the project branding, attribution to the Software Engineering Project
+ * at Technische Hochschule Mittelhessen, and links to legal information.
+ */
 export function AppFooter() {
   return (
     <footer className="border-t border-neutral-borderDefault bg-neutral-card px-6 py-6 text-sm text-neutral-textSecondary">
@@ -16,11 +22,11 @@ export function AppFooter() {
             href="https://www.thm.de/site/impressum.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-neutral-textSecondary hover:text-primary-hover"
+            className="font-medium text-neutral-textSecondary underline-offset-4 hover:text-primary-hover hover:underline"
           >
             Imprint
           </a>
-          <Link to="/datenschutz" className="font-medium text-neutral-textSecondary hover:text-primary-hover">
+          <Link to="/datenschutz" className="font-medium text-neutral-textSecondary underline-offset-4 hover:text-primary-hover hover:underline">
             Privacy Policy
           </Link>
           <span>© 2026 BigTom</span>

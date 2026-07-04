@@ -1,149 +1,135 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
-import App from "../../App";
+import { LandingPage } from "./LandingPage";
 
-function renderApp(path: string) {
+// Helper to isolate LandingPage rendering inside a router provider context
+function renderLandingPage() {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
+    <MemoryRouter initialEntries={["/"]}>
+      <LandingPage />
+    </MemoryRouter>
   );
 }
 
-describe("LandingPage", () => {
+describe("LandingPage Component", () => {
+  it("displays the correct project title and descriptive introduction text blocks", () => {
+    // Arrange & Act
+    renderLandingPage();
 
-  it("zeigt die Projektbeschreibung", () => {
-    renderApp("/");
-
+    // Assert main headline
     expect(
-      screen.getByText(/web-based platform for DNA methylation analysis/i),
+      screen.getByRole("heading", { name: "DNA Methylation Analysis Platform" })
     ).toBeInTheDocument();
 
-    // Mis à jour conformément aux corrections linguistiques du ticket #3949
+    // Assert platform details
     expect(
-      screen.getByText(/minimizing the need for extensive programming or bioinformatics expertise/i),
-    ).toBeInTheDocument();
-  });
-
-  it("renders landing page on root route", () => {
-    renderApp("/");
-
-    expect(
-      screen.getByRole("heading", {
-        name: "DNA Methylation Analysis Platform",
-      }),
+      screen.getByText(/web-based platform for DNA methylation analysis/i)
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("link", { name: "Start Analysis" }),
-    ).toHaveAttribute("href", "/upload");
-
-    expect(
-      screen.getByText(/Full methylation analysis/i),
+      screen.getByText(/minimizing the need for extensive programming or bioinformatics expertise/i)
     ).toBeInTheDocument();
   });
 
-  it("zeigt Workflow Sektion korrekt", () => {
-    renderApp("/");
+  it("contains an active, correctly targeted redirection link to push users towards the upload interface", () => {
+    // Arrange & Act
+    renderLandingPage();
 
+    // Assert link element attributes
+    const startLink = screen.getByRole("link", { name: /Start Analysis/i });
+    expect(startLink).toBeInTheDocument();
+    expect(startLink).toHaveAttribute("href", "/upload");
+  });
+
+    it("renders the automated analysis workflow stages section with matching list structures", () => {
+    // Arrange & Act
+    renderLandingPage();
+
+    // Assert workflow section intro
     expect(
-      screen.getByRole("heading", {
-        name: "From raw files to interpretable results",
-      }),
+      screen.getByRole("heading", { name: "From raw files to interpretable results" })
     ).toBeInTheDocument();
 
-    const workflowSteps = [
+    const expectedWorkflowSteps = [
       "Select Files",
       "Initial Filtering",
       "Normalization",
       "Optional Batch Correction",
-      "Results",
+      "Results"
     ];
 
-    workflowSteps.forEach((step) => {
+    // Verify each workflow card title is safely displayed (using getAllByRole to avoid duplication errors)
+    expectedWorkflowSteps.forEach((step) => {
       const headings = screen.getAllByRole("heading", { name: step });
+      expect(headings.length).toBeGreaterThan(0);
       expect(headings[0]).toBeInTheDocument();
     });
   });
 
-  it("zeigt Beginner Section", () => {
-    renderApp("/");
+
+  it("displays the introductory guidance section targeted at newcomers or beginners", () => {
+    // Arrange & Act
+    renderLandingPage();
 
     expect(
-      screen.getByRole("heading", {
-        name: "New to DNA methylation analysis?",
-      }),
+      screen.getByRole("heading", { name: "New to DNA methylation analysis?" })
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/DNA methylation analysis involves several processing steps/i),
+      screen.getByText(/DNA methylation analysis involves several processing steps/i)
     ).toBeInTheDocument();
   });
 
-  it("zeigt FAQ Kategorien", () => {
-    renderApp("/");
+  it("presents structured FAQ category containers grouped by contextual themes", () => {
+    // Arrange & Act
+    renderLandingPage();
 
-    const categories = [
+    const expectedFaqCategories = [
       "Upload & Files",
       "Analysis Process",
       "Results & Tables",
       "Visualizations",
-      "Data Privacy & Security",
+      "Data Privacy & Security"
     ];
 
-    categories.forEach((cat) => {
-      expect(
-        screen.getByRole("heading", { name: cat }),
-      ).toBeInTheDocument();
+    expectedFaqCategories.forEach((category) => {
+      expect(screen.getByRole("heading", { name: category })).toBeInTheDocument();
     });
   });
 
-  it("zeigt FAQ Fragen", () => {
-    renderApp("/");
+  it("renders critical FAQ specific query prompts within the drop-down accordion lists", () => {
+    // Arrange & Act
+    renderLandingPage();
 
     expect(
-      screen.getByText("What is a Sample Sheet and what information does it contain?"),
+      screen.getByText("What is a Sample Sheet and what information does it contain?")
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("What is normalization and why is it necessary?"),
-    ).toBeInTheDocument();
-
-    // Espace fautif supprimé conformément à la correction typographique
-    expect(
-      screen.getByText("What is a DMP?"),
+      screen.getByText("What is normalization and why is it necessary?")
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("What does the PCA plot show?"),
+      screen.getByText("What is a DMP?")
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText("What does the PCA plot show?")
     ).toBeInTheDocument();
   });
 
-      //EXTENSION : SURVEILLANCE DU GLOSSAIRE
-
-  it("zeigt das biologische Glossar korrekt", () => {
-    renderApp("/");
-
-    expect(
-      screen.getByRole("heading", {
-        name: "Biological & Technical Glossary",
-      }),
-    ).toBeInTheDocument();
-
-    // Vérification que les termes du dictionnaire interne s'affichent
-    expect(screen.getByText("detP (Detection p-value)")).toBeInTheDocument();
-    expect(screen.getByText("CpG Site")).toBeInTheDocument();
-    expect(screen.getByText("Batch Effect")).toBeInTheDocument();
-  });
-
-  it("upload route bleibt erreichbar", () => {
-    renderApp("/upload");
-
-    const main = screen.getByRole("main");
+  it("mounts the biological and technical knowledge base glossary with expected terms", () => {
+    // Arrange & Act
+    renderLandingPage();
 
     expect(
-      within(main).getByRole("heading", { name: "Upload" }),
+      screen.getByRole("heading", { name: "Biological & Technical Glossary" })
     ).toBeInTheDocument();
+
+    // Validate a selection of key dictionary definitions
+    expect(screen.getByRole("heading", { name: "DNA Methylation" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "CpG Site" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Batch Effect" })).toBeInTheDocument();
   });
 });

@@ -21,6 +21,12 @@ RUN apt-get update && apt-get install -y \
     build-essential wget git \
     && rm -rf /var/lib/apt/lists/*
 
+# Große Bioconductor-Annotationspakete (v. a. EPICv2anno.20a1.hg38, mehrere
+# hundert MB) brechen mit R's Default-Download-Timeout von 60s an langsamen
+# Mirrors ab und lassen den Build fehlschlagen. Timeout global & früh anheben,
+# damit ALLE folgenden Installs (Annotationen, ChAMP, ComplexHeatmap …) greifen.
+RUN echo 'options(timeout = 1200)' >> /usr/local/lib/R/etc/Rprofile.site
+
 # BiocManager für die stabile Version 3.20 initialisieren
 RUN R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')" \
     && R -e "BiocManager::install(version='3.20', ask=FALSE)"

@@ -1,17 +1,26 @@
 import { useState } from "react";
-import type {HeatMapErrorResponse, HeatMapRequest, HeatMapResponse} from "../utils/types.ts";
+import type { HeatMapRequest, HeatMapResponse } from "../utils/types.ts";
+import { readApiError } from "../../../shared/utils/apiError.ts";
 
 
 /**
- * Hook für die Generierung einer Heatmap basierend auf den ausgewählten Gruppierungsoptionen.
- * Sendet eine POST-Anfrage an den Endpoint /heatmap/{job_id} mit den entsprechenden Parametern und verwaltet den Lade- und Fehlerstatus.
- * @param jobId
+ * Orchestrates the generation of a heatmap based on selected filters and grouping options.
+ *
+ * Submits a POST request to the server to initiate the calculation and manages
+ * the resulting metadata, loading state, and error handling.
+ *
+ * @param jobId - The unique identifier of the analysis job.
  */
 export const useGenerateHeatMap = (jobId: string | null) => {
     const [data, setData] = useState<HeatMapResponse | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    /**
+     * Triggers the server-side heatmap generation.
+     * @param payload - The configuration including filters and metadata grouping.
+     * @returns The server response or null if the request fails.
+     */
     const generateHeatMap = async (
         payload: HeatMapRequest,
     ): Promise<HeatMapResponse | null> => {
@@ -30,16 +39,15 @@ export const useGenerateHeatMap = (jobId: string | null) => {
                 body: JSON.stringify(payload),
             });
 
-            const body = await response.json();
-
+            // Read the error body defensively: a server fault may return a
+            // non-JSON body, so we must not blindly call response.json() before
+            // confirming success (that is what produced the opaque
+            // "JSON.parse: unexpected character" error users reported).
             if (!response.ok) {
-                const errorResponse = body as HeatMapErrorResponse;
-                throw new Error(
-                    errorResponse.detail ?? errorResponse.message ?? "Heatmap generation failed",
-                );
+                throw new Error(await readApiError(response, "Heatmap generation failed"));
             }
 
-            const result = body as HeatMapResponse;
+            const result = (await response.json()) as HeatMapResponse;
             setData(result);
             return result;
 

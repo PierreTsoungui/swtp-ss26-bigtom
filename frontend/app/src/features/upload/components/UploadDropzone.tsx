@@ -1,29 +1,36 @@
 import { useRef, useState } from "react";
 
+/**
+ * Props for the UploadDropzone component.
+ */
 interface UploadDropzoneProps {
+  /** Callback triggered when valid files or folders are selected. */
   onFiles: (files: File[]) => void;
+  /** Whether the dropzone is non-interactive. */
   disabled?: boolean;
-  /** Compact variant used as an "add more files" affordance during review. */
+  /**
+   * If true, uses a minimal UI layout.
+   * Typically used as an "Add more" button during the review phase.
+   */
   compact?: boolean;
 }
 
-// Accepted when files are picked/dropped directly. Folder contents are not
-// filtered here (the server ignores unsupported files inside a folder/ZIP).
+/** Accepted file extensions for direct selection. */
 const ACCEPTED = [".zip", ".idat", ".csv", ".xls", ".xlsx"];
 const ACCEPT_ATTR = ACCEPTED.join(",");
 
+/** Checks if a file extension is in the allowed list. */
 function isAccepted(file: File): boolean {
   const lower = file.name.toLowerCase();
   return ACCEPTED.some((ext) => lower.endsWith(ext));
 }
 
 /**
- * One upload field that accepts a folder, a .zip or individual files (UPL-01).
+ * A multi-mode upload component supporting drag-and-drop, file picking, and folder selection.
  *
- * Drag & drop plus two pickers (files/ZIP and folder) feed the same callback.
- * Direct selections are restricted to the accepted types (a stray PDF is
- * rejected up front); a folder is passed through whole, since unsupported files
- * inside it are simply ignored server-side.
+ * Flow logic:
+ * - **Files/ZIPs**: Filtered client-side against {@link ACCEPTED} extensions.
+ * - **Folders**: Passed through entirely; the backend handles recursive filtering.
  */
 function UploadDropzone({ onFiles, disabled = false, compact = false }: UploadDropzoneProps) {
   const fileInput = useRef<HTMLInputElement>(null);
@@ -31,6 +38,7 @@ function UploadDropzone({ onFiles, disabled = false, compact = false }: UploadDr
   const [dragOver, setDragOver] = useState(false);
   const [rejected, setRejected] = useState(0);
 
+  /** Filters a file list and emits only accepted files. */
   const emitDirect = (list: FileList | null) => {
     const all = Array.from(list ?? []);
     const accepted = all.filter(isAccepted);
@@ -38,6 +46,7 @@ function UploadDropzone({ onFiles, disabled = false, compact = false }: UploadDr
     if (accepted.length > 0) onFiles(accepted);
   };
 
+  /** Emits all files from a folder selection without client-side filtering. */
   const emitFolder = (list: FileList | null) => {
     setRejected(0);
     const files = Array.from(list ?? []);

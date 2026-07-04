@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Dict, Optional, Any, Set, Tuple
 
 from app.models.job import JobStatus
-from app.core.exceptions import InvalidTransitionError
+from app.core.exceptions import InvalidTransitionError, JobSessionExpiredError
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,10 @@ def transition_job(
 
     job = jobs.get(job_id)
     if job is None:
-        raise KeyError(f"Job '{job_id}' nicht gefunden.")
+        # The in-memory session is gone (backend restart / eviction) while a
+        # request still targets this job. Raise a typed AppException so the
+        # caller gets a clean RFC 9457 410 response instead of a raw 500.
+        raise JobSessionExpiredError(job_id)
 
     current = (JobPhase(job.phase), JobStatusValue(job.status))
     target  = (new_phase, new_status)

@@ -7,22 +7,41 @@ import {
 } from "../utils/uploadApi";
 import ColumnRoleMapper, { type RoleSelection } from "./ColumnRoleMapper";
 
+/**
+ * Props for the FileReviewList component.
+ */
 interface Props {
+  /** List of detected sample sheet candidates (CSV/Excel). */
   sheets: SampleSheetCandidate[];
+  /** Detected IDAT file pairs and their completion status. */
   pairs: IdatPair[];
+  /** List of files that were identified but excluded from the analysis. */
   otherFiles: OtherFile[];
+  /** The ID of the currently active sample sheet. */
   selectedSheetId: string | null;
+  /** Critical error message that prevents proceeding (e.g., missing IDATs). */
   blockingError: string | null;
+  /** Helpful guidance for the user to complete the configuration. */
   selectionHint: string | null;
+  /** Available column names from the selected sample sheet. */
   mappingColumns: string[];
+  /** Current mapping of columns to biological roles. */
   columnMapping: RoleSelection;
+  /** Callback to update a specific role mapping. */
   onSetRole: (role: RoleKey, value: string | null) => void;
+  /** Callback to select a primary sample sheet. */
   onSelectSheet: (id: string) => void;
+  /** Callback to open a modal preview for a specific sheet. */
   onPreviewSheet: (sheet: SampleSheetCandidate) => void;
+  /** Callback to exclude an IDAT pair from the analysis. */
   onRemovePair: (pairId: string) => void;
+  /** Whether all interactions should be disabled (e.g., during upload). */
   disabled?: boolean;
 }
 
+/**
+ * A specialized button for excluding items from the file list.
+ */
 function RemoveButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
@@ -37,7 +56,15 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
   );
 }
 
-/** Reviewable, editable list of everything the backend detected. */
+/**
+ * Displays a detailed review interface for all detected files and metadata.
+ *
+ * This component allows users to:
+ * 1. Select exactly one **Sample Sheet** for the analysis.
+ * 2. Configure **Column Mapping** (matching CSV columns to biological roles).
+ * 3. Review **IDAT Pair Integrity** (checking for missing Green/Red channels).
+ * 4. Inspect **Ignored Files** and the reasons for their exclusion.
+ */
 function FileReviewList({
   sheets,
   pairs,

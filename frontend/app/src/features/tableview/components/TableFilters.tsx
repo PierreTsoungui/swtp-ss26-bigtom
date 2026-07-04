@@ -39,13 +39,19 @@ const FILTER_DEFINITIONS = {
   ],
 };
 
+/**
+ * Metadata defining the input type and constraints for individual table filters.
+ */
 type FilterDef = { key: string; label: string; type: string; min?: number; max?: number };
 
 /**
- * Validates the (string) filter inputs by their declared type/range and returns
- * a map of field → English error message. Empty fields are ignored (a cleared
- * filter is valid). Numeric fields must parse to a finite number within their
- * [min, max]; positional Start must be ≤ Stop.
+ * Validates filter inputs against their defined types and logical constraints.
+ *
+ * Logic includes:
+ * - **Numeric Checks**: Ensures inputs are finite numbers within [min, max] range.
+ * - **Genomic Integrity**: Validates that the 'Start' position does not exceed the 'Stop' position.
+ *
+ * @returns A map of field keys to English error messages.
  */
 function validateFilters(
   values: Record<string, string>,
@@ -87,18 +93,27 @@ function validateFilters(
   return errors;
 }
 
-// Standard Illumina/ChAMP genomic-region categories.
+/**
+ * Provides genomic region categories based on standard Illumina and ChAMP specifications.
+ * @returns Array of options for feature-based filtering
+ */
 function getFeatureOptions() {
   return ["TSS1500", "TSS200", "5'UTR", "1stExon", "Body", "ExonBnd", "3'UTR", "IGR", "Unknow"]
     .map((v) => ({ value: v, label: v }));
 }
 
-// CpG-island context categories.
+/**
+ * Provides CpG island context categories.
+ * @returns Array of options for context-based filtering (e.g., Island, OpenSea).
+ */
 function getCgiOptions() {
   return ["Island", "Shore", "Shelf", "OpenSea"].map((v) => ({ value: v, label: v }));
 }
 
-// Δβ direction; empty value = both.
+/**
+ * Defines the direction of methylation changes (Delta Beta).
+ * @returns Options for filtering hypermethylated (Δβ > 0) or hypomethylated (Δβ < 0) positions.
+ */
 function getDirectionOptions() {
   return [
     { value: "hyper", label: "Hyper (Δβ > 0)" },
@@ -106,6 +121,10 @@ function getDirectionOptions() {
   ];
 }
 
+/**
+ * Generates a standard list of human chromosome options (chr1-22, X, Y).
+ * @returns A formatted list of chromosome identifiers for selection inputs.
+ */
 function getChromosomeOptions() {
   const options = Array.from({ length: 22 }, (_, i) => ({
     value: `chr${i + 1}`,
@@ -117,14 +136,30 @@ function getChromosomeOptions() {
 }
 
 
+/**
+ * Props for the TableFilters component.
+ */
 interface TableFiltersProps<T extends DmpFilters | DmrFilters> {
+  /** The specific analysis result type ('dmp' or 'dmr'). */
   table: "dmp" | "dmr";
+  /** Current state of the draft filter values. */
   filters: T;
+  /** Callback fired when a filter input is modified. */
   onChange: <K extends keyof T>(key: K, value: string) => void;
+  /** Triggers the data fetch using current filter values. */
   onApply: () => void;
+  /** Resets all filters to their initial empty state. */
   onReset: () => void;
 }
 
+
+/**
+ * A dynamic filter management interface for result tables.
+ *
+ * It automatically generates appropriate input fields (selects, numbers, text)
+ * based on the {@link FILTER_DEFINITIONS}. Includes real-time validation to
+ * prevent invalid API requests.
+ */
 export function TableFilters<T extends DmpFilters | DmrFilters>({
   table,
   filters,
@@ -176,7 +211,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
             onClick={onReset}
             className="text-sm text-neutral-textSecondary hover:text-neutral-textPrimary"
           >
-            Alle zurücksetzen
+            Reset All
           </button>
         )}
       </div>
@@ -236,7 +271,7 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
               <button
                   onClick={onApply}
                   disabled={!hasFilters || hasErrors}
-                  className="px-4 py-2 bg-primary text-primary-text rounded-md text-sm font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="rounded-md border-2 border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-text transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-neutral-textSecondary disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
               >
                 Apply
               </button>

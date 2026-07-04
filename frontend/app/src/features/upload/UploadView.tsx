@@ -11,12 +11,13 @@ import type { SampleSheetCandidate } from "./utils/uploadApi";
 import HelpButton from "../../shared/help/HelpButton.tsx";
 
 /**
- * Upload as a single field with an inspect → review → commit flow (UPL-01).
+ * Main view for data ingestion, implementing the "Inspect → Review → Commit" workflow.
  *
- * The user drops a folder/ZIP/files, the backend returns a classified manifest,
- * the user reviews it (removes wrong files, picks the one sample sheet, sets
- * filters) and starts the analysis. Files are uploaded once (inspect); the start
- * only sends the selection.
+ * Flow logic:
+ * 1. **Inspect**: User uploads files/folders; the backend validates and classifies the manifest.
+ * 2. **Review**: User identifies the correct sample sheet, assigns required metadata roles,
+ *    and configures preprocessing filters.
+ * 3. **Commit**: Finalizes the selection and triggers the server-side analysis pipeline.
  */
 function UploadView(): JSX.Element {
   const navigate = useNavigate();
@@ -115,5 +116,6 @@ function UploadView(): JSX.Element {
     </div>
   );
 }
+
 
 export default UploadView;

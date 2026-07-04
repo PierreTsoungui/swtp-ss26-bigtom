@@ -2,64 +2,81 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import HelpButton from "./HelpButton";
 
-describe("HelpButton", () => {
-  it("opens the dialog and renders the topic's help content", () => {
+describe("HelpButton Component", () => {
+  it("opens the dialog modal and renders the topic's markdown help content text blocks", () => {
+    // Arrange & Act
     render(<HelpButton topic="upload" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe öffnen" }));
+    // Click trigger using the newly internationalized English fallback aria-label
+    fireEvent.click(screen.getByRole("button", { name: "Open help" }));
 
+    // Assert dialog layout mounts
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(
-      screen.getByText(/What files are required for the analysis/i),
+      screen.getByText(/What files are required for the analysis/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Hilfe schließen" })).toHaveFocus();
+    
+    // Check that the closing button intercepts focus smoothly upon opening
+    expect(screen.getByRole("button", { name: "Close help" })).toHaveFocus();
   });
 
-  it("renders the topic title in the dialog header", () => {
+  it("renders the resolved topic title dynamically in the dialog header section", () => {
+    // Arrange & Act
     render(<HelpButton topic="normalization" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe öffnen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open help" }));
 
+    // Assert title heading matches registry data fields
     expect(
-      screen.getByRole("heading", { name: "Normalization" }),
+      screen.getByRole("heading", { name: "Normalization" })
     ).toBeInTheDocument();
   });
 
-  it("renders Markdown structure (headings and lists), not plain text", () => {
+  it("renders rich Markdown syntax components (headings, lists) rather than raw plain text fields", () => {
+    // Arrange & Act
     render(<HelpButton topic="filtering" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Hilfe öffnen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open help" }));
 
+    // Assert markdown formatting blocks parse safely into standard sub-elements
     expect(
-      screen.getByRole("heading", { name: /Why is filtering necessary/i }),
+      screen.getByRole("heading", { name: /Why is filtering necessary/i })
     ).toBeInTheDocument();
     expect(screen.getAllByRole("list").length).toBeGreaterThan(0);
   });
 
-  it("does not submit a surrounding form", () => {
-    const onSubmit = vi.fn((event: React.FormEvent) => event.preventDefault());
+  it("does not trigger submission handlers of surrounding form containers when clicked", () => {
+    // Arrange
+    const onSubmitMock = vi.fn((event: React.FormEvent) => event.preventDefault());
 
     render(
-      <form onSubmit={onSubmit}>
+      <form onSubmit={onSubmitMock}>
         <HelpButton topic="upload" />
-      </form>,
+      </form>
     );
 
-    const helpButton = screen.getByRole("button", { name: "Hilfe öffnen" });
-    expect(helpButton).toHaveAttribute("type", "button");
+    // Act
+    const helpButton = screen.getByRole("button", { name: "Open help" });
+    expect(helpButton).toHaveAttribute("type", "button"); // Must enforce type="button" to prevent submit actions
 
     fireEvent.click(helpButton);
 
-    expect(onSubmit).not.toHaveBeenCalled();
+    // Assert
+    expect(onSubmitMock).not.toHaveBeenCalled();
   });
 
-  it("closes with Escape and restores focus to the trigger", () => {
+  it("dismisses the help overlay safely upon firing the Escape key and restores focus back to the trigger button", () => {
+    // Arrange
     render(<HelpButton topic="upload" />);
 
-    const helpButton = screen.getByRole("button", { name: "Hilfe öffnen" });
+    // Act - Open dialog
+    const helpButton = screen.getByRole("button", { name: "Open help" });
     fireEvent.click(helpButton);
+    
+    // Act - Escape out of dialog overlay
     fireEvent.keyDown(document, { key: "Escape" });
 
+    // Assert state resets
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(helpButton).toHaveFocus();
   });

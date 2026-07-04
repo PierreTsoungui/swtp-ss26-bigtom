@@ -14,7 +14,7 @@ interface HelpButtonProps {
 
     /**
      * Optional ARIA label for the trigger button.
-     * @default "Hilfe öffnen"
+     * @default "Open help"
      */
     ariaLabel?: string;
 }
@@ -23,7 +23,7 @@ interface HelpButtonProps {
  * A small "?" button that opens an accessible modal dialog with contextual,
  * Markdown-formatted help for the given {@link HelpButtonProps.topic}.
  */
-function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
+function HelpButton({ topic, ariaLabel = "Open help" }: HelpButtonProps) {
     const { title, body } = helpTopics[topic];
 
     const [open, setOpen] = useState(false);
@@ -105,17 +105,22 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                 ref={triggerRef}
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-sm font-bold text-zinc-800 shadow-sm transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                className="group inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold text-neutral-textSecondary transition hover:bg-neutral-surface active:bg-info-badgeBackground"
                 aria-label={ariaLabel}
                 aria-haspopup="dialog"
                 aria-expanded={open}
             >
-                ?
+                <span
+                    aria-hidden="true"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-neutral-borderEmphasis bg-neutral-card transition group-hover:border-primary group-hover:text-primary group-active:border-primary"
+                >
+                    ?
+                </span>
             </button>
 
             {open && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 p-4"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-textPrimary/60 p-4"
                     onMouseDown={closeDialog}
                 >
                     <div
@@ -124,13 +129,13 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                         aria-modal="true"
                         aria-labelledby={titleId}
                         aria-describedby={descriptionId}
-                        className="flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 text-zinc-900 shadow-2xl"
+                        className="flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-borderDefault bg-neutral-card text-neutral-textPrimary shadow-2xl"
                         onMouseDown={(event) => event.stopPropagation()}
                     >
-                        <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-6 py-4">
+                        <div className="flex items-start justify-between gap-4 border-b border-neutral-borderDefault px-6 py-4">
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
-                                    Kontextuelle Hilfe
+                                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                                    Contextual Help
                                 </p>
                                 <h2 id={titleId} className="mt-1 text-xl font-semibold">
                                     {title}
@@ -141,8 +146,8 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                                 ref={closeButtonRef}
                                 type="button"
                                 onClick={closeDialog}
-                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-300 bg-zinc-50 text-xl font-semibold leading-none text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
-                                aria-label="Hilfe schließen"
+                                className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-neutral-textSecondary bg-neutral-card text-xl font-semibold leading-none text-neutral-textPrimary transition-colors hover:bg-neutral-surface"
+                                aria-label="Close help"
                             >
                                 ×
                             </button>
@@ -152,13 +157,13 @@ function HelpButton({ topic, ariaLabel = "Hilfe öffnen" }: HelpButtonProps) {
                             <HelpContent markdown={body} />
                         </div>
 
-                        <div className="flex justify-end border-t border-zinc-200 px-6 py-4">
+                        <div className="flex justify-end border-t border-neutral-borderDefault px-6 py-4">
                             <button
                                 type="button"
                                 onClick={closeDialog}
-                                className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-zinc-50 shadow-sm transition-colors hover:bg-indigo-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-700"
+                                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-text shadow-sm transition-colors hover:bg-primary-hover"
                             >
-                                Schließen
+                                Close
                             </button>
                         </div>
                     </div>

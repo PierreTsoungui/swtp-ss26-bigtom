@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, { useEffect, useState } from "react";
 import type { BatchFormData, BatchParametersResponse, GroupSelection } from "../utils/types";
 import {
     FormControl,
@@ -14,31 +14,26 @@ import { colors } from "../../../shared/theme/colors";
 import SampleSheetPreviewModal from "./SampleSheetPreviewModal.tsx";
 
 /**
- * Props für die {@link BatchForm} Komponente.
+ * Props for the {@link BatchForm} component.
  */
 interface BatchFormProps {
-    /** Die vom Server oder der API bereitgestellten Parameter und verfügbaren Spalten. */
+    /** Available metadata columns and group values provided by the API. */
     parameters: BatchParametersResponse;
-    /** Callback-Funktion, die beim erfolgreichen Absenden des Formulars aufgerufen wird. */
+    /** Callback to trigger a new batch correction round. */
     onSubmit: (data: BatchFormData) => void;
-    /** Zeigt an, ob die Batch-Korrektur aktuell verarbeitet wird (deaktiviert Interaktionen). */
+    /** Disables interactions while a correction is in progress. */
     isLoading?: boolean;
-    /** Proceed to the DMP/DMR analysis with the chosen comparison (case/control). */
+    /** Finalizes the workflow and proceeds to DMP/DMR analysis with the chosen comparison. */
     onSkip?: (selection?: GroupSelection) => void;
-
-    // isSkipping?: boolean;
 }
 
 /**
- * Ein Formular zur Konfiguration und Durchführung einer Batch-Effekt-Korrektur.
+ * A configuration interface for identifying and correcting technical batch effects.
  *
- * Erlaubt die Auswahl einer primären Batch-Variable (technischer Faktor) sowie optionaler
- * Covariates (biologische Gruppen), die während der Korrektur geschützt werden sollen.
- * Stellt sicher, dass die Batch-Variable nicht gleichzeitig als Covariate ausgewählt wird.
- *
- * @component
- * @param props - Die Props der Komponente gemäß {@link BatchFormProps}.
- * @returns Das gerenderte Batch-Korrektur-Formular als React-Element.
+ * It allows the user to:
+ * 1. Select a **Batch Variable** (technical noise) to be removed.
+ * 2. Define **Covariates** (biological signal) to be protected.
+ * 3. Configure the **Case vs. Control** groups for final differential analysis.
  */
 export function BatchForm({
                               parameters,
@@ -49,25 +44,21 @@ export function BatchForm({
     const [batchVariable, setBatchVariable] = useState<string>("");
     const [covariates, setCovariates] = useState<string[]>([]);
     const [showPreview, setShowPreview] = useState<boolean>(false);
-
-    // 2. Lokaler State, um den aktiven Button zu tracken
     const [clickedButton, setClickedButton] = useState<"batch" | "skip" | null>(null);
 
     const columns = parameters.columns ?? [];
     const columnNames = parameters.available_columns ?? columns.map((c) => c.name);
 
-    // Label helper: "Sentrix_ID (4 groups)".
-    const levelsOf = (name: string) =>
-        columns.find((c) => c.name === name)?.levels;
-    const valuesOf = (name: string) =>
-        columns.find((c) => c.name === name)?.values ?? [];
+    // Label helpers
+    const levelsOf = (name: string) => columns.find((c) => c.name === name)?.levels;
+    const valuesOf = (name: string) => columns.find((c) => c.name === name)?.values ?? [];
 
-    // ── DMP/DMR comparison (case vs control) — chosen before "Proceed" ──────────
+    // DMP/DMR comparison state triggers
     const [analysisColumn, setAnalysisColumn] = useState<string>("");
     const [caseGroup, setCaseGroup] = useState<string>("");
     const [controlGroup, setControlGroup] = useState<string>("");
 
-    // Sensible default once the columns arrive: first column, its first two values.
+    // Initialize sensible analysis parameters as columns arrive
     useEffect(() => {
         if (!analysisColumn && columns.length > 0) {
             const first = columns[0];
@@ -88,7 +79,7 @@ export function BatchForm({
     const analysisReady =
         analysisColumn !== "" && caseGroup !== "" && controlGroup !== "" && caseGroup !== controlGroup;
 
-    // 3. Reset, sobald das Laden beendet ist
+    // Reset localized loading targets once processing clears
     useEffect(() => {
         if (!isLoading) {
             setClickedButton(null);
@@ -111,11 +102,11 @@ export function BatchForm({
     const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!batchVariable) {
-            alert("Bitte wählen Sie eine Batch Variable aus");
+            alert("Please select a batch variable.");
             return;
         }
 
-        setClickedButton("batch"); // 4. Setze Klick auf "batch"
+        setClickedButton("batch");
         onSubmit({ batch_variable: batchVariable, covariates });
     };
 
@@ -125,7 +116,8 @@ export function BatchForm({
         <form onSubmit={handleSubmit} className="space-y-8">
             <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-lg font-semibold">Batch Analysis &amp; Correction</h3>
-                <HelpButton topic="batchCorrection" ariaLabel="Hilfe zur Batch-Korrektur öffnen" />
+                {/* Updated English accessibility aria-label string context */}
+                <HelpButton topic="batchCorrection" ariaLabel="Open batch correction help" />
                 <button
                     type="button"
                     onClick={() => setShowPreview(true)}
@@ -135,12 +127,12 @@ export function BatchForm({
                 </button>
             </div>
 
-            {/* Batch variable — technical factor to REMOVE */}
+            {/* Batch variable select fields */}
             <div className="space-y-2">
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Batch variable — technical factor to remove <span className="text-danger">*</span>
                 </label>
-                <p className="text-xs text-neutral-textSecondary">
+                <p className="text-sm text-neutral-textSecondary">
                     Its effect is removed from the data (e.g. chip / Sentrix_ID, plate). You decide
                     which column is technical — open the preview if unsure.
                 </p>
@@ -163,12 +155,12 @@ export function BatchForm({
                 </FormControl>
             </div>
 
-            {/* Covariates — biological signal to PROTECT */}
+            {/* Covariates multi-select inputs */}
             <div className="space-y-2">
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Covariates — biological signal to protect (optional)
                 </label>
-                <p className="text-xs text-neutral-textSecondary">
+                <p className="text-sm text-neutral-textSecondary">
                     Preserved, never removed — typically your comparison group (the column may have
                     any name). Multiple selections allowed.
                 </p>
@@ -195,7 +187,6 @@ export function BatchForm({
                 />
             </div>
 
-            {/* Info Box */}
             <Alert
                 severity="info"
                 variant="outlined"
@@ -213,7 +204,7 @@ export function BatchForm({
                 decide.
             </Alert>
 
-            {/* Differential analysis (DMP/DMR): comparison column + case + control */}
+            {/* Differential group comparison section */}
             <div className="space-y-3 rounded-lg border border-neutral-borderDefault p-4">
                 <label className="block text-sm font-semibold text-neutral-textPrimary">
                     Differential analysis comparison (DMP/DMR)
@@ -265,18 +256,17 @@ export function BatchForm({
                 )}
             </div>
 
-            {/* Buttons */}
+            {/* Action buttons footer layout */}
             <div className="flex gap-4">
                 <button
                     type="submit"
                     disabled={!batchVariable || isLoading}
-                    className={`flex-1 px-6 py-3 rounded-lg font-semibold transition ${
+                    className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors ${
                         batchVariable && !isLoading
-                            ? "bg-primary text-primary-text hover:bg-primary-hover"
-                            : "bg-neutral-borderEmphasis text-neutral-textSecondary cursor-not-allowed"
+                            ? "border-primary bg-primary text-primary-text hover:bg-primary-hover"
+                            : "cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary"
                     }`}
                 >
-                    {/* 5. Text ändert sich nur, wenn HIER geklickt wurde */}
                     {isLoading && clickedButton === "batch" ? "Batch ongoing..." : "Start Batch"}
                 </button>
 
@@ -292,13 +282,12 @@ export function BatchForm({
                             );
                         }}
                         disabled={isLoading || (columns.length > 0 && !analysisReady)}
-                        className={`flex-1 px-6 py-3 rounded-lg font-semibold border-2 border-neutral-borderEmphasis transition-colors duration-200 ease-in-out ${
+                        className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors duration-200 ease-in-out ${
                             isLoading || (columns.length > 0 && !analysisReady)
-                                ? 'bg-neutral-card text-neutral-textDisabled cursor-not-allowed opacity-50'
-                                : 'text-neutral-textSecondary bg-neutral-card hover:bg-neutral-surface hover:border-neutral-textDisabled active:bg-neutral-borderDefault'
+                                ? 'cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary'
+                                : 'border-neutral-textSecondary bg-neutral-card text-neutral-textSecondary hover:bg-neutral-surface hover:text-neutral-textPrimary active:bg-neutral-borderDefault'
                         }`}
                     >
-                        {/* 7. Text change only when clicked here */}
                         {isLoading && clickedButton === "skip" ? "Starting…" : "Proceed to analysis"}
                     </button>
                 )}

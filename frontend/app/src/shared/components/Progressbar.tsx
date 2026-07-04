@@ -3,30 +3,36 @@ import {JobPhase, type JobStatus, JobStatusValue} from "../utils/JobTypes.ts";
 import {Alert} from "@mui/material";
 
 /**
- * Props für die Progressbar-Komponente.
+ * Props for the Progressbar component.
  */
 type ProgressbarProps = {
-    /** Der aktuelle Status des Jobs mit allen Fortschrittsinformationen. */
+    /**
+     * The current status of the job with all progress information.
+     * @see {@link JobStatus}
+     */
     jobStatus: JobStatus;
-    /** Bestimmt, ob der "Weiter"-Button angezeigt wird. */
+
+    /**
+     * Determines whether the "Next" button is displayed.
+     * @default false
+     */
     showNextButton?: boolean;
-    /** Deaktiviert den "Weiter"-Button. */
+
+    /**
+     * Determines whether the "Next" button is disabled.
+     * @default true
+     */
     nextDisabled?: boolean;
-    /** Callback-Funktion, wenn auf "Weiter" geklickt wird. */
+
+    /** Callback function, when the "Next" button is clicked. */
     onNext?: () => void;
 };
 
 
 /**
- * Fortschrittsanzeige-Komponente, die den aktuellen Status eines Analysejobs visualisiert.
- * Sie zeigt den Fortschrittsbalken, die Anzahl der abgeschlossenen Schritte,
- * den aktuellen Schritt und die geschätzte verbleibende Zeit an.
- *
- * @param jobStatus - Aktueller Status des Analysejobs.
- * @param showNextButton - Flag zur Anzeige des Next-Buttons.
- * @param nextDisabled - Flag zum Deaktivieren des Next-Buttons.
- * @param onNext - Callback für den Klickevent.
- * @returns Das gerenderte JSX-Element.
+ * Progressbar component that visualizes the current status of an analysis job.
+ * It displays the progress bar, the current step, the percentage of completion, and any error messages if the job has failed.
+ * Optionally, it can also display a "Next" button to proceed to the next step in the workflow.
  */
 function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, onNext }: ProgressbarProps) {
     const finished = jobStatus.progress_percent === 100;
@@ -41,23 +47,8 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
         return "primary";
     }
 
-    console.log("jobStatus:", jobStatus);
-    console.log("status:", jobStatus.status);
-    console.log("error:", jobStatus.error);
-    console.log("isFailed:", isFailed);
-
     return (
         <div className="mx-auto w-full max-w-3xl rounded-2xl border border-neutral-borderDefault bg-neutral-card p-5 shadow-sm">
-            {/* Error PopUp Snackbar */}
-            {/*cancelError && (
-                <ErrorMessage
-                    open={true}
-                    error={cancelError}
-                    vertical={"top"}
-                    horizontal={"center"}
-                />
-            )*/}
-
             {/* Header */}
             <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -99,15 +90,14 @@ function Progressbar({ jobStatus, showNextButton = false, nextDisabled = true, o
             </div>
 
             {/* Footer */}
-
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 {showNextButton && (
                     <button
                         onClick={onNext}
                         disabled={nextDisabled}
                         className="inline-flex min-w-24 items-center justify-center rounded-full
-                                 bg-primary px-6 py-3 font-bold text-primary-text transition-colors
-                                 hover:bg-primary-hover disabled:bg-neutral-borderEmphasis"
+                                 border-2 border-primary bg-primary px-6 py-3 font-bold text-primary-text transition-colors
+                                 hover:bg-primary-hover disabled:cursor-not-allowed disabled:border-neutral-textSecondary disabled:bg-neutral-surface disabled:text-neutral-textSecondary"
                     >
                         Next
                     </button>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+/** Filters specific to Differentially Methylated Positions (DMP). */
 export type DmpFilters = {
   chr: string;
   start: string;
@@ -19,6 +20,7 @@ export type DmpFilters = {
   dmr_id: string;
 };
 
+/** Filters specific to Differentially Methylated Regions (DMR). */
 export type DmrFilters = {
   chr: string;
   dmrid: string;
@@ -33,7 +35,14 @@ export type DmrFilters = {
   n_dmps_max: string;
 };
 
+/** Union type for results table filtering. */
 export type TableFilters = DmpFilters | DmrFilters;
+
+/** Internal state structure for all table-specific filters. */
+type FilterState = {
+  dmp: DmpFilters;
+  dmr: DmrFilters;
+}
 
 const EMPTY_DMP_FILTERS: DmpFilters = {
   chr: "",
@@ -68,24 +77,33 @@ const EMPTY_DMR_FILTERS: DmrFilters = {
   n_dmps_max: "",
 };
 
-type FilterState = {
-  dmp: DmpFilters;
-  dmr: DmrFilters;
-}
-
+/**
+ * Manages the complex filtering state for DMP and DMR result tables.
+ *
+ * Implements a **Draft/Apply pattern**:
+ * - `draftFilters`: Temporary state updated during user input.
+ * - `appliedFilters`: Static state used to trigger API requests.
+ *
+ * @param onResetPage - Optional callback to reset pagination when filters are cleared.
+ */
 export function useTableFilters(onResetPage?: () => void) {
+  /** Uncommitted user input. */
   const [draftFilters, setDraftFilters] =
     useState<FilterState>({
       dmp: { ...EMPTY_DMP_FILTERS },
       dmr: { ...EMPTY_DMR_FILTERS },
     });
 
+  /** Filters currently active for data fetching. */
   const [appliedFilters, setAppliedFilters] =
     useState<FilterState>({
       dmp: { ...EMPTY_DMP_FILTERS },
       dmr: { ...EMPTY_DMR_FILTERS },
     });
 
+  /**
+   * Updates a single filter field in the draft state.
+   */
   const updateDraftFilter = <K extends keyof FilterState>(
       table: K,
       key: keyof FilterState[K],
@@ -100,6 +118,9 @@ export function useTableFilters(onResetPage?: () => void) {
     }));
   };
 
+  /**
+   * Commits current draft filters to the active state to trigger a data fetch.
+   */
   const applyFilters = <K extends keyof FilterState>(table: K) => {
     setAppliedFilters((prev) => ({
       ...prev,
@@ -107,6 +128,9 @@ export function useTableFilters(onResetPage?: () => void) {
     }));
   };
 
+  /**
+   * Clears all filters for a specific table and synchronizes draft/active states.
+   */
   const resetFilters = <K extends keyof FilterState>(table: K) => {
     const emptyFilters = table === "dmp" ? EMPTY_DMP_FILTERS : EMPTY_DMR_FILTERS;
     setDraftFilters((prev) => ({ ...prev, [table]: { ...emptyFilters } }));
@@ -114,6 +138,7 @@ export function useTableFilters(onResetPage?: () => void) {
     if (onResetPage) onResetPage();
   };
 
+  /** Returns true if at least one filter field is non-empty. */
   const hasFilters = <K extends keyof FilterState>(table: K): boolean => {
     return Object.values(appliedFilters[table]).some((v) => v !== "");
   };

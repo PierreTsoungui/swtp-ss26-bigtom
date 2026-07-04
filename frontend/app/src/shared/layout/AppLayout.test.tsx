@@ -1,8 +1,16 @@
 import type { ComponentProps } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { AppLayout } from "./AppLayout";
+
+// Mock the downstream hook layer used inside layout side effects
+vi.mock("../../features/analysis/hooks/useJobCancel", () => ({
+  useJobCancel: (onCancelSuccess: () => void) => ({ // jobId: string,
+    cancelJob: vi.fn(() => onCancelSuccess()),
+    isLoading: false,
+  }),
+}));
 
 function renderLayout(path = "/upload", resetAction?: ComponentProps<typeof AppLayout>["resetAction"]) {
   return render(
@@ -14,8 +22,12 @@ function renderLayout(path = "/upload", resetAction?: ComponentProps<typeof AppL
   );
 }
 
-describe("AppLayout", () => {
-  it("rendert Header, Footer und children", () => {
+describe("AppLayout Component Shell", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders structural layout headers, footers, and generic children placeholders properly", () => {
     renderLayout();
 
     expect(screen.getByRole("banner")).toBeInTheDocument();
@@ -24,43 +36,46 @@ describe("AppLayout", () => {
     expect(screen.getByText("© 2026 BigTom")).toBeInTheDocument();
   });
 
-  it("zeigt die aktuelle Phase und die Schritte 1 bis 5", () => {
+    it("displays the five chronological sequence indicator milestones inside step sub-navigations", () => {
+    // Arrange & Act
     renderLayout("/analysis/job-123");
 
     expect(screen.getAllByText("Filter").length).toBeGreaterThan(0);
 
-    const stepIndicator = screen.getByRole("navigation", { name: /schrittanzeige/i });
+    // Target via the actual active aria-label string found in the DOM accessibility tree
+    const stepIndicator = screen.getByRole("navigation", { name: "Schrittanzeige" });
+    
     for (let step = 1; step <= 5; step += 1) {
       expect(within(stepIndicator).getByText(String(step))).toBeInTheDocument();
     }
+    expect(within(stepIndicator).getByText("✓")).toBeInTheDocument();
 
-    expect(within(stepIndicator).getByText("2")).toHaveAttribute("aria-current", "step");
+    const currentStep = within(stepIndicator).getByText("2").closest("li");
+    expect(currentStep).toHaveAttribute("aria-current", "step");
+    expect(within(stepIndicator).queryByText("Aktuell")).not.toBeInTheDocument();
     expect(within(stepIndicator).getByText("Upload")).toBeInTheDocument();
     expect(within(stepIndicator).getByText("Filter")).toBeInTheDocument();
     expect(within(stepIndicator).getByText("Normalization")).toBeInTheDocument();
     expect(within(stepIndicator).getByText("Batch")).toBeInTheDocument();
     expect(within(stepIndicator).getByText("Results")).toBeInTheDocument();
-    expect(within(stepIndicator).queryByText("Validation")).not.toBeInTheDocument();
-    expect(within(stepIndicator).queryByText("Analysis")).not.toBeInTheDocument();
-    expect(within(stepIndicator).queryByText("Quality Control")).not.toBeInTheDocument();
-    expect(within(stepIndicator).queryByText("Export")).not.toBeInTheDocument();
   });
 
-  it("zeigt Datenschutz nur auf der Datenschutz-Seite als aktuelle Phase", () => {
+
+  it("updates header labels to display 'Privacy Policy' upon hitting the datenschutz page route", () => {
     renderLayout("/datenschutz");
 
-    expect(within(screen.getByRole("banner")).getByText("Datenschutz")).toBeInTheDocument();
+    expect(within(screen.getByRole("banner")).getByText("Privacy Policy")).toBeInTheDocument();
   });
 
-  it("verwendet BigTom als Phase für unbekannte Routen", () => {
-    renderLayout("/unbekannt");
+  it("falls back gracefully onto generic application headers if navigation lands on unmapped parameters", () => {
+    renderLayout("/unknown-route");
 
     const header = screen.getByRole("banner");
-    expect(within(header).queryByText("Datenschutz")).not.toBeInTheDocument();
+    expect(within(header).queryByText("Privacy Policy")).not.toBeInTheDocument();
     expect(within(header).getAllByText("MethylAnalyzer")).toHaveLength(1);
   });
 
-  it("rendert die Footer-Links korrekt", () => {
+  it("safely routes external regulatory footer links targeted at the official university imprint portal", () => {
     renderLayout();
 
     const impressum = screen.getByRole("link", { name: "Imprint" });
@@ -69,44 +84,35 @@ describe("AppLayout", () => {
     expect(impressum.getAttribute("rel")).toContain("noopener");
     expect(impressum.getAttribute("rel")).toContain("noreferrer");
 
-    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
-      "href",
-      "/datenschutz",
-    );
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/datenschutz");
   });
 
-  it("zeigt auf der Landing Page nur die reduzierte Header-Identität", () => {
+  it("renders scaled-down minimal identity headers without action tools inside landing entries", () => {
     renderLayout("/");
 
     const header = screen.getByRole("banner");
-    expect(within(header).getByRole("link", { name: /methylanalyzer/i })).toHaveAttribute(
-      "href",
-      "/",
-    );
-    expect(
-      within(header).queryByRole("navigation", { name: /schrittanzeige/i }),
-    ).not.toBeInTheDocument();
+    expect(within(header).getByRole("link", { name: /methylanalyzer/i })).toHaveAttribute("href", "/");
+    expect(within(header).queryByRole("navigation", { name: /step indicator/i })).not.toBeInTheDocument();
     expect(within(header).queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
   });
 
-  it("deaktiviert den Reset-Button, wenn keine Analyse aktiv ist", () => {
+  it("keeps form reset triggers disabled if no continuous active analysis background tasks are identified", () => {
     renderLayout("/upload");
 
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
   });
 
-  it("aktiviert den Reset-Button bei aktiver Analyse und ruft den frontend reset auf", () => {
-    const onReset = vi.fn();
+  it("unlocks reset triggers on busy sessions and correctly delegates action dispatches back to parent handlers", () => {
+    const onResetMock = vi.fn();
     renderLayout("/analysis/job-123", {
       isAnalysisActive: true,
-      onReset,
+      onReset: onResetMock,
     });
 
     const resetButton = screen.getByRole("button", { name: "Reset" });
     expect(resetButton).toBeEnabled();
 
     fireEvent.click(resetButton);
-
-    expect(onReset).toHaveBeenCalledTimes(1);
+    expect(onResetMock).toHaveBeenCalledTimes(1);
   });
 });

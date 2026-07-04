@@ -2,22 +2,31 @@ import { forwardRef, useMemo } from "react";
 import type { PcaData } from "../utils/types";
 import { NO_GROUP_COLOR, NO_GROUP_LABEL } from "../utils/pcaColors";
 
+/**
+ * Props for the PcaPlot component.
+ */
 interface PcaPlotProps {
+  /** The PCA dataset including point coordinates and variance explained. */
   data: PcaData;
-  /** Group -> color. */
+  /** Mapping of group names to their respective theme colors. */
   groupColors: Record<string, string>;
-  /** Sample -> color (overrides the group color for individual points). */
+  /** Mapping of sample IDs to specific colors (overrides group-level coloring). */
   sampleColors: Record<string, string>;
-  /** Samples whose names are shown as point labels. */
+  /** List of samples that should be explicitly labeled on the plot. */
   labeledSamples?: string[];
+  /** Whether to display the legend on the right side of the plot. */
   showLegend?: boolean;
+  /** Total width of the SVG element. */
   width?: number;
+  /** Total height of the SVG element. */
   height?: number;
-  /** Larger fonts for export/print (NRM-02). */
+  /** Global font scale multiplier for high-resolution exports. */
   fontScale?: number;
 }
 
-// Produces ~count "round" tick values across [min, max].
+/**
+ * Generates human-friendly tick marks for the plot axes.
+ */
 function niceTicks(min: number, max: number, count = 5): number[] {
   if (!isFinite(min) || !isFinite(max) || min === max) return [min];
   const span = max - min;
@@ -34,12 +43,16 @@ function niceTicks(min: number, max: number, count = 5): number[] {
 }
 
 /**
- * Renders a PCA scatter plot (PC1 vs. PC2) as SVG.
+ * Renders an interactive PCA scatter plot as a scalable vector graphic (SVG).
  *
- * SVG rather than a finished PNG on purpose: colours, labels and size are
- * produced in the frontend, can be changed any number of times (NRM-03) and the
- * rendered plot is exportable to PNG via the SVG ref (NRM-04). Font sizes and
- * contrast are chosen so the plot stays legible when printed (NRM-02).
+ * **Key Features:**
+ * - **Dynamic Styling**: Colors, labels, and sizing are applied client-side for instant updates.
+ * - **Print Readiness**: High-contrast colors and scalable fonts ensure legibility in publications.
+ * - **Exportable**: The SVG ref can be used to capture high-density PNG snapshots.
+ *
+ * @remarks
+ * Using SVG instead of a canvas or pre-rendered image allows for precise control
+ * over individual elements and seamless integration with CSS/JS for tooltips.
  */
 const PcaPlot = forwardRef<SVGSVGElement, PcaPlotProps>(function PcaPlot(
   {
