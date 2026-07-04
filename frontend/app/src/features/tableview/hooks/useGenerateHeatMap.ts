@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type {HeatMapErrorResponse, HeatMapRequest, HeatMapResponse} from "../utils/types.ts";
+import type { HeatMapRequest, HeatMapResponse } from "../utils/types.ts";
+import { readApiError } from "../../../shared/utils/apiError.ts";
 
 
 /**
@@ -38,16 +39,15 @@ export const useGenerateHeatMap = (jobId: string | null) => {
                 body: JSON.stringify(payload),
             });
 
-            const body = await response.json();
-
+            // Read the error body defensively: a server fault may return a
+            // non-JSON body, so we must not blindly call response.json() before
+            // confirming success (that is what produced the opaque
+            // "JSON.parse: unexpected character" error users reported).
             if (!response.ok) {
-                const errorResponse = body as HeatMapErrorResponse;
-                throw new Error(
-                    errorResponse.detail ?? errorResponse.message ?? "Heatmap generation failed",
-                );
+                throw new Error(await readApiError(response, "Heatmap generation failed"));
             }
 
-            const result = body as HeatMapResponse;
+            const result = (await response.json()) as HeatMapResponse;
             setData(result);
             return result;
 

@@ -239,6 +239,27 @@ def test_run_heatmap_job_not_found(mock_job):
     assert data["type"] == ErrorTypes.JOB_NOT_FOUND.path
 
 
+def test_run_heatmap_session_expired(mock_job_with_samplesheet, no_run):
+    """Job dir on disk but the in-memory session is gone (e.g. backend restart).
+
+    This must yield a clean RFC 9457 410 response, not the unhandled KeyError /
+    raw 500 that previously made the frontend fail with
+    "JSON.parse: unexpected character at line 1 column 1".
+    """
+    job_id, _ = mock_job_with_samplesheet
+    # Simulate the lost session: files remain, but the job manager forgot the job.
+    job_manager.jobs.pop(job_id, None)
+
+    response = client.post(
+        f"/api/v1/heatmap/{job_id}",
+        json={"grouping": {"primary": "Sample_Group"}, "filters": {"chr": "chr19"}},
+    )
+    assert response.status_code == 410
+    body = response.json()
+    assert body["type"] == ErrorTypes.SESSION_EXPIRED.path
+    assert body["detail"]  # a human-readable message is present
+
+
 def test_run_heatmap_no_dmp_rds(mock_job):
     """Test heatmap when DMP RDS is missing."""
     job_id, job_dir = mock_job

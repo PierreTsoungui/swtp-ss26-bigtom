@@ -3,6 +3,7 @@ import type { PcaData } from "../utils/types";
 import PcaPlot from "./PcaPlot";
 import { defaultGroupColors, uniqueGroups } from "../utils/pcaColors";
 import { exportSvgAsPng } from "../utils/exportSvg";
+import { exportSvgAsPdf } from "../utils/exportSvgAsPdf";
 
 /**
  * Interface for the props of the PcaViewer component.
@@ -30,6 +31,33 @@ const COLOR_OPTIONS: { name: string; value: string }[] = [
 
 const PLOT_W = 820;
 const PLOT_H = 600;
+
+/**
+ * Supported export formats for the interactive PCA plot. Adding a new format is
+ * a single entry here — the handler and buttons are driven off this registry.
+ *  - PNG: rasterised via canvas (small, universally viewable).
+ *  - PDF: true vector output, matching the R-generated PDFs of every other plot.
+ */
+type ExportFormat = "png" | "pdf";
+
+const EXPORTERS: Record<
+  ExportFormat,
+  { label: string; run: (svg: SVGSVGElement, basename: string) => Promise<void> }
+> = {
+  png: {
+    label: "PNG",
+    run: (svg, basename) =>
+      exportSvgAsPng(svg, `${basename}.png`, PLOT_W, PLOT_H, 2),
+  },
+  pdf: {
+    label: "PDF",
+    run: (svg, basename) =>
+      exportSvgAsPdf(svg, `${basename}.pdf`, PLOT_W, PLOT_H),
+  },
+};
+
+// Render order of the export buttons (PDF sits directly under PNG).
+const EXPORT_ORDER: ExportFormat[] = ["png", "pdf"];
 
 /**
  * Modal with an interactive PCA plot and a side menu (NRM-03/NRM-04):
@@ -63,7 +91,10 @@ function PcaViewer({ method, data, onClose }: PcaViewerProps) {
   const [labelToAdd, setLabelToAdd] = useState<string>("");
 
   const svgRef = useRef<SVGSVGElement>(null);
-  const [exporting, setExporting] = useState(false);
+  // Which export is currently running (null = idle). Shared across formats so
+  // both buttons disable while any export is in flight — and so a new format
+  // can be added by extending EXPORTERS below without touching the UI wiring.
+  const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
 
   const applyOverride = () => {
     if (!selectedSample) return;
@@ -93,13 +124,18 @@ function PcaViewer({ method, data, onClose }: PcaViewerProps) {
     setSampleColors({});
   };
 
-  const handleExport = async () => {
-    if (!svgRef.current) return;
-    setExporting(true);
+  const handleExport = async (format: ExportFormat) => {
+    if (!svgRef.current || exportingFormat) return;
+    setExportingFormat(format);
     try {
-      await exportSvgAsPng(svgRef.current, `pca_${method}.png`, PLOT_W, PLOT_H, 2);
+      await EXPORTERS[format].run(svgRef.current, `pca_${method}`);
+    } catch (err) {
+      // The export utilities throw on failure; surface it rather than failing
+      // silently. A toast system could replace this later.
+      console.error(`PCA ${format.toUpperCase()} export failed`, err);
+      alert(`Could not export the plot as ${format.toUpperCase()}.`);
     } finally {
-      setExporting(false);
+      setExportingFormat(null);
     }
   };
 
@@ -279,13 +315,18 @@ function PcaViewer({ method, data, onClose }: PcaViewerProps) {
 
           {/* Actions */}
           <div className="space-y-2 border-t border-neutral-borderDefault pt-3">
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-text hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {exporting ? "Exporting…" : "Export as PNG"}
-            </button>
+            {EXPORT_ORDER.map((format) => (
+              <button
+                key={format}
+                onClick={() => void handleExport(format)}
+                disabled={exportingFormat !== null}
+                className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-text hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {exportingFormat === format
+                  ? "Exporting…"
+                  : `Export as ${EXPORTERS[format].label}`}
+              </button>
+            ))}
             <button
               onClick={resetAll}
               className="w-full rounded-lg border border-neutral-borderEmphasis px-3 py-2 text-sm font-semibold text-neutral-textSecondary hover:bg-neutral-surface"
