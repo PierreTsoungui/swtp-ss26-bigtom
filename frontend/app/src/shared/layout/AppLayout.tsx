@@ -26,6 +26,12 @@ interface AppLayoutProps {
   children: ReactNode;
   /** Optional overrides for the header's reset functionality. */
   resetAction?: ResetActionOverride;
+  /**
+   * If true, forces the step indicator to be hidden regardless of the current route.
+   * Also resets the header phase label to the default branding.
+   * @default false
+   */
+  hideStepIndicator?: boolean;
 }
 
 /**
@@ -47,23 +53,29 @@ function getJobIdFromPath(pathname: string): string | null {
  * routing state, manages the global job cancellation (reset) logic, and
  * identifies the active workflow phase.
  */
-export function AppLayout({ children, resetAction }: AppLayoutProps) {
+export function AppLayout({ children, resetAction, hideStepIndicator = false }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const isLandingPage = location.pathname === "/";
   const currentStep = getWorkflowStepForPath(location.pathname);
   const jobId = useMemo(() => getJobIdFromPath(location.pathname), [location.pathname]);
-  
-  // Translated route header labels to complete the English transformation loop
-  const currentPhase = location.pathname.startsWith("/datenschutz")
-    ? "Privacy Policy"
-    : currentStep?.label ?? "BigTom";
+
+  const showStepIndicator = !hideStepIndicator && currentStep !== undefined;
+  let currentPhase = currentStep?.label ?? "BigTom";
+
+  if (location.pathname.startsWith("/datenschutz")) {
+    currentPhase = "Datenschutz";
+  }
+
+  if (hideStepIndicator) {
+    currentPhase = "BigTom";
+  }
 
   const { cancelJob, isLoading } = useJobCancel(jobId ?? "", () => {
     void navigate("/upload");
   });
 
-  const isAnalysisActive = resetAction?.isAnalysisActive ?? jobId !== null;
+  const isAnalysisActive = !hideStepIndicator && (resetAction?.isAnalysisActive ?? jobId !== null);
   const handleReset = resetAction?.onReset ?? (() => {
     if (jobId) {
       void cancelJob();
@@ -76,6 +88,7 @@ export function AppLayout({ children, resetAction }: AppLayoutProps) {
         currentPhase={currentPhase}
         currentStepId={currentStep?.id}
         isLandingPage={isLandingPage}
+        showStepIndicator={showStepIndicator}
         isAnalysisActive={isAnalysisActive}
         isResetting={resetAction?.isResetting ?? isLoading}
         onReset={handleReset}

@@ -15,6 +15,11 @@ interface AppHeaderProps {
    * @default false
    */
   isLandingPage?: boolean;
+  /**
+   * Whether to display the pipeline progress steps in the header.
+   * @default true
+   */
+  showStepIndicator?: boolean;
   /** Whether an analysis is currently loaded or running, enabling the reset option. */
   isAnalysisActive: boolean;
   /**
@@ -37,6 +42,7 @@ export function AppHeader({
   currentPhase,
   currentStepId,
   isLandingPage = false,
+  showStepIndicator = true,
   isAnalysisActive,
   isResetting = false,
   onReset,
@@ -61,7 +67,7 @@ export function AppHeader({
               <p className="text-sm font-semibold uppercase tracking-wide text-neutral-textSecondary">
                 {currentPhase}
               </p>
-              <StepIndicator currentStepId={currentStepId} />
+              {showStepIndicator && <StepIndicator currentStepId={currentStepId} />}
             </div>
 
             <div className="flex justify-start lg:justify-end">
