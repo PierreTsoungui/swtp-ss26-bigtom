@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.2.0] - 2026-07-04
+
+### Added
+- **Local HTTPS Support**: Added local HTTPS support for the Dockerized application, enabling secure local development and testing environments.
+- **API Rate Limiting**: Implemented rate limiting across all API routes via NGINX and adjusted the frontend job-polling interval to 3 seconds to reduce request pressure on the backend.
+- **Batch Round Tracker**: Introduced a round tracker (`startRound()` / `observe()`) for the batch correction workflow, now triggered on every submit or skip action on the Batch page.
+- **Fallback & Error Pages**: Added dedicated fallback and error pages to the frontend for improved handling of unexpected states.
+
+### Changed
+- **Reverse Proxy Routing**: Updated NGINX routes to match the latest API version.
+- **Normalization Error Handling**: Improved handling of HTTP 429 errors on the Normalization page.
+
+### Fixed
+- **EPICv2 Annotation Fallback**: Fixed a failure in the R worker by ensuring the required EPICv2 annotation package is installed.
+- **HTTP Security Headers**: Fixed a low-severity issue identified by an OWASP ZAP scan caused by missing HTTP security headers, resolved via middleware.
+- **Docker Image Hardening**: Fixed security issues in the Dockerfile flagged by Trivy.
+- **Dependency Security**: Upgraded npm dependencies to secure versions following a security audit.
+- Minor English text correction in the frontend.
+
+### Refactored
+- **Frontend Accessibility & Readability**: Reworked frontend components to improve WCAG accessibility and readability.
+- **Test Suites Modernized**: Adapted backend and frontend test suites to the updated project architecture.
+
+### Documentation
+- **Complete English TypeDoc Coverage**: Extended and translated TypeDoc documentation to English across all frontend modules (Analysis, Batch, Landing, Normalization, TableView, Shared), including an English rewrite of the privacy policy.
+
 ## [1.1.0] - 2026-07-02
 
 ### Added
