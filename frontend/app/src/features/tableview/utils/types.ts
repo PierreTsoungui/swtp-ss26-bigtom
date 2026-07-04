@@ -57,12 +57,3 @@ export type HeatMapOptionsResponse = {
     job_id: string;
     available_columns: AnnotationColumn[];
 };
-
-/**
- * Error response of POST /heatmap/{job_id}.
- */
-export type HeatMapErrorResponse = {
-    error: string;
-    message: string;
-    detail?: string;
-};

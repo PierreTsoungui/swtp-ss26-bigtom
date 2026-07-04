@@ -184,11 +184,20 @@ describe('HeatMap', () => {
                 return Promise.resolve({ ok: true, json: async () => mockHeatMapOptions } as Response);
             }
             if (url.includes('/heatmap') && !url.includes('options')) {
+                // The backend returns an RFC 9457 problem+json body; readApiError
+                // reads it via response.text() and surfaces its `detail`.
                 return Promise.resolve({
                     ok: false,
                     status: 400,
-                    json: async () => ({ message: "API Fehler: Server-Validierung fehlgeschlagen" })
-                } as Response);
+                    text: () =>
+                        Promise.resolve(
+                            JSON.stringify({
+                                type: "/errors/invalid-grouping-column",
+                                title: "Invalid grouping column",
+                                detail: "API Fehler: Server-Validierung fehlgeschlagen",
+                            }),
+                        ),
+                } as unknown as Response);
             }
             return Promise.resolve({ ok: true, json: async () => ({}) } as Response);
         });
