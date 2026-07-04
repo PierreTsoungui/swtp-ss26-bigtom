@@ -54,14 +54,14 @@ describe("TableTabs", () => {
   it("shows the help button with correct english aria-label for active DMP analysis", () => {
     render(<TableTabs activeTab="dmp" onChange={vi.fn()} />);
 
-    const helpButton = screen.getByRole("button", { name: "Open DMP analysis help" });
+    const helpButton = screen.getByRole("button", { name: "Open help for DMP analysis" });
     expect(helpButton).toBeInTheDocument();
   });
 
   it("shows the help button with correct english aria-label for active DMR analysis", () => {
     render(<TableTabs activeTab="dmr" onChange={vi.fn()} />);
 
-    const helpButton = screen.getByRole("button", { name: "Open DMR analysis help" });
+    const helpButton = screen.getByRole("button", { name: "Open help for DMR analysis" });
     expect(helpButton).toBeInTheDocument();
   });
 });

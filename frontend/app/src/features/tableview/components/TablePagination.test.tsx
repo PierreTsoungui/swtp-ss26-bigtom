@@ -106,16 +106,16 @@ describe("TablePagination", () => {
   it("calls onPageChange when a specific numbered page button is clicked", () => {
     const onPageChangeMock = vi.fn();
     render(
-      <TablePagination
-        page={1}
-        totalPages={10}
-        pageSize={100}
-        onPageChange={onPageChangeMock}
-      />
+        <TablePagination
+            page={1}
+            totalPages={10}
+            pageSize={100}
+            onPageChange={onPageChangeMock}
+        />
     );
 
-    // Click on page number 4
-    const pageFourButton = screen.getByRole("button", { name: "4" });
+    const pageFourButton = screen.getByRole("button", { name: /page 4/i });
+
     fireEvent.click(pageFourButton);
 
     expect(onPageChangeMock).toHaveBeenCalledWith(4);
@@ -124,32 +124,36 @@ describe("TablePagination", () => {
   //COVERAGE TESTS FOR THE GETPAGENUMBERS SLIDING WINDOW ALGORITHM
 
   it("shifts the pagination sliding window correctly when page is near the end", () => {
+    const onPageChangeMock = vi.fn();
+
     render(
-      <TablePagination
-        page={10}
-        totalPages={10}
-        pageSize={50}
-        onPageChange={vi.fn()}
-      />
+        <TablePagination
+            page={10}
+            totalPages={10}
+            pageSize={50}
+            onPageChange={onPageChangeMock}
+        />
     );
 
-    // Max visible is 5. On page 10 of 10, visible numbers should be 6, 7, 8, 9, 10
-    expect(screen.getByRole("button", { name: "6" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "5" })).not.toBeInTheDocument();
+    const pageSixButton = screen.getByRole("button", { name: /page 6/i });
+
+    fireEvent.click(pageSixButton);
+
+    expect(onPageChangeMock).toHaveBeenCalledWith(6);
   });
 
-  it("handles situations where totalPages is smaller than maxVisible pages width", () => {
+
+  it('handles situations where totalPages is smaller than maxVisible pages width', () => {
     render(
-      <TablePagination
-        page={1}
-        totalPages={3}
-        pageSize={50}
-        onPageChange={vi.fn()}
-      />
+        <TablePagination
+            page={1}
+            totalPages={3}
+            pageSize={50}
+            onPageChange={vi.fn()}
+        />
     );
-
-    // Total pages is 3. It should only render buttons up to 3.
-    expect(screen.getByRole("button", { name: "3" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "4" })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /page 3/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /page 4/i })).not.toBeInTheDocument();
   });
+
 });

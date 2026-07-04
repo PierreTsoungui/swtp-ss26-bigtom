@@ -60,7 +60,7 @@ global.fetch = vi.fn();
 describe("NormalizationPage Component Suite", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useNormalizationPreview).mockReturnValue({ data: mockPreviewPayload as any, isLoading: false, error: null });
+    vi.mocked(useNormalizationPreview).mockReturnValue({ data: mockPreviewPayload as any, isLoading: false, error: null, setError: vi.fn() });
     vi.mocked(useJobPolling).mockReturnValue(null);
     (global.fetch as any).mockResolvedValue({ ok: true });
   });
@@ -76,17 +76,17 @@ describe("NormalizationPage Component Suite", () => {
   });
 
   it("displays explicit loading message wrappers when background requests are pending", () => {
-    vi.mocked(useNormalizationPreview).mockReturnValue({ data: null, isLoading: true, error: null });
+    vi.mocked(useNormalizationPreview).mockReturnValue({ data: null, isLoading: true, error: null, setError: vi.fn() });
     render(<MemoryRouter><NormalizationPage /></MemoryRouter>);
 
     expect(screen.getByTestId("loading-screen")).toHaveTextContent("Loading normalization previews...");
   });
 
   it("renders targeted error message contents gracefully upon operational failures", () => {
-    vi.mocked(useNormalizationPreview).mockReturnValue({ data: null, isLoading: false, error: "Database Connection Dropped" });
+    vi.mocked(useNormalizationPreview).mockReturnValue({ data: null, isLoading: false, error: "Database Connection Dropped", setError: vi.fn() });
     render(<MemoryRouter><NormalizationPage /></MemoryRouter>);
 
-    expect(screen.getByTestId("loading-screen")).toHaveTextContent("Database Connection Dropped");
+    expect(screen.getByRole("alert")).toHaveTextContent("Database Connection Dropped");
   });
 
   it("manages method selections, triggers POST calls and displays button execution changes", async () => {

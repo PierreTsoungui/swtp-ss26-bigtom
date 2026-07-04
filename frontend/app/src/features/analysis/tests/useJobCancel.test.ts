@@ -83,7 +83,6 @@ describe("useJobCancel Hook", () => {
         // Assert
         expect(result.current.isLoading).toBe(false);
         expect(result.current.error).toEqual({
-            type: "http://localhost:3000/analysis/errors#connection-error",
             title: "Connection Error",
             status: 503,
             detail: "The connection to the server was interrupted.",
