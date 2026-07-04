@@ -96,6 +96,34 @@ describe("AppLayout Component Shell", () => {
     expect(within(header).queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
   });
 
+  it("exposes in-page section anchors in the landing header navigation", () => {
+    renderLayout("/");
+
+    const sectionNav = within(screen.getByRole("banner")).getByRole("navigation", {
+      name: /landing page sections/i,
+    });
+
+    // Each nav item is an anchor pointing at the matching section id.
+    const expected = [
+      { name: "Overview", href: "#overview" },
+      { name: "Workflow", href: "#workflow" },
+      { name: "Getting Started", href: "#getting-started" },
+      { name: "FAQ", href: "#help" },
+      { name: "Glossary", href: "#glossary" },
+    ];
+    for (const { name, href } of expected) {
+      expect(within(sectionNav).getByRole("link", { name })).toHaveAttribute("href", href);
+    }
+  });
+
+  it("does not render the landing section navigation on non-landing routes", () => {
+    renderLayout("/upload");
+
+    expect(
+      screen.queryByRole("navigation", { name: /landing page sections/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps form reset triggers disabled if no continuous active analysis background tasks are identified", () => {
     renderLayout("/upload");
 

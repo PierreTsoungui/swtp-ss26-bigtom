@@ -3,6 +3,18 @@
 @config "../tailwind.config.ts";
 
 @layer base {
+  /* Smoothly animate in-page anchor jumps (e.g. the landing page section nav),
+     while respecting users who prefer reduced motion. */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
   :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
     outline: 3px solid theme(colors.primary.DEFAULT);
     outline-offset: 3px;

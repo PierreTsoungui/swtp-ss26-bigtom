@@ -77,7 +77,7 @@ describe("LandingPage Component", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/DNA methylation analysis involves several processing steps/i)
+      screen.getByText(/transforms raw signal from a methylation array/i)
     ).toBeInTheDocument();
   });
 

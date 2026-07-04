@@ -1,6 +1,7 @@
 import AnalyticsIcon from "@mui/icons-material/Analytics";
 import { Link } from "react-router";
 import { StepIndicator } from "./StepIndicator";
+import { LANDING_SECTIONS } from "../../features/landing/sections";
 
 /**
  * Props for the AppHeader component.
@@ -48,11 +49,18 @@ export function AppHeader({
   onReset,
 }: AppHeaderProps) {
   return (
-    <header className="border-b border-neutral-borderDefault bg-neutral-card px-6 py-4">
+    <header
+      className={`border-b border-neutral-borderDefault bg-neutral-card px-6 py-4 ${
+        // On the landing page the header doubles as the section navigation, so it
+        // stays pinned to the top while scrolling. Other routes keep the header
+        // in normal flow. z-40 sits below modal overlays (z-50).
+        isLandingPage ? "sticky top-0 z-40" : ""
+      }`}
+    >
       <div
         className={`mx-auto max-w-7xl ${
           isLandingPage
-            ? "flex items-center justify-between"
+            ? "flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
             : "grid gap-4 lg:grid-cols-[1fr_3fr_1fr] lg:items-center"
         }`}
       >
@@ -60,6 +68,23 @@ export function AppHeader({
           <AnalyticsIcon fontSize="large" />
           <span>MethylAnalyzer</span>
         </Link>
+
+        {isLandingPage && (
+          <nav aria-label="Landing page sections">
+            <ul className="flex flex-wrap items-center justify-end gap-x-1 gap-y-1">
+              {LANDING_SECTIONS.map((section) => (
+                <li key={section.id}>
+                  <a
+                    href={`#${section.id}`}
+                    className="block rounded-md px-3 py-2 text-sm font-medium text-neutral-textSecondary transition-colors hover:bg-neutral-surface hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    {section.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
         {!isLandingPage && (
           <>
