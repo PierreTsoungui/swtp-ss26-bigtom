@@ -1,11 +1,12 @@
 import { useParams } from "react-router-dom";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { BatchForm } from "./components/BatchForm";
 import { SvdPlot } from "./components/SvdPlot";
 
 import { useBatchParameters } from "./hooks/useBatchParameters";
 import { useBatchCorrection } from "./hooks/useBatchCorrection";
+import { BatchRoundTracker } from "./utils/batchRoundTracker";
 import { useJobPolling } from "../analysis/hooks/useJobPolling";
 
 import Progressbar from "../../shared/components/Progressbar";
@@ -39,6 +40,17 @@ const BatchPage: React.FC = () => {
 
   const [pollingKey, setPollingKey] = useState(0);
 
+  // Distinguishes a real round completion from the stale BATCH+WAITING status
+  // that lingers from the *previous* round (the race that made round 2+ show no
+  // progress bar). Held in a ref so startRound() takes effect synchronously in
+  // the submit handler, before the effect below re-runs. Lazily initialised so
+  // the instance is created exactly once.
+  const roundTrackerRef = useRef<BatchRoundTracker | null>(null);
+  if (roundTrackerRef.current === null) {
+    roundTrackerRef.current = new BatchRoundTracker();
+  }
+  const roundTracker = roundTrackerRef.current;
+
   // Status Polling
   const jobStatus = useJobPolling(
       showProgressBar && job_id ? job_id : null,
@@ -47,34 +59,38 @@ const BatchPage: React.FC = () => {
   // TODO: Prüfen, wo SVD + RUNNING eingesetzt werden muss
   const batchRunning = isSubmitting && jobStatus?.status === JobStatusValue.RUNNING;
 
-  // Erfolgreich beendet
+  // React to job-status changes: drive the progress bar and detect completion.
   useEffect(() => {
     if (!jobStatus) return;
-    console.log("[BATCH STATUS]", jobStatus);
 
-    // DMP/DMR läuft
-    if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.RUNNING ) {
+    // Feed the tracker every status so it can observe this round running; it
+    // reports completion only for a round it has actually seen run (guards the
+    // stale-WAITING race). Kept separate from the early-returning analysis
+    // branches below so the observation is never skipped.
+    const batchFinished = roundTracker.observe(jobStatus);
+
+    // Downstream analysis (DMP/DMR) is running.
+    if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.RUNNING) {
       setShowProgressBar(true);
       return;
     }
-    // DMP/DMR fertig
-    else if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.COMPLETED ||
-             jobStatus.phase === JobPhase.RESULTS && jobStatus.status === JobStatusValue.WAITING
+    // Downstream analysis finished -> move on to the results page.
+    else if ((jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.COMPLETED) ||
+             (jobStatus.phase === JobPhase.RESULTS && jobStatus.status === JobStatusValue.WAITING)
     ) {
       setShowProgressBar(false);
-      console.log("[DOWNSTREAM ANALYSIS FINISHED]", jobStatus.status);
       fetchHistory();
       navigate(`/results/${job_id}`);
       return;
     }
-    const batchFinished = jobStatus.phase === JobPhase.BATCH && jobStatus.status === JobStatusValue.WAITING;
+
+    // A batch round finished: hide the progress bar and reload the SVD history.
     if (batchFinished && showProgressBar) {
       setShowProgressBar(false);
       fetchHistory();
-      // TODO: Prüfen, ob hier ein return hin muss?
     }
 
-  }, [jobStatus, showProgressBar, fetchHistory, navigate , job_id ]);
+  }, [jobStatus, showProgressBar, fetchHistory, navigate, job_id, roundTracker]);
 
   if (!job_id) {
     return (
@@ -93,19 +109,23 @@ const BatchPage: React.FC = () => {
   }
 
   const handleSubmit = async (data: BatchFormData) => {
+    // Start a fresh cycle: the previous round's WAITING must not count as done
+    // until we observe THIS run executing.
+    roundTracker.startRound();
     await runBatch({
       batch_correction: {
         batch_variable: data.batch_variable,
         covariates: data.covariates,
       },
     });
-    setPollingKey(prev => prev + 1); // Reset Polling
+    setPollingKey(prev => prev + 1); // reset polling for the new round
     setShowProgressBar(true);
   };
 
   const handleSkip = async (selection?: GroupSelection) => {
+    roundTracker.startRound();
     await skipBatch(selection);
-    setPollingKey(prev => prev + 1); // Reset Polling
+    setPollingKey(prev => prev + 1); // reset polling for the new round
     setShowProgressBar(true);
   };
 
