@@ -13,7 +13,7 @@ interface HelpButtonProps {
     topic: HelpTopicId;
 
     /**
-     * Accessibility label for the trigger button.
+     * Optional ARIA label for the trigger button.
      * @default "Open help"
      */
     ariaLabel?: string;
@@ -149,7 +149,7 @@ function HelpButton({ topic, ariaLabel = "Open help" }: HelpButtonProps) {
                                 className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-neutral-textSecondary bg-neutral-card text-xl font-semibold leading-none text-neutral-textPrimary transition-colors hover:bg-neutral-surface"
                                 aria-label="Close help"
                             >
-                                <span aria-hidden="true">×</span>
+                                ×
                             </button>
                         </div>
 

@@ -123,7 +123,7 @@ function FilterPanel({ filterSettings, onFilterSettingsChange }: FilterPanelProp
         <div className="max-w-4/6 mx-auto mt-2">
             <div className="mb-2 flex items-center gap-2">
                 <h2 className="text-lg font-semibold">Quality Filtering</h2>
-                <HelpButton topic="filtering" ariaLabel="Hilfe zur Filterung öffnen" />
+                <HelpButton topic="filtering" ariaLabel="Open filtering help" />
             </div>
             <Accordion defaultExpanded>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="filter-settings-content" id="filter-settings-header">

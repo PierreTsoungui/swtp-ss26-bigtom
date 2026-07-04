@@ -12,9 +12,7 @@ type Props = {
  * Typically used in results views to export filtered analysis data
  * into a machine-readable CSV format.
  */
-export function TableExportButton({
-  onDownload,
-}: Props) {
+export function TableExportButton({onDownload,}: Props) {
   return (
     <button
       onClick={onDownload}

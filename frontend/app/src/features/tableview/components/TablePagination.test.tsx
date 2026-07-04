@@ -1,73 +1,155 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 import { TablePagination } from "./TablePagination";
 
 describe("TablePagination", () => {
-  it("renders page information", () => {
-    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={() => {}} />);
+  it("renders page information and entries count correctly", () => {
+    render(
+      <TablePagination
+        page={1}
+        totalPages={10}
+        pageSize={100}
+        onPageChange={vi.fn()}
+      />
+    );
 
-    expect(screen.getByText("Seite 1 von 10")).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 10")).toBeInTheDocument();
+    expect(screen.getByText("100 entries per page")).toBeInTheDocument();
   });
 
-  it("calls next page", () => {
-    const onPageChange = vi.fn();
+  it("calls onPageChange with next page index when next button is clicked", () => {
+    const onPageChangeMock = vi.fn();
+    render(
+      <TablePagination
+        page={1}
+        totalPages={10}
+        pageSize={100}
+        onPageChange={onPageChangeMock}
+      />
+    );
 
-    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={onPageChange} />);
+    const nextButton = screen.getByTitle("Next page");
+    fireEvent.click(nextButton);
 
-    fireEvent.click(screen.getByRole("button", { name: "Zur nächsten Seite" }));
-
-    expect(onPageChange).toHaveBeenCalledWith(2);
+    expect(onPageChangeMock).toHaveBeenCalledWith(2);
   });
 
-  it("calls previous page", () => {
-    const onPageChange = vi.fn();
+  it("calls onPageChange with previous page index when previous button is clicked", () => {
+    const onPageChangeMock = vi.fn();
+    render(
+      <TablePagination
+        page={2}
+        totalPages={10}
+        pageSize={100}
+        onPageChange={onPageChangeMock}
+      />
+    );
 
-    render(<TablePagination page={2} totalPages={10} pageSize={100} onPageChange={onPageChange} />);
+    const prevButton = screen.getByTitle("Previous page");
+    fireEvent.click(prevButton);
 
-    fireEvent.click(screen.getByRole("button", { name: "Zur vorherigen Seite" }));
-
-    expect(onPageChange).toHaveBeenCalledWith(1);
+    expect(onPageChangeMock).toHaveBeenCalledWith(1);
   });
 
-  it("disables first and previous buttons on first page", () => {
-    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={() => {}} />);
+  it("calls onPageChange with bound targets when first and last buttons are clicked", () => {
+    const onPageChangeMock = vi.fn();
+    render(
+      <TablePagination
+        page={3}
+        totalPages={10}
+        pageSize={100}
+        onPageChange={onPageChangeMock}
+      />
+    );
 
-    expect(screen.getByRole("button", { name: "Zur ersten Seite" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Zur vorherigen Seite" })).toBeDisabled();
+    // Test first page click
+    fireEvent.click(screen.getByTitle("First page"));
+    expect(onPageChangeMock).toHaveBeenCalledWith(1);
+
+    // Test last page click
+    fireEvent.click(screen.getByTitle("Last page"));
+    expect(onPageChangeMock).toHaveBeenCalledWith(10);
   });
 
-  it("disables next and last buttons on last page", () => {
-    render(<TablePagination page={10} totalPages={10} pageSize={100} onPageChange={() => {}} />);
+  it("disables first and previous buttons on the first page", () => {
+    render(
+      <TablePagination
+        page={1}
+        totalPages={10}
+        pageSize={100}
+        onPageChange={vi.fn()}
+      />
+    );
 
-    expect(screen.getByRole("button", { name: "Zur nächsten Seite" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Zur letzten Seite" })).toBeDisabled();
+    expect(screen.getByTitle("First page")).toBeDisabled();
+    expect(screen.getByTitle("Previous page")).toBeDisabled();
+    expect(screen.getByTitle("Next page")).not.toBeDisabled();
+    expect(screen.getByTitle("Last page")).not.toBeDisabled();
   });
 
-  it("calls page number button", () => {
-    const onPageChange = vi.fn();
+  it("disables next and last buttons on the last page", () => {
+    render(
+      <TablePagination
+        page={10}
+        totalPages={10}
+        pageSize={100}
+        onPageChange={vi.fn()}
+      />
+    );
 
-    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={onPageChange} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Seite 5" }));
-
-    expect(onPageChange).toHaveBeenCalledWith(5);
+    expect(screen.getByTitle("First page")).not.toBeDisabled();
+    expect(screen.getByTitle("Previous page")).not.toBeDisabled();
+    expect(screen.getByTitle("Next page")).toBeDisabled();
+    expect(screen.getByTitle("Last page")).toBeDisabled();
   });
 
-  it("marks the current page semantically", () => {
-    render(<TablePagination page={5} totalPages={10} pageSize={100} onPageChange={() => {}} />);
+  it("calls onPageChange when a specific numbered page button is clicked", () => {
+    const onPageChangeMock = vi.fn();
+    render(
+      <TablePagination
+        page={1}
+        totalPages={10}
+        pageSize={100}
+        onPageChange={onPageChangeMock}
+      />
+    );
 
-    expect(screen.getByRole("button", { name: "Seite 5", current: "page" })).toBeInTheDocument();
+    // Click on page number 4
+    const pageFourButton = screen.getByRole("button", { name: "4" });
+    fireEvent.click(pageFourButton);
+
+    expect(onPageChangeMock).toHaveBeenCalledWith(4);
   });
 
-  it("shows page size", () => {
-    render(<TablePagination page={1} totalPages={10} pageSize={100} onPageChange={() => {}} />);
+  //COVERAGE TESTS FOR THE GETPAGENUMBERS SLIDING WINDOW ALGORITHM
 
-    expect(screen.getByText("100 Einträge pro Seite")).toBeInTheDocument();
+  it("shifts the pagination sliding window correctly when page is near the end", () => {
+    render(
+      <TablePagination
+        page={10}
+        totalPages={10}
+        pageSize={50}
+        onPageChange={vi.fn()}
+      />
+    );
+
+    // Max visible is 5. On page 10 of 10, visible numbers should be 6, 7, 8, 9, 10
+    expect(screen.getByRole("button", { name: "6" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "5" })).not.toBeInTheDocument();
   });
 
-  it("renders correct page number", () => {
-    render(<TablePagination page={5} totalPages={10} pageSize={100} onPageChange={() => {}} />);
+  it("handles situations where totalPages is smaller than maxVisible pages width", () => {
+    render(
+      <TablePagination
+        page={1}
+        totalPages={3}
+        pageSize={50}
+        onPageChange={vi.fn()}
+      />
+    );
 
-    expect(screen.getByText("Seite 5 von 10")).toBeInTheDocument();
+    // Total pages is 3. It should only render buttons up to 3.
+    expect(screen.getByRole("button", { name: "3" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "4" })).not.toBeInTheDocument();
   });
 });

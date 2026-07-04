@@ -50,7 +50,7 @@ export function TablePagination({
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
       <div className="text-sm text-neutral-textSecondary">
-        {pageSize} records per page
+        {pageSize} entries per page
       </div>
 
       <nav className="flex items-center gap-2" aria-label="Seitennavigation">
@@ -78,7 +78,7 @@ export function TablePagination({
           ‹
         </button>
 
-        {/* Page numbers */}
+        {/* Page Numbers */}
         {getPageNumbers().map((pageNumber) => (
           <button
             key={pageNumber}
@@ -110,7 +110,7 @@ export function TablePagination({
           ›
         </button>
 
-        {/* Last page */}
+        {/* Last Page */}
         <button
           type="button"
           onClick={() => onPageChange(totalPages)}

@@ -1,14 +1,14 @@
-import {useEffect, useMemo, useState} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import type { MethodPreview, NormalizationMethod } from "./utils/types";
 import { METHOD_ORDER } from "./utils/types";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
-import {useJobPolling} from "../analysis/hooks/useJobPolling.ts";
+import { useJobPolling } from "../analysis/hooks/useJobPolling.ts";
 import Progressbar from "../../shared/components/Progressbar.tsx";
 import PcaViewer from "./components/PcaViewer.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
-import {JobPhase, type JobStatus, JobStatusValue} from "../../shared/utils/JobTypes.ts";
+import { JobPhase, type JobStatus, JobStatusValue } from "../../shared/utils/JobTypes.ts";
 import HelpButton from "../../shared/help/HelpButton.tsx";
 import ErrorMessage from "../../shared/error-handling/components/ErrorMessage.tsx";
 
@@ -49,14 +49,14 @@ export function NormalizationPage() {
     );
   }, [data]);
 
-  const jobStatus : JobStatus | null  = useJobPolling(isNormalising ? (job_id ?? null) : null);
+  const jobStatus: JobStatus | null = useJobPolling(isNormalising ? (job_id ?? null) : null);
 
   useEffect(() => {
       if (!jobStatus) return;
       if (jobStatus.status === JobStatusValue.WAITING && jobStatus.phase === JobPhase.BATCH) {
         navigate(`/batch/${job_id}`);
       }
-  }, [jobStatus?.status, job_id, navigate]);
+  }, [jobStatus?.status, job_id, navigate, jobStatus?.phase]);
 
   /**
    * Submits the selected method to the backend.
@@ -96,7 +96,7 @@ export function NormalizationPage() {
   if (isLoading) { return <LoadingScreen message="Loading normalization previews..." /> }
   if (!data && !error) return null;
 
-  const isDisabled : boolean = !selected || isSubmitting || isNormalising;
+  const isDisabled: boolean = !selected || isSubmitting || isNormalising;
 
   return (
 
@@ -141,14 +141,14 @@ export function NormalizationPage() {
         ))}
       </div>
 
-      {/* Loadingscreen */}
+      {/* Progressbar active during live server processing execution */}
       {isNormalising && jobStatus && (
-          <div className="mb-5">
+          <div className="mb-5" data-testid="normalization-progressbar-container">
             <Progressbar jobStatus={jobStatus} showNextButton={false} onNext={() => {}} />
           </div>
       )}
 
-      {/* CONFIRM BUTTON */}
+      {/* Operational submit action triggers */}
       <div className="flex justify-center">
         <button
           type="button"

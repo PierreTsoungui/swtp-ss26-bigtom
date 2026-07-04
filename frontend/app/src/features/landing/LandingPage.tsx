@@ -512,7 +512,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
       {/* SECTION: NEW BIOLOGICAL GLOSSARY */}
       <section id="glossary" aria-labelledby="glossary-title" className="border-t border-neutral-borderDefault bg-neutral-card px-6 py-16">
         <div className="mx-auto max-w-5xl">

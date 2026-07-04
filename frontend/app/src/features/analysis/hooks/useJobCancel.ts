@@ -1,5 +1,5 @@
-import type {ApiProblemDetail, ProblemDetail} from "../../../shared/error-handling/types/ErrorTypes.ts";
-import {useState} from "react";
+import type { ApiProblemDetail, ProblemDetail } from "../../../shared/error-handling/types/ErrorTypes.ts";
+import { useState } from "react";
 
 /**
  * Provides functionality to cancel an active job.
@@ -16,7 +16,7 @@ export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
         setError(null);
 
         try {
-            const response : Response = await fetch(`/api/v1/reset/${jobId}`, {
+            const response: Response = await fetch(`/api/v1/reset/${jobId}`, {
                 method: "POST",
             });
 
@@ -28,9 +28,9 @@ export function useJobCancel(jobId: string, onCancelSuccess: () => void) {
             onCancelSuccess();
         } catch {
             setError({
-                title: "Verbindungsfehler",
+                title: "Connection Error",
                 status: 503,
-                detail: "Verbindung zum Server unterbrochen.",
+                detail: "The connection to the server was interrupted.",
                 instance: `/api/v1/reset/${jobId}`,
             });
         } finally {

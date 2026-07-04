@@ -53,8 +53,10 @@ export function AppLayout({ children, resetAction }: AppLayoutProps) {
   const isLandingPage = location.pathname === "/";
   const currentStep = getWorkflowStepForPath(location.pathname);
   const jobId = useMemo(() => getJobIdFromPath(location.pathname), [location.pathname]);
+  
+  // Translated route header labels to complete the English transformation loop
   const currentPhase = location.pathname.startsWith("/datenschutz")
-    ? "Datenschutz"
+    ? "Privacy Policy"
     : currentStep?.label ?? "BigTom";
 
   const { cancelJob, isLoading } = useJobCancel(jobId ?? "", () => {

@@ -155,7 +155,7 @@ function HeatMap({filters, rowCount}: HeatMapProps) {
                             The heatmap uses the filters currently applied to the DMP table
                             {rowCount != null && <> — <strong>{rowCount}</strong> CpG{rowCount === 1 ? "" : "s"} selected</>}.
                         </p>
-                        <HelpButton topic="heatmap" ariaLabel="Hilfe zur Heatmap öffnen" />
+                        <HelpButton topic="heatmap" ariaLabel="Open heatmap help" />
                     </div>
 
                     {/* Row-limit / empty pre-checks */}
@@ -196,7 +196,6 @@ function HeatMap({filters, rowCount}: HeatMapProps) {
                                 </Select>
                             </FormControl>
                         </div>
-
                         <div className="space-y-2">
                             <label className="block text-sm font-semibold">Secondary group (optional)</label>
                             <FormControl fullWidth disabled={optionsLoading || isGenerating}>

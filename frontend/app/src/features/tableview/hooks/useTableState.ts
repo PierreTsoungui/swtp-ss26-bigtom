@@ -35,15 +35,12 @@ export function useTableState() {
     useState<"dmp" | "dmr">("dmp");
 
   /** Independent sorting state for each table type. */
-  const [sorting, setSorting] = 
+  const [sorting, setSorting] =
   useState<Record<"dmp" | "dmr",
     TableSortState
   >>({
-    dmp: { sort_by: null, sort_order: null },
-    dmr: { sort_by: null, sort_order: null },
+    dmp: { sort_by: null, sort_order: null }, dmr: { sort_by: null, sort_order: null },
   });
-
-  /** Independent pagination state for each table type. */
   const [pagination, setPagination] =
     useState<
       Record<"dmp" | "dmr",
