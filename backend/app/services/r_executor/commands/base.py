@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from app.core import config
+
 if TYPE_CHECKING:
     from app.services.r_executor.result import ExecutionResult
 
@@ -22,6 +24,13 @@ class RCommand(ABC):
     timeout_seconds: int = 600
 
     R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
+
+    # ── Admission-control weights (see app.core.resource_governor) ──
+    # Estimated peak memory (GiB) and CPU cores this step needs. Deliberately
+    # PLAIN class attributes (no annotation) so they are NOT dataclass fields and
+    # never shift the constructor signature; heavy commands override them.
+    mem_gb = config.PIPELINE_STEP_MEMORY_GB
+    cores = 1
 
     @property
     def docker_job_dir(self) -> str:

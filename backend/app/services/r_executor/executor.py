@@ -3,6 +3,7 @@ import logging
 import re
 from typing import Optional, Callable, Awaitable
 
+from app.core.resource_governor import governor
 from app.services.r_executor.commands.base import RCommand
 from app.services.r_executor.protocol import extract_json_objects
 from app.services.r_executor.result import ExecutionResult, ExecutionStatus
@@ -46,6 +47,37 @@ async def run_r_script(
 
     logger.info("R command prepared: job_id=%s mode=%s", command.job_id, command.mode_label)
 
+    async def _queued_notice() -> None:
+        """Tell the UI the job is waiting for a free compute slot (backpressure)."""
+        if on_progress is not None:
+            await on_progress({
+                "status": "running",
+                "current_step": "In Warteschlange — warte auf freie Rechenkapazität …",
+            })
+
+    # Admission control: hold a memory+core slot for the entire subprocess
+    # lifetime so concurrent jobs cannot oversubscribe the host and trigger the
+    # OOM-killer (see app.core.resource_governor). Under load this QUEUES the job
+    # instead of crashing the server; the container mem_limit is the hard backstop.
+    async with governor.slot(
+        command.mem_gb, command.cores,
+        label=command.mode_label, on_wait=_queued_notice,
+    ):
+        return await _run_subprocess(command, cancel_event, on_progress, cmd)
+
+
+async def _run_subprocess(
+    command: RCommand,
+    cancel_event: asyncio.Event,
+    on_progress: Optional[Callable[[dict], Awaitable[None]]],
+    cmd: list[str],
+) -> ExecutionResult:
+    """Start the built R command, stream its output, and resolve the result.
+
+    Extracted from :func:`run_r_script` so the resource-governor slot can wrap the
+    whole subprocess lifetime (start → drain → reap) without deeply nesting the
+    streaming logic. Behaviour is unchanged from the original inline body.
+    """
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,

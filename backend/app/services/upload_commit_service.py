@@ -14,7 +14,7 @@ from pathlib import Path
 
 from app.core.error_types import AppException, ErrorTypes
 from app.models.upload import ColumnMapping, CommitRequest
-from app.services import job_manager, staging_manager
+from app.services import intake_guards, job_manager, staging_manager
 from app.services.file_handler import clean_job_files, ensure_upload_dir, save_filter_settings
 from app.services.job_manager import JobPhase, JobStatusValue
 from app.services.samplesheet_normalizer import normalize_sample_sheet, read_sample_sheet_table
@@ -41,6 +41,13 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
         )
 
     selected_pairs = _resolve_selected_pairs(req.selected_pair_ids, internal.get("pairs", {}), instance)
+
+    # Intake guards — reject an oversized cohort or a full disk BEFORE building
+    # the job dir, so the pipeline never starts work it cannot finish within the
+    # RAM/disk budget (see app.core.config). The container mem_limit is the hard
+    # backstop; these give the user a clear, early message instead.
+    intake_guards.enforce_sample_limit(len(selected_pairs), instance)
+    intake_guards.enforce_storage_limit(instance)
 
     # Validate the role mapping against the chosen sheet *before* touching the
     # job dir, so a bad mapping never leaves a half-built job behind.
