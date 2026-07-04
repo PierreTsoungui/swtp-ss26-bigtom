@@ -21,6 +21,12 @@ RUN apt-get update && apt-get install -y \
     build-essential wget git \
     && rm -rf /var/lib/apt/lists/*
 
+# Große Bioconductor-Annotationspakete (v. a. EPICv2anno.20a1.hg38, mehrere
+# hundert MB) brechen mit R's Default-Download-Timeout von 60s an langsamen
+# Mirrors ab und lassen den Build fehlschlagen. Timeout global & früh anheben,
+# damit ALLE folgenden Installs (Annotationen, ChAMP, ComplexHeatmap …) greifen.
+RUN echo 'options(timeout = 1200)' >> /usr/local/lib/R/etc/Rprofile.site
+
 # BiocManager für die stabile Version 3.20 initialisieren
 RUN R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')" \
     && R -e "BiocManager::install(version='3.20', ask=FALSE)"
@@ -54,10 +60,6 @@ RUN R -e "install.packages(c( \
 # (Nutzt die eben installierten Abhängigkeiten und überschreibt nur den ChAMP-Kern)
 RUN R -e "remotes::install_github('YuanTian1991/ChAMPdata', upgrade='never')" \
     && R -e "remotes::install_github('YuanTian1991/ChAMP', upgrade='never')"
-
-# EPIC v2 Annotation nach dem ChAMP-GitHub-Override nochmals explizit sicherstellen.
-# Das Paket ist groß; ein höherer Timeout verhindert abgebrochene Mirror-Downloads.
-RUN R -e "options(timeout=1200); BiocManager::install('IlluminaHumanMethylationEPICv2anno.20a1.hg38', update=FALSE, ask=FALSE, force=TRUE); if (!requireNamespace('IlluminaHumanMethylationEPICv2anno.20a1.hg38', quietly=TRUE)) stop('EPICv2 annotation package installation failed')"
 
 WORKDIR /app
 
