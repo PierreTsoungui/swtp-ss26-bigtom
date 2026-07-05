@@ -62,7 +62,7 @@ describe("AppLayout Component Shell", () => {
 
 
   it("updates header labels to display 'Privacy Policy' upon hitting the datenschutz page route", () => {
-    renderLayout("/datenschutz");
+    renderLayout("/privacy");
 
     expect(within(screen.getByRole("banner")).getByText("Privacy Policy")).toBeInTheDocument();
   });
@@ -84,7 +84,7 @@ describe("AppLayout Component Shell", () => {
     expect(impressum.getAttribute("rel")).toContain("noopener");
     expect(impressum.getAttribute("rel")).toContain("noreferrer");
 
-    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/datenschutz");
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
   });
 
   it("renders scaled-down minimal identity headers without action tools inside landing entries", () => {
@@ -130,7 +130,15 @@ describe("AppLayout Component Shell", () => {
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
   });
 
-  it("unlocks reset triggers on busy sessions and correctly delegates action dispatches back to parent handlers", () => {
+  it("enables the reset action on the results page so data can be deleted after the analysis finished", () => {
+    // Regression: reset must be reachable on /results (GDPR right to erasure),
+    // not only while an analysis is running on /analysis or /normalization.
+    renderLayout("/results/job-123");
+
+    expect(screen.getByRole("button", { name: "Reset" })).toBeEnabled();
+  });
+
+  it("confirms before delegating a reset: opens the dialog, and only the Delete action fires onReset", () => {
     const onResetMock = vi.fn();
     renderLayout("/analysis/job-123", {
       isAnalysisActive: true,
@@ -140,7 +148,29 @@ describe("AppLayout Component Shell", () => {
     const resetButton = screen.getByRole("button", { name: "Reset" });
     expect(resetButton).toBeEnabled();
 
+    // Clicking Reset must NOT delete immediately — it opens a confirmation.
     fireEvent.click(resetButton);
+    expect(onResetMock).not.toHaveBeenCalled();
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Delete this analysis?")).toBeInTheDocument();
+
+    // Only confirming the destructive action delegates to the parent handler.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     expect(onResetMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancelling the reset confirmation does not delete anything", () => {
+    const onResetMock = vi.fn();
+    renderLayout("/analysis/job-123", {
+      isAnalysisActive: true,
+      onReset: onResetMock,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+
+    expect(onResetMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,8 @@
 import AnalyticsIcon from "@mui/icons-material/Analytics";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { StepIndicator } from "./StepIndicator";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { LANDING_SECTIONS } from "../../features/landing/sections";
 
 /**
@@ -48,6 +50,20 @@ export function AppHeader({
   isResetting = false,
   onReset,
 }: AppHeaderProps) {
+  // Reset permanently deletes the analysis and all of its data, so it is gated
+  // behind an explicit confirmation dialog.
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Close the dialog once a confirmed reset finishes. On success `onReset`
+  // navigates away (this header stays mounted across routes, so the dialog would
+  // otherwise linger); on failure control returns here and the dialog closes so
+  // the user can try again. The transition true -> false marks completion.
+  const wasResetting = useRef(false);
+  useEffect(() => {
+    if (wasResetting.current && !isResetting) setConfirmOpen(false);
+    wasResetting.current = isResetting;
+  }, [isResetting]);
+
   return (
     <header
       className={`border-b border-neutral-borderDefault bg-neutral-card px-6 py-4 ${
@@ -98,7 +114,7 @@ export function AppHeader({
             <div className="flex justify-start lg:justify-end">
               <button
                 type="button"
-                onClick={onReset}
+                onClick={() => setConfirmOpen(true)}
                 disabled={!isAnalysisActive || isResetting}
                 className="rounded-md border border-neutral-textSecondary bg-neutral-card px-4 py-2 text-sm font-semibold text-neutral-textSecondary transition-colors hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:border-neutral-borderEmphasis disabled:bg-neutral-surface disabled:text-neutral-textSecondary disabled:hover:border-neutral-borderEmphasis disabled:hover:text-neutral-textSecondary"
               >
@@ -108,6 +124,24 @@ export function AppHeader({
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        destructive
+        title="Delete this analysis?"
+        description={
+          <>
+            This permanently deletes the current analysis and all of its uploaded
+            files and results from the server. This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        busy={isResetting}
+        busyLabel="Deleting…"
+        onConfirm={onReset}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </header>
   );
 }

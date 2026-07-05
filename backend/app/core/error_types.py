@@ -18,6 +18,9 @@ class ErrorTypes:
     INVALID_UPLOAD = ErrorType("/errors/invalid-upload", 400, "Invalid upload")
     SAVE_FAILED    = ErrorType("/errors/save-failed", 500, "Save failed")
 
+    # Reset Errors (500) — the job's data could not be fully deleted on reset.
+    RESET_FAILED   = ErrorType("/errors/reset-failed", 500, "Reset failed")
+
     # ── FOLDER / ZIP UPLOAD (inspect → commit) ─────────────────────────
     INVALID_ARCHIVE      = ErrorType("/errors/invalid-archive", 400, "Invalid archive")
     ARCHIVE_TOO_LARGE    = ErrorType("/errors/archive-too-large", 400, "Archive too large")

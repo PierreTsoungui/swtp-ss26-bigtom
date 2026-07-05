@@ -26,7 +26,7 @@ export function AppFooter() {
           >
             Imprint
           </a>
-          <Link to="/datenschutz" className="font-medium text-neutral-textSecondary underline-offset-4 hover:text-primary-hover hover:underline">
+          <Link to="/privacy" className="font-medium text-neutral-textSecondary underline-offset-4 hover:text-primary-hover hover:underline">
             Privacy Policy
           </Link>
           <span>© 2026 BigTom</span>

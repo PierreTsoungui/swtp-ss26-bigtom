@@ -23,7 +23,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
-from app.services import job_manager
+from app.services import file_handler, job_manager
 from app.services.job_manager import JobStatusValue
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,27 @@ class ResetOutcome:
 
 
 async def reset_job(job_id: str) -> ResetOutcome:
-    """Cancel (if needed) and delete a job. Idempotent and concurrency-safe."""
+    """Cancel (if needed) and permanently delete a job and its data.
+
+    This is the user-facing "delete my data now" action, so the guarantee is:
+    when this returns successfully, no data for ``job_id`` remains on disk. To
+    make that guarantee real, the order is deliberate:
+
+      1. stop any running R work and wait for it to actually terminate, so it can
+         no longer write into the job directory;
+      2. purge the in-memory registries;
+      3. delete the job directory from disk and verify it is gone.
+
+    Deleting before the R subprocess is stopped would be unsafe — the still-running
+    process could recreate files after the deletion. A job is considered present
+    if either its in-memory record OR its on-disk directory exists, so a completed
+    job whose in-memory record was already evicted can still be deleted.
+
+    Idempotent and concurrency-safe.
+
+    @raises OSError: if the job directory cannot be fully removed (the caller must
+        then NOT report success — the route maps this to an HTTP 500).
+    """
     # Exactly one reset may run per job. A second concurrent request returns
     # immediately rather than racing on the same teardown.
     if not job_manager.begin_reset(job_id):
@@ -51,25 +71,33 @@ async def reset_job(job_id: str) -> ResetOutcome:
 
     try:
         job = job_manager.get_job(job_id)
-        if job is None:
+        dir_exists = file_handler.job_dir_exists(job_id)
+
+        # Nothing anywhere (neither in memory nor on disk) → genuinely not found.
+        if job is None and not dir_exists:
             logger.info("[reset] Job not found: job_id=%s", job_id)
             return ResetOutcome(found=False, was_running=False)
 
-        was_running = job.status == JobStatusValue.RUNNING.value
+        was_running = job is not None and job.status == JobStatusValue.RUNNING.value
 
-        # Signal cancellation unconditionally: an in-flight task or cancel event
-        # may still exist even if the reported status briefly lags behind. Both
-        # calls are safe no-ops when nothing is in flight.
+        # 1. Stop in-flight R work FIRST so it cannot recreate files after we
+        #    delete them. Signal unconditionally: an in-flight task or cancel
+        #    event may still exist even if the reported status briefly lags
+        #    behind. Both calls are safe no-ops when nothing is in flight.
         if job_manager.trigger_cancel(job_id):
             logger.info("[reset] Cancel signal sent: job_id=%s", job_id)
         await _await_task_shutdown(job_id)
 
-        # Purge the job. The pipeline task's own finally normally clears the
-        # cancel-event/task registrations already; these calls are an
-        # idempotent safety net for the forced-cancel path.
+        # 2. Purge the in-memory registries. The pipeline task's own finally
+        #    normally clears the cancel-event/task registrations already; these
+        #    calls are an idempotent safety net for the forced-cancel path.
         job_manager.delete_job(job_id)
         job_manager.unregister_cancel_event(job_id)
         job_manager.unregister_job_task(job_id)
+
+        # 3. Delete the job's data from disk. This must succeed before we report
+        #    success — the response is a guarantee that the data is gone.
+        file_handler.delete_job_files(job_id)
 
         logger.info(
             "[reset] Job reset complete: job_id=%s was_running=%s", job_id, was_running

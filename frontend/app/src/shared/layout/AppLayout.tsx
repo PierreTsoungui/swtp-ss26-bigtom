@@ -36,13 +36,17 @@ interface AppLayoutProps {
 
 /**
  * Extracts the job ID from the current URL path using a regular expression.
- * Supported paths: /analysis/:id, /normalization/:id.
+ *
+ * Covers every route that is tied to a job (analysis, normalization, batch,
+ * results). This is what enables the header Reset action, so it must match all
+ * job pages — including the results page, where a user must still be able to
+ * delete their data after the analysis has finished (GDPR right to erasure).
  *
  * @param pathname - The current URL path.
  * @returns The job ID or null if not found.
  */
 function getJobIdFromPath(pathname: string): string | null {
-  const match = /^\/(?:analysis|normalization)\/([^/]+)/.exec(pathname);
+  const match = /^\/(?:analysis|normalization|batch|results)\/([^/]+)/.exec(pathname);
   return match?.[1] ?? null;
 }
 
@@ -63,8 +67,8 @@ export function AppLayout({ children, resetAction, hideStepIndicator = false }: 
   const showStepIndicator = !hideStepIndicator && currentStep !== undefined;
   let currentPhase = currentStep?.label ?? "BigTom";
 
-  if (location.pathname.startsWith("/datenschutz")) {
-    currentPhase = "Datenschutz";
+  if (location.pathname.startsWith("/privacy")) {
+    currentPhase = "Privacy Policy";
   }
 
   if (hideStepIndicator) {

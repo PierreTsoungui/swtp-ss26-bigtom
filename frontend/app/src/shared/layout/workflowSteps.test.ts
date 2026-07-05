@@ -38,6 +38,6 @@ describe("workflowSteps utility", () => {
     expect(getWorkflowStepForPath("/results/job-123")?.label).toBe("Results");
     
     // Unmapped standalone routes must return undefined fallback statuses
-    expect(getWorkflowStepForPath("/datenschutz")).toBeUndefined();
+    expect(getWorkflowStepForPath("/privacy")).toBeUndefined();
   });
 });

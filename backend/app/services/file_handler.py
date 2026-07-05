@@ -335,8 +335,34 @@ def ensure_upload_dir(job_id: str) -> Path:
 
 
 def clean_job_files(job_id: str):
-    """Löscht alle Dateien eines Jobs"""
+    """Löscht alle Dateien eines Jobs (best effort, wirft nicht).
+
+    Wird u. a. für den Rollback eines halb angelegten Jobs verwendet, wo ein
+    Rest-Fehler toleriert werden kann. Für eine garantierte Löschung (Reset)
+    ``delete_job_files`` verwenden.
+    """
     job_dir = UPLOAD_BASE_DIR / job_id
     if job_dir.exists():
         shutil.rmtree(job_dir, ignore_errors=True)
+
+
+def job_dir_exists(job_id: str) -> bool:
+    """True if the job's directory still exists on disk."""
+    return (UPLOAD_BASE_DIR / job_id).exists()
+
+
+def delete_job_files(job_id: str) -> None:
+    """Delete a job's directory and guarantee it is gone.
+
+    Unlike ``clean_job_files`` this raises if the directory cannot be fully
+    removed, so a caller (the reset flow) can refuse to report success while any
+    data remains on disk.
+
+    @raises OSError: if the directory still exists after the deletion attempt.
+    """
+    job_dir = UPLOAD_BASE_DIR / job_id
+    if job_dir.exists():
+        shutil.rmtree(job_dir)
+    if job_dir.exists():
+        raise OSError(f"Job-Verzeichnis konnte nicht vollständig gelöscht werden: {job_dir}")
 
