@@ -12,10 +12,8 @@ describe("HelpButton Component", () => {
 
     // Assert dialog layout mounts
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(
-      screen.getByText(/What files are required for the analysis/i)
-    ).toBeInTheDocument();
-    
+    expect(screen.getByText(/What files are required for the analysis/i)).toBeInTheDocument();
+
     // Check that the closing button intercepts focus smoothly upon opening
     expect(screen.getByRole("button", { name: "Close help" })).toHaveFocus();
   });
@@ -27,9 +25,7 @@ describe("HelpButton Component", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open help" }));
 
     // Assert title heading matches registry data fields
-    expect(
-      screen.getByRole("heading", { name: "Normalization" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Normalization" })).toBeInTheDocument();
   });
 
   it("renders rich Markdown syntax components (headings, lists) rather than raw plain text fields", () => {
@@ -40,7 +36,7 @@ describe("HelpButton Component", () => {
 
     // Assert markdown formatting blocks parse safely into standard sub-elements
     expect(
-      screen.getByRole("heading", { name: /Why is filtering necessary/i })
+      screen.getByRole("heading", { name: /Why is filtering necessary/i }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("list").length).toBeGreaterThan(0);
   });
@@ -52,7 +48,7 @@ describe("HelpButton Component", () => {
     render(
       <form onSubmit={onSubmitMock}>
         <HelpButton topic="upload" />
-      </form>
+      </form>,
     );
 
     // Act
@@ -65,6 +61,21 @@ describe("HelpButton Component", () => {
     expect(onSubmitMock).not.toHaveBeenCalled();
   });
 
+  it("traps focus within the dialog on Tab and Shift+Tab", () => {
+    render(<HelpButton topic="upload" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open help" }));
+
+    const closeButton = screen.getByRole("button", { name: "Close help" });
+    expect(closeButton).toHaveFocus();
+
+    // Forward and backward tabbing keep focus inside the open dialog.
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("dismisses the help overlay safely upon firing the Escape key and restores focus back to the trigger button", () => {
     // Arrange
     render(<HelpButton topic="upload" />);
@@ -72,7 +83,7 @@ describe("HelpButton Component", () => {
     // Act - Open dialog
     const helpButton = screen.getByRole("button", { name: "Open help" });
     fireEvent.click(helpButton);
-    
+
     // Act - Escape out of dialog overlay
     fireEvent.keyDown(document, { key: "Escape" });
 

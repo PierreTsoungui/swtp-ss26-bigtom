@@ -11,17 +11,17 @@ export type PlotFormat = "png" | "pdf";
  * zoom and export behaviour for free via {@link PlotView}.
  */
 export interface PlotSource {
-    /** URL of the PNG shown inline and downloaded for a PNG export. */
-    pngUrl: string;
-    /** URL of the PDF downloaded for a PDF export. */
-    pdfUrl: string;
-    /** Caption / accessible label for the figure. */
-    title: string;
-    /** Base file name (without extension) used for downloaded files. */
-    downloadName: string;
+  /** URL of the PNG shown inline and downloaded for a PNG export. */
+  pngUrl: string;
+  /** URL of the PDF downloaded for a PDF export. */
+  pdfUrl: string;
+  /** Caption / accessible label for the figure. */
+  title: string;
+  /** Base file name (without extension) used for downloaded files. */
+  downloadName: string;
 }
 
 /** Resolves the source URL for a given export format. */
 export function urlForFormat(source: PlotSource, format: PlotFormat): string {
-    return format === "pdf" ? source.pdfUrl : source.pngUrl;
+  return format === "pdf" ? source.pdfUrl : source.pngUrl;
 }

@@ -1,4 +1,4 @@
-import { JobPhase, JobStatusValue, type JobStatus } from "../../../shared/utils/JobTypes.ts";
+import { JobPhase, JobStatusValue, type JobStatus } from "../../../shared/types/JobTypes.ts";
 
 /**
  * Tracks a single batch-correction round so the UI can tell a *genuine*
@@ -37,9 +37,7 @@ export class BatchRoundTracker {
     }
 
     const finished =
-        job.phase === JobPhase.BATCH &&
-        job.status === JobStatusValue.WAITING &&
-        this.runObserved;
+      job.phase === JobPhase.BATCH && job.status === JobStatusValue.WAITING && this.runObserved;
 
     if (finished) {
       // Consume the completion so the same lingering WAITING is not reported

@@ -1,16 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import {
-  commitUpload,
-  discardUpload,
-  inspectUpload,
-  type ColumnMapping,
-  type InspectManifest,
-  type RoleKey,
-  type SampleSheetCandidate,
-} from "../utils/uploadApi";
+import { commitUpload, discardUpload, inspectUpload } from "./uploadApi";
+import type { ColumnMapping, InspectManifest, RoleKey, SampleSheetCandidate } from "../types";
 import type { RoleSelection } from "../components/ColumnRoleMapper";
-import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from "../utils/types";
-
+import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from "../types";
 
 /**
  * Current operational state of the upload process.
@@ -39,7 +31,6 @@ function prefillMapping(sheet: SampleSheetCandidate | null): RoleSelection {
     sample_name: sm.sample_name ?? null,
   };
 }
-
 
 /**
  * Orchestrates the "Inspect → Review → Commit" upload workflow.
@@ -79,7 +70,9 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
         sessionRef.current = result.session_id;
         setManifest(result);
         setRemovedPairIds(new Set());
-        setSelectedSheetId(result.sample_sheets.length === 1 ? result.sample_sheets[0].id : null);
+        setSelectedSheetId(
+          result.sample_sheets.length === 1 ? (result.sample_sheets[0]?.id ?? null) : null,
+        );
         setStatus("review");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Inspection failed");
@@ -125,7 +118,7 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
 
   // One sample sheet → auto-selected; several → the user's radio choice.
   const effectiveSheetId = useMemo(() => {
-    if (sheets.length === 1) return sheets[0].id;
+    if (sheets.length === 1) return sheets[0]?.id ?? null;
     if (selectedSheetId && sheets.some((s) => s.id === selectedSheetId)) return selectedSheetId;
     return null;
   }, [sheets, selectedSheetId]);
@@ -149,10 +142,11 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
 
   // All four roles assigned, and every choice is a real column of the sheet.
   const mappingComplete = useMemo(
-    () => ROLE_KEYS.every((k) => {
-      const v = columnMapping[k];
-      return v !== null && mappingColumns.includes(v);
-    }),
+    () =>
+      ROLE_KEYS.every((k) => {
+        const v = columnMapping[k];
+        return v !== null && mappingColumns.includes(v);
+      }),
     [columnMapping, mappingColumns],
   );
 
@@ -196,7 +190,15 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
       setError(e instanceof Error ? e.message : "Could not start the analysis");
       setStatus("review");
     }
-  }, [manifest, effectiveSheetId, mappingComplete, completePairs, columnMapping, filterSettings, onStarted]);
+  }, [
+    manifest,
+    effectiveSheetId,
+    mappingComplete,
+    completePairs,
+    columnMapping,
+    filterSettings,
+    onStarted,
+  ]);
 
   const discardOnUnmount = useCallback(() => {
     if (sessionRef.current) discardUpload(sessionRef.current);

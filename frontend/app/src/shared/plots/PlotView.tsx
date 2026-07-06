@@ -6,16 +6,16 @@ import PlotExportButtons from "./PlotExportButtons";
 import type { PlotSource } from "./types";
 
 interface PlotViewProps {
-    /** The plot to display and export. */
-    source: PlotSource;
-    /** Tailwind max-height class for the inline preview. @default "max-h-72" */
-    maxHeightClass?: string;
-    /** Size of the inline export buttons. @default "medium" */
-    exportSize?: "small" | "medium";
-    /** Called when an export download fails. */
-    onExportError?: (error: unknown) => void;
-    /** Extra classes for the wrapper. */
-    className?: string;
+  /** The plot to display and export. */
+  source: PlotSource;
+  /** Tailwind max-height class for the inline preview. @default "max-h-72" */
+  maxHeightClass?: string;
+  /** Size of the inline export buttons. @default "medium" */
+  exportSize?: "small" | "medium";
+  /** Called when an export download fails. */
+  onExportError?: (error: unknown) => void;
+  /** Extra classes for the wrapper. */
+  className?: string;
 }
 
 /**
@@ -26,34 +26,34 @@ interface PlotViewProps {
  * every static plot looks, hovers, zooms and exports identically.
  */
 function PlotView({
-    source,
-    maxHeightClass,
-    exportSize = "medium",
-    onExportError,
-    className = "",
+  source,
+  maxHeightClass,
+  exportSize = "medium",
+  onExportError,
+  className = "",
 }: PlotViewProps) {
-    const [isEnlarged, setIsEnlarged] = useState(false);
+  const [isEnlarged, setIsEnlarged] = useState(false);
 
-    return (
-        <div className={`space-y-3 ${className}`}>
-            <PlotFigure
-                source={source}
-                onEnlarge={() => setIsEnlarged(true)}
-                maxHeightClass={maxHeightClass}
-            />
-            <div className="flex justify-end">
-                <PlotExportButtons source={source} size={exportSize} onError={onExportError} />
-            </div>
+  return (
+    <div className={`space-y-3 ${className}`}>
+      <PlotFigure
+        source={source}
+        onEnlarge={() => setIsEnlarged(true)}
+        maxHeightClass={maxHeightClass}
+      />
+      <div className="flex justify-end">
+        <PlotExportButtons source={source} size={exportSize} onError={onExportError} />
+      </div>
 
-            {isEnlarged && (
-                <PlotLightbox
-                    source={source}
-                    onClose={() => setIsEnlarged(false)}
-                    onExportError={onExportError}
-                />
-            )}
-        </div>
-    );
+      {isEnlarged && (
+        <PlotLightbox
+          source={source}
+          onClose={() => setIsEnlarged(false)}
+          onExportError={onExportError}
+        />
+      )}
+    </div>
+  );
 }
 
 export default PlotView;

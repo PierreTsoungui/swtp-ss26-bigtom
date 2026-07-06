@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi} from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import PlotView from "./PlotView";
 import { downloadPlot } from "./downloadPlot";
@@ -11,17 +11,23 @@ vi.mock("./downloadPlot", () => ({
 
 // Mock localized downstream sub-elements to decouple layout testing and easily trigger error states
 vi.mock("./PlotExportButtons", () => ({
-  default: ({ source,  onError }: any) => ( //size,
+  default: ({ source, onError }: { source: PlotSource; onError?: (error: unknown) => void }) => (
     <div data-testid="plot-export-buttons">
-      <button onClick={() => downloadPlot(source.pngUrl, `${source.downloadName}.png`)}>Export Test plot as PNG</button>
-      <button onClick={() => downloadPlot(source.pdfUrl, `${source.downloadName}.pdf`)}>Export Test plot as PDF</button>
-      <button onClick={() => onError?.(new Error("Export failed manually"))}>Simulate Export Error</button>
+      <button onClick={() => void downloadPlot(source.pngUrl, `${source.downloadName}.png`)}>
+        Export Test plot as PNG
+      </button>
+      <button onClick={() => void downloadPlot(source.pdfUrl, `${source.downloadName}.pdf`)}>
+        Export Test plot as PDF
+      </button>
+      <button onClick={() => onError?.(new Error("Export failed manually"))}>
+        Simulate Export Error
+      </button>
     </div>
   ),
 }));
 
 vi.mock("./PlotFigure", () => ({
-  default: ({ source, onEnlarge }: any) => (
+  default: ({ source, onEnlarge }: { source: PlotSource; onEnlarge: () => void }) => (
     <div data-testid="plot-figure">
       <img src={source.pngUrl} alt={source.title} />
       <button onClick={onEnlarge}>Enlarge Test plot</button>
@@ -30,11 +36,23 @@ vi.mock("./PlotFigure", () => ({
 }));
 
 vi.mock("./PlotLightbox", () => ({
-  default: ({ source, onClose, onExportError }: any) => (
+  default: ({
+    source,
+    onClose,
+    onExportError,
+  }: {
+    source: PlotSource;
+    onClose: () => void;
+    onExportError?: (error: unknown) => void;
+  }) => (
     <div role="dialog" data-testid="plot-lightbox">
       <img src={source.pngUrl} alt={source.title} />
-      <button onClick={() => downloadPlot(source.pdfUrl, `${source.downloadName}.pdf`)}>Export Test plot as PDF</button>
-      <button onClick={() => onExportError?.(new Error("Lightbox export failed"))}>Simulate Lightbox Error</button>
+      <button onClick={() => void downloadPlot(source.pdfUrl, `${source.downloadName}.pdf`)}>
+        Export Test plot as PDF
+      </button>
+      <button onClick={() => onExportError?.(new Error("Lightbox export failed"))}>
+        Simulate Lightbox Error
+      </button>
       <button onClick={onClose}>Close Lightbox</button>
     </div>
   ),
@@ -69,17 +87,17 @@ describe("PlotView Component Layer", () => {
     // Act & Assert - Trigger PNG Download
     fireEvent.click(screen.getByRole("button", { name: "Export Test plot as PNG" }));
     await waitFor(() =>
-      expect(downloadPlot).toHaveBeenCalledWith("/api/v1/plot.png", "test_plot.png")
+      expect(downloadPlot).toHaveBeenCalledWith("/api/v1/plot.png", "test_plot.png"),
     );
 
     // Act & Assert - Trigger PDF Download
     fireEvent.click(screen.getByRole("button", { name: "Export Test plot as PDF" }));
     await waitFor(() =>
-      expect(downloadPlot).toHaveBeenCalledWith("/api/v1/plot.pdf", "test_plot.pdf")
+      expect(downloadPlot).toHaveBeenCalledWith("/api/v1/plot.pdf", "test_plot.pdf"),
     );
   });
 
-    it("opens the lightbox on click and manages full backdrop dismissals using the close action control button", () => {
+  it("opens the lightbox on click and manages full backdrop dismissals using the close action control button", () => {
     // Arrange
     render(<PlotView source={source} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -91,15 +109,16 @@ describe("PlotView Component Layer", () => {
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByAltText("Test plot")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Export Test plot as PDF" })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Export Test plot as PDF" }),
+    ).toBeInTheDocument();
 
     // Act - Dismiss lightbox modal via the rendered Close button from our mock layout
     fireEvent.click(within(dialog).getByRole("button", { name: "Close Lightbox" }));
-    
+
     // Assert modal container safely unmounts from active DOM document
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
-
 
   it("correctly intercepts and bubbles download export error payloads back up to parent callback hooks", () => {
     // Arrange

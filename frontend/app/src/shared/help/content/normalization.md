@@ -29,13 +29,13 @@ reliable default.
 
 ### NOOB
 
-*Normal-exponential out-of-band* correction estimates background and dye bias
+_Normal-exponential out-of-band_ correction estimates background and dye bias
 using out-of-band signal. It is widely used and is a safe default for most
 datasets.
 
 ### SWAN
 
-*Subset-quantile Within-Array Normalization* reduces the systematic offset
+_Subset-quantile Within-Array Normalization_ reduces the systematic offset
 between Type I and Type II probe designs, improving comparability across probe
 types. Useful when probe-design effects are prominent.
 

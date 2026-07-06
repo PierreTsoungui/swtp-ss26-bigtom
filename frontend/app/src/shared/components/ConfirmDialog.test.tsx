@@ -51,12 +51,12 @@ describe("ConfirmDialog", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("cancels on Escape and on backdrop click", () => {
+  it("cancels on Escape and on backdrop mousedown", () => {
     const { onCancel } = setup();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onCancel).toHaveBeenCalledTimes(1);
     // The backdrop is the outermost element wrapping the dialog.
-    fireEvent.click(screen.getByRole("dialog").parentElement as HTMLElement);
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement as HTMLElement);
     expect(onCancel).toHaveBeenCalledTimes(2);
   });
 
@@ -69,7 +69,7 @@ describe("ConfirmDialog", () => {
 
     // Escape and backdrop must not dismiss an in-flight action.
     fireEvent.keyDown(document, { key: "Escape" });
-    fireEvent.click(screen.getByRole("dialog").parentElement as HTMLElement);
+    fireEvent.mouseDown(screen.getByRole("dialog").parentElement as HTMLElement);
     expect(onCancel).not.toHaveBeenCalled();
     expect(onConfirm).not.toHaveBeenCalled();
   });

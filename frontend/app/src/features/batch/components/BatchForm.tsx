@@ -1,30 +1,32 @@
-import React, { useEffect, useState } from "react";
-import type { BatchFormData, BatchParametersResponse, GroupSelection } from "../utils/types";
+import React, { useState } from "react";
 import {
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    TextField,
-    Autocomplete,
-    Alert,
+  Alert,
+  Autocomplete,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
 } from "@mui/material";
 import HelpButton from "../../../shared/help/HelpButton.tsx";
 import { colors } from "../../../shared/theme/colors";
-import SampleSheetPreviewModal from "./SampleSheetPreviewModal.tsx";
+import { Button } from "../../../shared/components/Button";
+import type { BatchFormData, BatchParametersResponse, GroupSelection } from "../types";
+import { defaultGroupSelection, isComparisonReady, levelsOf, valuesOf } from "../utils/batchForm";
+import BatchSampleSheetPreviewModal from "./BatchSampleSheetPreviewModal.tsx";
 
 /**
  * Props for the {@link BatchForm} component.
  */
 interface BatchFormProps {
-    /** Available metadata columns and group values provided by the API. */
-    parameters: BatchParametersResponse;
-    /** Callback to trigger a new batch correction round. */
-    onSubmit: (data: BatchFormData) => void;
-    /** Disables interactions while a correction is in progress. */
-    isLoading?: boolean;
-    /** Finalizes the workflow and proceeds to DMP/DMR analysis with the chosen comparison. */
-    onSkip?: (selection?: GroupSelection) => void;
+  /** Available metadata columns and group values provided by the API. */
+  parameters: BatchParametersResponse;
+  /** Callback to trigger a new batch correction round. */
+  onSubmit: (data: BatchFormData) => void;
+  /** Disables interactions while a correction is in progress. */
+  isLoading?: boolean;
+  /** Finalizes the workflow and proceeds to DMP/DMR analysis with the chosen comparison. */
+  onSkip?: (selection?: GroupSelection) => void;
 }
 
 /**
@@ -35,270 +37,257 @@ interface BatchFormProps {
  * 2. Define **Covariates** (biological signal) to be protected.
  * 3. Configure the **Case vs. Control** groups for final differential analysis.
  */
-export function BatchForm({
-                              parameters,
-                              onSubmit,
-                              isLoading = false,
-                              onSkip,
-                          }: BatchFormProps) {
-    const [batchVariable, setBatchVariable] = useState<string>("");
-    const [covariates, setCovariates] = useState<string[]>([]);
-    const [showPreview, setShowPreview] = useState<boolean>(false);
-    const [clickedButton, setClickedButton] = useState<"batch" | "skip" | null>(null);
+export function BatchForm({ parameters, onSubmit, isLoading = false, onSkip }: BatchFormProps) {
+  const columns = parameters.columns ?? [];
+  const columnNames = parameters.available_columns ?? columns.map((c) => c.name);
 
-    const columns = parameters.columns ?? [];
-    const columnNames = parameters.available_columns ?? columns.map((c) => c.name);
+  const [batchVariable, setBatchVariable] = useState<string>("");
+  const [covariates, setCovariates] = useState<string[]>([]);
+  const [showPreview, setShowPreview] = useState<boolean>(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  // Tracks which action button was pressed so only that button shows a spinner
+  // label while `isLoading`. A stale value is harmless: the label conditions
+  // below only apply it while loading.
+  const [clickedButton, setClickedButton] = useState<"batch" | "skip" | null>(null);
 
-    // Label helpers
-    const levelsOf = (name: string) => columns.find((c) => c.name === name)?.levels;
-    const valuesOf = (name: string) => columns.find((c) => c.name === name)?.values ?? [];
+  // Comparison defaults are derived from the columns, which are available on
+  // first render, so the state can be initialized lazily without an effect.
+  const initialGroups = defaultGroupSelection(columns);
+  const [analysisColumn, setAnalysisColumn] = useState<string>(initialGroups.group_column);
+  const [caseGroup, setCaseGroup] = useState<string>(initialGroups.case_group);
+  const [controlGroup, setControlGroup] = useState<string>(initialGroups.control_group);
 
-    // DMP/DMR comparison state triggers
-    const [analysisColumn, setAnalysisColumn] = useState<string>("");
-    const [caseGroup, setCaseGroup] = useState<string>("");
-    const [controlGroup, setControlGroup] = useState<string>("");
+  const analysisValues = valuesOf(columns, analysisColumn);
+  const currentSelection: GroupSelection = {
+    group_column: analysisColumn,
+    case_group: caseGroup,
+    control_group: controlGroup,
+  };
+  const analysisReady = isComparisonReady(currentSelection);
 
-    // Initialize sensible analysis parameters as columns arrive
-    useEffect(() => {
-        if (!analysisColumn && columns.length > 0) {
-            const first = columns[0];
-            setAnalysisColumn(first.name);
-            setControlGroup(first.values[0] ?? "");
-            setCaseGroup(first.values[1] ?? "");
-        }
-    }, [columns, analysisColumn]);
+  const handleAnalysisColumnChange = (col: string) => {
+    setAnalysisColumn(col);
+    const vals = valuesOf(columns, col);
+    setControlGroup(vals[0] ?? "");
+    setCaseGroup(vals[1] ?? "");
+  };
 
-    const handleAnalysisColumnChange = (col: string) => {
-        setAnalysisColumn(col);
-        const vals = valuesOf(col);
-        setControlGroup(vals[0] ?? "");
-        setCaseGroup(vals[1] ?? "");
-    };
+  const handleBatchVariableChange = (value: string) => {
+    setBatchVariable(value);
+    setValidationError(null);
+    setCovariates((prev) => prev.filter((c) => c !== value));
+  };
 
-    const analysisValues = valuesOf(analysisColumn);
-    const analysisReady =
-        analysisColumn !== "" && caseGroup !== "" && controlGroup !== "" && caseGroup !== controlGroup;
+  const handleCovariatesChange = (_event: React.SyntheticEvent, newValue: string[]) => {
+    setCovariates(newValue.filter((c) => c !== batchVariable));
+  };
 
-    // Reset localized loading targets once processing clears
-    useEffect(() => {
-        if (!isLoading) {
-            setClickedButton(null);
-        }
-    }, [isLoading]);
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!batchVariable) {
+      setValidationError("Please select a batch variable.");
+      return;
+    }
 
-    const handleBatchVariableChange = (value: string) => {
-        setBatchVariable(value);
-        setCovariates(covariates.filter((c) => c !== value));
-    };
+    setValidationError(null);
+    setClickedButton("batch");
+    onSubmit({ batch_variable: batchVariable, covariates });
+  };
 
-    const handleCovariatesChange = (
-        _event: React.SyntheticEvent,
-        newValue: string[]
-    ) => {
-        const filtered = newValue.filter((c) => c !== batchVariable);
-        setCovariates(filtered);
-    };
+  const handleSkip = () => {
+    setClickedButton("skip");
+    onSkip?.(columns.length > 0 ? currentSelection : undefined);
+  };
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        if (!batchVariable) {
-            alert("Please select a batch variable.");
-            return;
-        }
+  const filteredOptions = columnNames.filter((col) => col !== batchVariable);
 
-        setClickedButton("batch");
-        onSubmit({ batch_variable: batchVariable, covariates });
-    };
+  return (
+    <form onSubmit={handleSubmit} className="space-y-8">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-lg font-semibold">Batch Analysis &amp; Correction</h3>
+        <HelpButton topic="batchCorrection" ariaLabel="Open batch correction help" />
+        <Button variant="secondary" onClick={() => setShowPreview(true)} className="ml-auto">
+          Preview sample sheet
+        </Button>
+      </div>
 
-    const filteredOptions = columnNames.filter((col) => col !== batchVariable);
+      {/* Batch variable select fields */}
+      <div className="space-y-2">
+        <label className="block text-sm font-semibold text-neutral-textPrimary">
+          Batch variable — technical factor to remove <span className="text-danger">*</span>
+        </label>
+        <p className="text-sm text-neutral-textSecondary">
+          Its effect is removed from the data (e.g. chip / Sentrix_ID, plate). You decide which
+          column is technical — open the preview if unsure.
+        </p>
 
-    return (
-        <form onSubmit={handleSubmit} className="space-y-8">
-            <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-semibold">Batch Analysis &amp; Correction</h3>
-                {/* Updated English accessibility aria-label string context */}
-                <HelpButton topic="batchCorrection" ariaLabel="Open batch correction help" />
-                <button
-                    type="button"
-                    onClick={() => setShowPreview(true)}
-                    className="ml-auto rounded-lg border border-primary px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary hover:text-primary-text"
-                >
-                    Preview sample sheet
-                </button>
-            </div>
+        <FormControl fullWidth disabled={isLoading}>
+          <InputLabel id="batch-variable-label">Select a column…</InputLabel>
+          <Select
+            labelId="batch-variable-label"
+            id="batch-variable-select"
+            value={batchVariable}
+            label="Select a column…"
+            onChange={(e) => handleBatchVariableChange(e.target.value)}
+          >
+            {columns.map((col) => (
+              <MenuItem key={col.name} value={col.name}>
+                {col.name} ({col.levels} groups)
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </div>
 
-            {/* Batch variable select fields */}
-            <div className="space-y-2">
-                <label className="block text-sm font-semibold text-neutral-textPrimary">
-                    Batch variable — technical factor to remove <span className="text-danger">*</span>
-                </label>
-                <p className="text-sm text-neutral-textSecondary">
-                    Its effect is removed from the data (e.g. chip / Sentrix_ID, plate). You decide
-                    which column is technical — open the preview if unsure.
-                </p>
+      {/* Covariates multi-select inputs */}
+      <div className="space-y-2">
+        <label className="block text-sm font-semibold text-neutral-textPrimary">
+          Covariates — biological signal to protect (optional)
+        </label>
+        <p className="text-sm text-neutral-textSecondary">
+          Preserved, never removed — typically your comparison group (the column may have any name).
+          Multiple selections allowed.
+        </p>
 
-                <FormControl fullWidth disabled={isLoading}>
-                    <InputLabel id="batch-variable-label">Select a column…</InputLabel>
-                    <Select
-                        labelId="batch-variable-label"
-                        id="batch-variable-select"
-                        value={batchVariable}
-                        label="Select a column…"
-                        onChange={(e) => handleBatchVariableChange(e.target.value)}
-                    >
-                        {columns.map((col) => (
-                            <MenuItem key={col.name} value={col.name}>
-                                {col.name} ({col.levels} groups)
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-            </div>
+        <Autocomplete
+          multiple
+          id="covariates-autocomplete"
+          options={filteredOptions}
+          getOptionLabel={(name) => {
+            const lv = levelsOf(columns, name);
+            return lv ? `${name} (${lv} groups)` : name;
+          }}
+          value={covariates}
+          onChange={handleCovariatesChange}
+          disabled={isLoading}
+          freeSolo={false}
+          noOptionsText="No columns available"
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder={covariates.length === 0 ? "Select covariates…" : ""}
+            />
+          )}
+        />
+      </div>
 
-            {/* Covariates multi-select inputs */}
-            <div className="space-y-2">
-                <label className="block text-sm font-semibold text-neutral-textPrimary">
-                    Covariates — biological signal to protect (optional)
-                </label>
-                <p className="text-sm text-neutral-textSecondary">
-                    Preserved, never removed — typically your comparison group (the column may have
-                    any name). Multiple selections allowed.
-                </p>
+      <Alert
+        severity="info"
+        variant="outlined"
+        className="rounded-lg"
+        sx={{
+          bgcolor: colors.info.badgeBackground,
+          borderColor: colors.info.DEFAULT,
+          "& .MuiAlert-message": { color: colors.info.badgeText },
+          "& .MuiAlert-icon": { color: colors.info.DEFAULT },
+        }}
+      >
+        The batch variable and covariates play opposite roles: the batch variable is
+        <strong> removed</strong>, covariates are <strong>protected</strong>. A column cannot be
+        both. The tool does not judge whether a choice makes sense — use the SVD plot to decide.
+      </Alert>
 
-                <Autocomplete
-                    multiple
-                    id="covariates-autocomplete"
-                    options={filteredOptions}
-                    getOptionLabel={(name) => {
-                        const lv = levelsOf(name);
-                        return lv ? `${name} (${lv} groups)` : name;
-                    }}
-                    value={covariates}
-                    onChange={handleCovariatesChange}
-                    disabled={isLoading}
-                    freeSolo={false}
-                    noOptionsText="No columns available"
-                    renderInput={(params) => (
-                        <TextField
-                            {...params}
-                            placeholder={covariates.length === 0 ? "Select covariates…" : ""}
-                        />
-                    )}
-                />
-            </div>
+      {/* Differential group comparison section */}
+      <div className="space-y-3 rounded-lg border border-neutral-borderDefault p-4">
+        <label className="block text-sm font-semibold text-neutral-textPrimary">
+          Differential analysis comparison (DMP/DMR)
+        </label>
+        <p className="text-xs text-neutral-textSecondary">
+          Pick the biological column and the two groups to compare. The sign of Δβ is fixed as{" "}
+          <strong>mean(Case) − mean(Control)</strong>. Use “Preview sample sheet” if a column name
+          is unclear.
+        </p>
 
-            <Alert
-                severity="info"
-                variant="outlined"
-                className="rounded-lg"
-                sx={{
-                    bgcolor: colors.info.badgeBackground,
-                    borderColor: colors.info.DEFAULT,
-                    '& .MuiAlert-message': { color: colors.info.badgeText },
-                    '& .MuiAlert-icon': { color: colors.info.DEFAULT }
-                }}
+        <FormControl fullWidth disabled={isLoading} size="small">
+          <InputLabel id="analysis-column-label">Comparison column</InputLabel>
+          <Select
+            labelId="analysis-column-label"
+            value={analysisColumn}
+            label="Comparison column"
+            onChange={(e) => handleAnalysisColumnChange(e.target.value)}
+          >
+            {columns.map((col) => (
+              <MenuItem key={col.name} value={col.name}>
+                {col.name} ({col.levels} groups)
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <div className="flex gap-3 pt-2">
+          <FormControl fullWidth disabled={isLoading || !analysisColumn} size="small">
+            <InputLabel id="case-label">Case (treatment)</InputLabel>
+            <Select
+              labelId="case-label"
+              value={caseGroup}
+              label="Case (treatment)"
+              onChange={(e) => setCaseGroup(e.target.value)}
             >
-                The batch variable and covariates play opposite roles: the batch variable is
-                <strong> removed</strong>, covariates are <strong>protected</strong>. A column cannot
-                be both. The tool does not judge whether a choice makes sense — use the SVD plot to
-                decide.
-            </Alert>
+              {analysisValues.map((v) => (
+                <MenuItem key={v} value={v}>
+                  {v}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth disabled={isLoading || !analysisColumn} size="small">
+            <InputLabel id="control-label">Control (reference)</InputLabel>
+            <Select
+              labelId="control-label"
+              value={controlGroup}
+              label="Control (reference)"
+              onChange={(e) => setControlGroup(e.target.value)}
+            >
+              {analysisValues.map((v) => (
+                <MenuItem key={v} value={v}>
+                  {v}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </div>
+        {analysisColumn !== "" && caseGroup === controlGroup && (
+          <p className="text-xs text-danger">Case and control must be different groups.</p>
+        )}
+      </div>
 
-            {/* Differential group comparison section */}
-            <div className="space-y-3 rounded-lg border border-neutral-borderDefault p-4">
-                <label className="block text-sm font-semibold text-neutral-textPrimary">
-                    Differential analysis comparison (DMP/DMR)
-                </label>
-                <p className="text-xs text-neutral-textSecondary">
-                    Pick the biological column and the two groups to compare. The sign of Δβ is
-                    fixed as <strong>mean(Case) − mean(Control)</strong>. Use “Preview sample sheet”
-                    if a column name is unclear.
-                </p>
+      {validationError && (
+        <p role="alert" className="text-sm text-danger">
+          {validationError}
+        </p>
+      )}
 
-                <FormControl fullWidth disabled={isLoading} size="small">
-                    <InputLabel id="analysis-column-label">Comparison column</InputLabel>
-                    <Select
-                        labelId="analysis-column-label"
-                        value={analysisColumn}
-                        label="Comparison column"
-                        onChange={(e) => handleAnalysisColumnChange(e.target.value)}
-                    >
-                        {columns.map((col) => (
-                            <MenuItem key={col.name} value={col.name}>
-                                {col.name} ({col.levels} groups)
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
+      {/* Action buttons footer layout */}
+      <div className="flex gap-4">
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          disabled={!batchVariable || isLoading}
+          className="flex-1"
+        >
+          {isLoading && clickedButton === "batch" ? "Batch ongoing..." : "Start Batch"}
+        </Button>
 
-                <div className="flex gap-3">
-                    <FormControl fullWidth disabled={isLoading || !analysisColumn} size="small">
-                        <InputLabel id="case-label">Case (treatment)</InputLabel>
-                        <Select labelId="case-label" value={caseGroup} label="Case (treatment)"
-                                onChange={(e) => setCaseGroup(e.target.value)}>
-                            {analysisValues.map((v) => (
-                                <MenuItem key={v} value={v}>{v}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    <FormControl fullWidth disabled={isLoading || !analysisColumn} size="small">
-                        <InputLabel id="control-label">Control (reference)</InputLabel>
-                        <Select labelId="control-label" value={controlGroup} label="Control (reference)"
-                                onChange={(e) => setControlGroup(e.target.value)}>
-                            {analysisValues.map((v) => (
-                                <MenuItem key={v} value={v}>{v}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                </div>
-                {analysisColumn !== "" && caseGroup === controlGroup && (
-                    <p className="text-xs text-danger">Case and control must be different groups.</p>
-                )}
-            </div>
+        {onSkip && (
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={handleSkip}
+            disabled={isLoading || (columns.length > 0 && !analysisReady)}
+            className="flex-1"
+          >
+            {isLoading && clickedButton === "skip" ? "Starting…" : "Proceed to analysis"}
+          </Button>
+        )}
+      </div>
 
-            {/* Action buttons footer layout */}
-            <div className="flex gap-4">
-                <button
-                    type="submit"
-                    disabled={!batchVariable || isLoading}
-                    className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors ${
-                        batchVariable && !isLoading
-                            ? "border-primary bg-primary text-primary-text hover:bg-primary-hover"
-                            : "cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary"
-                    }`}
-                >
-                    {isLoading && clickedButton === "batch" ? "Batch ongoing..." : "Start Batch"}
-                </button>
-
-                {onSkip && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setClickedButton("skip");
-                            onSkip(
-                                columns.length > 0
-                                    ? { group_column: analysisColumn, case_group: caseGroup, control_group: controlGroup }
-                                    : undefined,
-                            );
-                        }}
-                        disabled={isLoading || (columns.length > 0 && !analysisReady)}
-                        className={`flex-1 rounded-lg border-2 px-6 py-3 font-semibold transition-colors duration-200 ease-in-out ${
-                            isLoading || (columns.length > 0 && !analysisReady)
-                                ? 'cursor-not-allowed border-neutral-textSecondary bg-neutral-surface text-neutral-textSecondary'
-                                : 'border-neutral-textSecondary bg-neutral-card text-neutral-textSecondary hover:bg-neutral-surface hover:text-neutral-textPrimary active:bg-neutral-borderDefault'
-                        }`}
-                    >
-                        {isLoading && clickedButton === "skip" ? "Starting…" : "Proceed to analysis"}
-                    </button>
-                )}
-            </div>
-
-            {showPreview && (
-                <SampleSheetPreviewModal
-                    jobId={parameters.job_id}
-                    onClose={() => setShowPreview(false)}
-                />
-            )}
-        </form>
-    );
+      {showPreview && (
+        <BatchSampleSheetPreviewModal
+          jobId={parameters.job_id}
+          onClose={() => setShowPreview(false)}
+        />
+      )}
+    </form>
+  );
 }

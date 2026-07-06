@@ -2,6 +2,6 @@
 // This declaration lets TypeScript understand Markdown raw imports used by the
 // help system (see src/shared/help).
 declare module "*.md?raw" {
-    const content: string;
-    export default content;
+  const content: string;
+  export default content;
 }

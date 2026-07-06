@@ -73,7 +73,9 @@ describe("ColumnRoleMapper Component", () => {
 
   it("enforces disabled attributes on all select fields when the disabled configuration prop flags true", () => {
     // Arrange & Act
-    render(<ColumnRoleMapper columns={COLUMNS} mapping={EMPTY} onChange={vi.fn()} disabled={true} />);
+    render(
+      <ColumnRoleMapper columns={COLUMNS} mapping={EMPTY} onChange={vi.fn()} disabled={true} />,
+    );
 
     // Assert fields are non-interactive
     for (const role of ["Sentrix_ID", "Sentrix_Position", "Sample_Group", "Sample_Name"]) {

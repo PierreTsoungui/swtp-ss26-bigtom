@@ -1,207 +1,168 @@
-import { useParams } from "react-router-dom";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router";
 
+import Progressbar from "../../shared/components/Progressbar";
+import { useJobPolling } from "../../shared/hooks/useJobPolling";
+import { JobStatusValue } from "../../shared/types/JobTypes.ts";
 import { BatchForm } from "./components/BatchForm";
 import { SvdPlot } from "./components/SvdPlot";
-import { useBatchParameters } from "./hooks/useBatchParameters";
 import { useBatchCorrection } from "./hooks/useBatchCorrection";
+import { useBatchParameters } from "./hooks/useBatchParameters";
+import type { BatchFormData, GroupSelection } from "./types";
+import { hasReachedResults, isDownstreamRunning, isSystemError } from "./utils/batchState";
 import { BatchRoundTracker } from "./utils/batchRoundTracker";
-import { useJobPolling } from "../analysis/hooks/useJobPolling";
-import Progressbar from "../../shared/components/Progressbar";
-import { colors } from "../../shared/theme/colors";
-import type { BatchFormData, GroupSelection } from "./utils/types";
-import {useNavigate} from "react-router";
-import {JobPhase, JobStatusValue} from "../../shared/utils/JobTypes.ts";
 
 /**
  * Main view for identifying and mitigating technical batch effects.
  *
  * Responsibilities:
- * - Visualizes variance components via {@link SvdPlot} based on the analysis history.
- * - Collects user configuration for batch variables and covariates via {@link BatchForm}.
- * - Manages the transition to downstream differential methylation analysis (DMP/DMR).
- * - Monitors long-running server-side corrections using {@link useJobPolling}.
+ * - Visualizes variance components via {@link SvdPlot} based on the round history.
+ * - Collects batch-variable/covariate configuration via {@link BatchForm}.
+ * - Runs correction rounds or skips ahead to differential analysis (DMP/DMR).
+ * - Monitors the long-running server-side pipeline via {@link useJobPolling} and
+ *   navigates to the results page once analysis completes.
+ *
+ * @remarks
+ * Pure state derivations live in `./utils/batchState`; this component only wires
+ * those decisions to polling, submission, and navigation.
  */
-const BatchPage: React.FC = () => {
+export function BatchPage() {
   const { job_id } = useParams<{ job_id: string }>();
-  const [showProgressBar, setShowProgressBar] = useState(false);
   const navigate = useNavigate();
 
-  /** Fetches available metadata columns for the dropdown selections. */
-  const {
-    parameters,
-    isLoading: parametersLoading,
-  } = useBatchParameters(job_id ?? null);
+  const [showProgressBar, setShowProgressBar] = useState(false);
+  // Bumped on each submission to restart polling for the new round.
+  const [pollingKey, setPollingKey] = useState(0);
 
-  /** Logic for submitting batch correction or skipping to final analysis. */
+  /** Available metadata columns for the dropdown selections. */
+  const { parameters, isLoading: parametersLoading } = useBatchParameters(job_id ?? null);
+
+  /** History plus the run/skip actions for the correction workflow. */
   const {
     history,
     loading: historyLoading,
     error,
     runBatch,
     skipBatch,
-    fetchHistory,
     isSubmitting,
-  } = useBatchCorrection(job_id, () => {});
-
-  const [pollingKey, setPollingKey] = useState(0);
+  } = useBatchCorrection(job_id);
 
   // Distinguishes a real round completion from the stale BATCH+WAITING status
   // that lingers from the *previous* round (the race that made round 2+ show no
   // progress bar). Held in a ref so startRound() takes effect synchronously in
-  // the submit handler, before the effect below re-runs. Lazily initialised so
-  // the instance is created exactly once.
+  // the submit handler; only ever touched inside effects and event handlers, so
+  // it is never read during render.
   const roundTrackerRef = useRef<BatchRoundTracker | null>(null);
-  if (roundTrackerRef.current === null) {
-    roundTrackerRef.current = new BatchRoundTracker();
-  }
-  const roundTracker = roundTrackerRef.current;
+  const getRoundTracker = (): BatchRoundTracker => {
+    roundTrackerRef.current ??= new BatchRoundTracker();
+    return roundTrackerRef.current;
+  };
 
-  // Status Polling
-  const jobStatus = useJobPolling(
-      showProgressBar && job_id ? job_id : null,
-      pollingKey
-  );
+  const jobStatus = useJobPolling(showProgressBar && job_id ? job_id : null, pollingKey);
   const batchRunning = isSubmitting && jobStatus?.status === JobStatusValue.RUNNING;
 
-  // React to job-status changes: drive the progress bar and detect completion.
+  // React to polled job-status changes: drive the progress bar, detect a round
+  // completion, and hand off to the results page once analysis is done.
   useEffect(() => {
-    if (!jobStatus) return;
+    /* eslint-disable react-hooks/set-state-in-effect --
+       This effect synchronizes UI state with the external polling system: it
+       reflects the latest job status onto the progress bar and triggers a
+       one-time navigation when the pipeline reaches its results stage. */
+    if (!jobStatus) {
+      return;
+    }
 
     // Feed the tracker every status so it can observe this round running; it
     // reports completion only for a round it has actually seen run (guards the
-    // stale-WAITING race). Kept separate from the early-returning analysis
-    // branches below so the observation is never skipped.
-    const batchFinished = roundTracker.observe(jobStatus);
+    // stale-WAITING race). Kept before the branches below so it is never skipped.
+    const batchFinished = getRoundTracker().observe(jobStatus);
 
-    // Downstream analysis (DMP/DMR) is running.
-    if (jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.RUNNING) {
+    if (isDownstreamRunning(jobStatus)) {
       setShowProgressBar(true);
       return;
     }
-    // Downstream analysis finished -> move on to the results page.
-    else if ((jobStatus.phase === JobPhase.ANALYSIS && jobStatus.status === JobStatusValue.COMPLETED) ||
-             (jobStatus.phase === JobPhase.RESULTS && jobStatus.status === JobStatusValue.WAITING)
-    ) {
+
+    if (hasReachedResults(jobStatus)) {
       setShowProgressBar(false);
-      fetchHistory();
-      navigate(`/results/${job_id}`);
+      void navigate(`/results/${job_id}`);
       return;
     }
 
-    // A batch round finished: hide the progress bar and reload the SVD history.
     if (batchFinished && showProgressBar) {
       setShowProgressBar(false);
-      fetchHistory();
     }
-
-  }, [jobStatus, showProgressBar, fetchHistory, navigate, job_id, roundTracker]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [jobStatus, showProgressBar, navigate, job_id]);
 
   if (!job_id) {
     return (
-        <div className="p-8">
-          <h2>Keine Job-ID vorhanden</h2>
-        </div>
+      <main className="mx-auto max-w-5xl p-8">
+        <h2 className="text-xl font-semibold text-neutral-textPrimary">
+          No job identifier provided
+        </h2>
+      </main>
     );
   }
 
   if (parametersLoading || historyLoading) {
     return (
-        <div className="p-8">
-          Lade Batch-Daten...
-        </div>
+      <main className="mx-auto max-w-5xl p-8">
+        <p className="text-neutral-textSecondary">Loading batch data…</p>
+      </main>
     );
   }
 
   const handleSubmit = async (data: BatchFormData) => {
     // Start a fresh cycle: the previous round's WAITING must not count as done
     // until we observe THIS run executing.
-    roundTracker.startRound();
+    getRoundTracker().startRound();
     await runBatch({
       batch_correction: {
         batch_variable: data.batch_variable,
         covariates: data.covariates,
       },
     });
-    setPollingKey(prev => prev + 1); // reset polling for the new round
+    setPollingKey((prev) => prev + 1);
     setShowProgressBar(true);
   };
 
   const handleSkip = async (selection?: GroupSelection) => {
-    roundTracker.startRound();
+    getRoundTracker().startRound();
     await skipBatch(selection);
-    setPollingKey(prev => prev + 1); // reset polling for the new round
+    setPollingKey((prev) => prev + 1);
     setShowProgressBar(true);
   };
 
-  const isGlobalError =
-      error &&
-      (
-          error.error === "BATCH_FAILED" ||
-          error.error === "NETWORK_ERROR"
-      );
-
   return (
-      <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            padding: "20px",
-          }}
-      >
-        <h2 className="text-2xl font-bold mb-4">Batch Effect Correction</h2>
+    <main className="mx-auto max-w-5xl p-5">
+      <h2 className="mb-4 text-2xl font-bold text-neutral-textPrimary">Batch Effect Correction</h2>
 
-        {isGlobalError && (
-            <div
-                style={{
-                  padding: "15px",
-                  backgroundColor: colors.danger.badgeBackground,
-                  color: colors.danger.badgeText,
-                  borderRadius: "4px",
-                  marginBottom: "20px",
-                }}
-            >
-              <strong>System Error:</strong>{" "}
-              {error.message}
-            </div>
-        )}
+      {isSystemError(error) && error && (
+        <div className="mb-5 rounded-md bg-danger-badgeBackground px-4 py-3 text-danger-badgeText">
+          <strong>System Error:</strong> {error.message}
+        </div>
+      )}
 
-        {/* SVD Plot */}
+      {history && (
+        <div className="mb-8">
+          <SvdPlot rounds={history.rounds} />
+        </div>
+      )}
 
-        {history && (
-            <div style={{ marginBottom: "30px" }}>
-              <SvdPlot rounds={history.rounds} />
-            </div>
-        )}
+      {parameters && (
+        <BatchForm
+          parameters={parameters}
+          isLoading={batchRunning || showProgressBar}
+          onSubmit={(data) => void handleSubmit(data)}
+          onSkip={(selection) => void handleSkip(selection)}
+        />
+      )}
 
-        {/* Batch Form */}
-
-        {parameters && (
-            <BatchForm
-                parameters={parameters}
-                isLoading={batchRunning || showProgressBar}
-                onSubmit={handleSubmit}
-                onSkip={handleSkip}
-            />
-        )}
-
-        {/* Progressbar */}
-        {showProgressBar && jobStatus && (
-            <div
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
-                  margin: "20px 0",
-                }}
-            >
-              <Progressbar
-                  jobStatus={jobStatus}
-              />
-            </div>
-        )}
-      </div>
+      {showProgressBar && jobStatus && (
+        <div className="my-5 flex w-full justify-center">
+          <Progressbar jobStatus={jobStatus} />
+        </div>
+      )}
+    </main>
   );
-};
-
-export default BatchPage;
+}

@@ -1,12 +1,20 @@
 import { useLocation, useNavigate } from "react-router";
+import { Button } from "./Button";
 
+/** The situations the fallback page can represent. */
 type FallbackVariant = "not-found" | "error";
 
+/**
+ * Props for the {@link FallbackPage}.
+ */
 interface FallbackPageProps {
+  /** Which message/title to display. */
   variant: FallbackVariant;
+  /** Optional callback invoked before navigating away (e.g. to clear an error boundary). */
   onReset?: () => void;
 }
 
+/** Title and description shown for each {@link FallbackVariant}. */
 const fallbackContent: Record<FallbackVariant, { title: string; description: string }> = {
   "not-found": {
     title: "Page not found",
@@ -19,6 +27,14 @@ const fallbackContent: Record<FallbackVariant, { title: string; description: str
   },
 };
 
+/**
+ * Full-page fallback shown for an unknown route (`not-found`) or a caught
+ * render error (`error`). Offers navigation back to the start page or to the
+ * previous page, running {@link FallbackPageProps.onReset} first so any error
+ * boundary state is cleared before navigating.
+ *
+ * @param props - See {@link FallbackPageProps}.
+ */
 export function FallbackPage({ variant, onReset }: FallbackPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,9 +63,7 @@ export function FallbackPage({ variant, onReset }: FallbackPageProps) {
       className="flex min-h-full items-center justify-center px-6 py-16"
     >
       <div className="w-full max-w-2xl rounded-lg border border-neutral-borderDefault bg-neutral-card p-6 text-center shadow-sm sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-primary">
-          BigTom
-        </p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-primary">BigTom</p>
         <h1 id="fallback-title" className="mt-2 text-3xl font-bold text-neutral-textPrimary">
           {content.title}
         </h1>
@@ -58,20 +72,12 @@ export function FallbackPage({ variant, onReset }: FallbackPageProps) {
         </p>
 
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <button
-            type="button"
-            onClick={handleHome}
-            className="rounded-full border-2 border-primary bg-primary px-6 py-3 font-semibold text-primary-text transition-colors hover:bg-primary-hover"
-          >
+          <Button variant="primary" onClick={handleHome}>
             Go to start page
-          </button>
-          <button
-            type="button"
-            onClick={handleBack}
-            className="rounded-full border-2 border-neutral-textSecondary bg-neutral-card px-6 py-3 font-semibold text-neutral-textSecondary transition-colors hover:bg-neutral-surface hover:text-neutral-textPrimary"
-          >
+          </Button>
+          <Button variant="secondary" onClick={handleBack}>
             Back
-          </button>
+          </Button>
         </div>
       </div>
     </section>

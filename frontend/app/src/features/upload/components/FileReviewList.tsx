@@ -1,10 +1,5 @@
-import {
-  formatBytes,
-  type IdatPair,
-  type OtherFile,
-  type RoleKey,
-  type SampleSheetCandidate,
-} from "../utils/uploadApi";
+import { formatBytes } from "../utils/formatBytes";
+import type { IdatPair, OtherFile, RoleKey, SampleSheetCandidate } from "../types";
 import ColumnRoleMapper, { type RoleSelection } from "./ColumnRoleMapper";
 
 /**
@@ -49,7 +44,7 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-danger hover:bg-danger-badgeBackground"
+      className="ml-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-danger hover:bg-danger-badgeBackground"
     >
       ✕
     </button>
@@ -181,7 +176,10 @@ function FileReviewList({
                     : `Incomplete — missing ${pair.grn ? "Red" : "Grn"}`}
                 </p>
               </div>
-              <RemoveButton onClick={() => onRemovePair(pair.pair_id)} label={`Remove ${pair.pair_id}`} />
+              <RemoveButton
+                onClick={() => onRemovePair(pair.pair_id)}
+                label={`Remove ${pair.pair_id}`}
+              />
             </li>
           ))}
           {pairs.length === 0 && (

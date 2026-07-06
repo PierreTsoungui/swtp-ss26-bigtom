@@ -1,0 +1,10 @@
+# Build output and generated artifacts
+dist
+coverage
+node_modules
+
+# Vitest snapshots are machine-generated; leave them untouched
+**/__snapshots__
+
+# Package manager lockfile
+package-lock.json

@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { useJobCancel } from "../../features/analysis/hooks/useJobCancel";
+import { useJobCancel } from "../hooks/useJobCancel";
 import { AppFooter } from "./AppFooter";
-import { AppHeader } from "./AppHeader";
+import { AppHeader, type NavSection } from "./AppHeader";
 import { getWorkflowStepForPath } from "./workflowSteps";
 
 /**
@@ -32,6 +32,11 @@ interface AppLayoutProps {
    * @default false
    */
   hideStepIndicator?: boolean;
+  /**
+   * In-page sections for the landing-page navigation, injected by the
+   * composition root so the shell stays feature-agnostic. @default []
+   */
+  landingSections?: readonly NavSection[];
 }
 
 /**
@@ -57,7 +62,12 @@ function getJobIdFromPath(pathname: string): string | null {
  * routing state, manages the global job cancellation (reset) logic, and
  * identifies the active workflow phase.
  */
-export function AppLayout({ children, resetAction, hideStepIndicator = false }: AppLayoutProps) {
+export function AppLayout({
+  children,
+  resetAction,
+  hideStepIndicator = false,
+  landingSections = [],
+}: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const isLandingPage = location.pathname === "/";
@@ -80,11 +90,13 @@ export function AppLayout({ children, resetAction, hideStepIndicator = false }: 
   });
 
   const isAnalysisActive = !hideStepIndicator && (resetAction?.isAnalysisActive ?? jobId !== null);
-  const handleReset = resetAction?.onReset ?? (() => {
-    if (jobId) {
-      void cancelJob();
-    }
-  });
+  const handleReset =
+    resetAction?.onReset ??
+    (() => {
+      if (jobId) {
+        void cancelJob();
+      }
+    });
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-background">
@@ -94,6 +106,7 @@ export function AppLayout({ children, resetAction, hideStepIndicator = false }: 
         isLandingPage={isLandingPage}
         showStepIndicator={showStepIndicator}
         isAnalysisActive={isAnalysisActive}
+        sections={landingSections}
         isResetting={resetAction?.isResetting ?? isLoading}
         onReset={handleReset}
       />

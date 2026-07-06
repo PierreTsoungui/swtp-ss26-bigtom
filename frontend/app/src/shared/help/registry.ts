@@ -16,10 +16,10 @@ import heatmapBody from "./content/heatmap.md?raw";
  * else in the UI needs to change.
  */
 export interface HelpTopic {
-    /** Title shown in the dialog header. */
-    title: string;
-    /** Markdown source rendered as the dialog body. */
-    body: string;
+  /** Title shown in the dialog header. */
+  title: string;
+  /** Markdown source rendered as the dialog body. */
+  body: string;
 }
 
 /**
@@ -29,38 +29,38 @@ export interface HelpTopic {
  * `<HelpButton topic="..." />`.
  */
 export const helpTopics = {
-    upload: {
-        title: "Upload Raw Data & Sample Information",
-        body: uploadBody,
-    },
-    filtering: {
-        title: "Quality Filtering",
-        body: filteringBody,
-    },
-    normalization: {
-        title: "Normalization",
-        body: normalizationBody,
-    },
-    batchCorrection: {
-        title: "Batch Effects & Batch Correction",
-        body: batchCorrectionBody,
-    },
-    dmp: {
-        title: "DMP Analysis",
-        body: dmpBody,
-    },
-    dmr: {
-        title: "DMR Analysis",
-        body: dmrBody,
-    },
-    tableExport: {
-        title: "Exporting Results",
-        body: tableExportBody,
-    },
-    heatmap: {
-        title: "Heatmap Interpretation",
-        body: heatmapBody,
-    },
+  upload: {
+    title: "Upload Raw Data & Sample Information",
+    body: uploadBody,
+  },
+  filtering: {
+    title: "Quality Filtering",
+    body: filteringBody,
+  },
+  normalization: {
+    title: "Normalization",
+    body: normalizationBody,
+  },
+  batchCorrection: {
+    title: "Batch Effects & Batch Correction",
+    body: batchCorrectionBody,
+  },
+  dmp: {
+    title: "DMP Analysis",
+    body: dmpBody,
+  },
+  dmr: {
+    title: "DMR Analysis",
+    body: dmrBody,
+  },
+  tableExport: {
+    title: "Exporting Results",
+    body: tableExportBody,
+  },
+  heatmap: {
+    title: "Heatmap Interpretation",
+    body: heatmapBody,
+  },
 } satisfies Record<string, HelpTopic>;
 
 /** Union of all valid help topic ids. */

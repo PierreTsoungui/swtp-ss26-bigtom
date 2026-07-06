@@ -15,7 +15,15 @@
     }
   }
 
-  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  :where(
+    a,
+    button,
+    input,
+    select,
+    textarea,
+    summary,
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
     outline: 3px solid theme(colors.primary.DEFAULT);
     outline-offset: 3px;
   }

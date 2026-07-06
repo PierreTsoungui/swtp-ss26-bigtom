@@ -14,6 +14,11 @@ export interface LandingSection {
   label: string;
 }
 
+/**
+ * The ordered in-page sections of the landing page. Consumed by both the landing
+ * page (which renders each `<section id>`) and the header navigation (which
+ * renders the anchor links), so the two never drift.
+ */
 export const LANDING_SECTIONS: LandingSection[] = [
   { id: "overview", label: "Overview" },
   { id: "workflow", label: "Workflow" },

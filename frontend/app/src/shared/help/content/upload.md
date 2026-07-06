@@ -8,8 +8,8 @@ microarray signal** and a **sample sheet** that describes your samples.
 The raw data must consist of Illumina IDAT files. Illumina arrays measure each
 sample on two channels, so **every sample is represented by two IDAT files**:
 
-- a *Green* channel file — ends in `_Grn.idat`
-- a *Red* channel file — ends in `_Red.idat`
+- a _Green_ channel file — ends in `_Grn.idat`
+- a _Red_ channel file — ends in `_Red.idat`
 
 Both files of a pair share the same prefix (the Sentrix barcode and position,
 e.g. `203927450093_R01C01`). You can drop a folder or a `.zip`; the system scans
@@ -28,7 +28,7 @@ your columns to **four required roles** after the sheet is read:
 - **Sentrix_ID** and **Sentrix_Position** — together they identify which IDAT
   pair belongs to each row.
 - **Sample_Name** — a human-readable label shown in plots and tables.
-- **Sample_Group** — the main biological grouping (e.g. *tumor* vs. *normal*).
+- **Sample_Group** — the main biological grouping (e.g. _tumor_ vs. _normal_).
 
 Columns that the system recognises are pre-selected, and each column can be used
 for only one role. **All remaining columns are kept** and stay available later

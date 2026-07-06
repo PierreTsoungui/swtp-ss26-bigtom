@@ -8,7 +8,7 @@ data is generated. Common sources include:
 - scanner or reagent lot
 
 If they are not addressed, batch effects can hide real biological findings or
-create false positives — samples may cluster by *when/where* they were processed
+create false positives — samples may cluster by _when/where_ they were processed
 instead of by their biology.
 
 ## Interpreting the SVD Heatmap
@@ -18,7 +18,7 @@ decomposes the methylation matrix into **principal components** (the main axes o
 variation) and tests each metadata variable against each component, showing the
 **association p-value** in every cell (darker = stronger association).
 
-- A strong association between a **technical** variable (e.g. *chip*, *plate*)
+- A strong association between a **technical** variable (e.g. _chip_, _plate_)
   and a major component is a red flag for a batch effect.
 - Your **biological** variable of interest should explain a meaningful share of
   the variation — that is the signal you want to keep.

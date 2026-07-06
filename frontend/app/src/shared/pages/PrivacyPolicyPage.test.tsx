@@ -7,13 +7,13 @@ describe("PrivacyPolicyPage Component", () => {
   it("contains all critical and required regulatory privacy information in English", () => {
     // Arrange & Act
     render(
-        <MemoryRouter>
-          <PrivacyPolicyPage />
-        </MemoryRouter>
+      <MemoryRouter>
+        <PrivacyPolicyPage />
+      </MemoryRouter>,
     );
 
     // Assert that the navigation back button trigger is present in layout view
-    const backButton = screen.getByRole('button');
+    const backButton = screen.getByRole("button");
     expect(backButton).toBeInTheDocument();
 
     // Assert localized English header titles and critical content descriptors
