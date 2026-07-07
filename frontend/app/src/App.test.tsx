@@ -17,7 +17,7 @@ describe("App routing", () => {
 
     expect(screen.getByRole("heading", { name: "Page not found" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Go to start page" })).toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Schrittanzeige" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Step indicator" })).not.toBeInTheDocument();
   });
 
   it("keeps valid routes reachable", () => {
@@ -32,6 +32,8 @@ describe("App routing", () => {
   it("keeps the workflow step indicator on valid workflow routes", () => {
     renderApp("/upload");
 
-    expect(screen.getByRole("navigation", { name: "Schrittanzeige" })).toBeInTheDocument();
+    expect(
+        screen.getByRole("navigation", { name: /step indicator/i }),
+    ).toBeInTheDocument();
   });
 });

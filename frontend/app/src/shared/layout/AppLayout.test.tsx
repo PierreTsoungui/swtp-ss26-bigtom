@@ -48,7 +48,7 @@ describe("AppLayout Component Shell", () => {
     expect(screen.getAllByText("Filter").length).toBeGreaterThan(0);
 
     // Target via the actual active aria-label string found in the DOM accessibility tree
-    const stepIndicator = screen.getByRole("navigation", { name: "Schrittanzeige" });
+    const stepIndicator = screen.getByRole("navigation", { name: "Step indicator" });
 
     // On /analysis, step 2 (Filter) is current: step 1 is completed and shows a
     // check mark (not its number), while the current and pending steps 2-5 show
