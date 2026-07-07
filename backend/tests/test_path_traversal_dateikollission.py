@@ -94,7 +94,7 @@ def test_save_idat_files_duplicate_filename(tmp_path):
         create_upload_file("sample.idat"),
     ]
 
-    with pytest.raises(ValueError, match="Doppelter Dateiname erkannt"):
+    with pytest.raises(ValueError, match="Duplicate filename detected"):
         save_idat_files(files, tmp_path)
 
 

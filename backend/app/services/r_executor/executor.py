@@ -1,3 +1,4 @@
+"""Run R commands in the Docker worker and stream their structured output."""
 import asyncio
 import logging
 import re
@@ -70,9 +71,11 @@ async def run_r_script(
     protocol: dict[str, Optional[str]] = {"r_error": None}
 
     async def forward_progress(line: str) -> None:
-        """Translate R's line-based JSON protocol into ``on_progress`` calls and
-        capture protocol state. Runs even when ``on_progress`` is None so the
-        error message is always recorded."""
+        """Translate R's JSON protocol into ``on_progress`` calls, capturing state.
+
+        Runs even when ``on_progress`` is None so the error message is always
+        recorded.
+        """
         for data in extract_json_objects(line):
             msg_type = data.get("type")
             if msg_type == "error":
@@ -84,18 +87,18 @@ async def run_r_script(
             elif msg_type == "error":
                 await on_progress({
                     "status":       "failed",
-                    "current_step": "Pipeline wegen R-Fehlers abgebrochen",
+                    "current_step": "Pipeline aborted due to an R error",
                     "error": {
                         "title":  "Pipeline Execution Error",
                         "status": 500,
-                        "detail": data.get("message", "Unbekannter R-Fehler."),
+                        "detail": data.get("message", "Unknown R error."),
                     },
                 })
             elif msg_type == "done":
                 await on_progress({
                     "status":           "running",
                     "progress_percent": 100,
-                    "current_step":     "Skript-Verarbeitung abgeschlossen",
+                    "current_step":     "Script processing finished",
                 })
 
     async def read_stream(stream: asyncio.StreamReader, sink: list[str], is_stdout: bool) -> None:
@@ -121,6 +124,8 @@ async def run_r_script(
                 level = logging.WARNING if _R_STDERR_ALERT.search(decoded) else logging.DEBUG
                 logger.log(level, "R_STDERR: job_id=%s line=%s", command.job_id, decoded)
 
+    # The subprocess was created with PIPE for both streams, so neither is None.
+    assert process.stdout is not None and process.stderr is not None
     stdout_task = asyncio.create_task(read_stream(process.stdout, stdout_lines, is_stdout=True))
     stderr_task = asyncio.create_task(read_stream(process.stderr, stderr_lines, is_stdout=False))
     # Completes once BOTH streams hit EOF, which happens when the subprocess
@@ -135,8 +140,9 @@ async def run_r_script(
     returncode: int | None = None
 
     try:
+        pending: set[asyncio.Future] = {readers_task, cancel_wait_task}
         done, _ = await asyncio.wait(
-            {readers_task, cancel_wait_task},
+            pending,
             timeout=command.timeout_seconds,
             return_when=asyncio.FIRST_COMPLETED,
         )

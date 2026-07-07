@@ -1,14 +1,12 @@
-"""
-Parsing helpers for the line-based JSON protocol that R scripts use to stream
-structured messages (progress, error, done, plot) over stdout.
+r"""Parse the line-based JSON protocol R scripts stream over stdout.
 
-R emits one JSON object per line via `jsonlite::toJSON`, but the surrounding
-log output is free text. We therefore have to locate JSON objects inside an
-otherwise unstructured line. A naive `\\{.*?\\}` regex breaks the moment an
-object contains nested braces (e.g. ``{"type":"progress","data":{"x":1}}``),
-silently truncating the payload. The scanner below tracks brace depth while
-respecting string literals and escapes, so nested objects are handled
-correctly.
+R emits structured messages (progress, error, done, plot) as one JSON object per
+line via ``jsonlite::toJSON``, but the surrounding log output is free text, so a
+JSON object has to be located inside an otherwise unstructured line. A naive
+``\{.*?\}`` regex breaks the moment an object contains nested braces (e.g.
+``{"type":"progress","data":{"x":1}}``), silently truncating the payload. The
+scanner below tracks brace depth while respecting string literals and escapes,
+so nested objects are handled correctly.
 """
 
 from __future__ import annotations

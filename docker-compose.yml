@@ -20,6 +20,10 @@ services:
       - JOB_RETENTION_HOURS=${JOB_RETENTION_HOURS:-24}
       - JOB_CLEANUP_INTERVAL_SECONDS=${JOB_CLEANUP_INTERVAL_SECONDS:-86400}
       - DMR_CORES=${DMR_CORES:-4}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080,https://localhost,https://127.0.0.1}
+      - MAX_TOTAL_UPLOAD_MB=${MAX_TOTAL_UPLOAD_MB:-900}
+      - MAX_SAMPLE_SHEET_MB=${MAX_SAMPLE_SHEET_MB:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     ports:
       - "8000:8000"
     volumes:

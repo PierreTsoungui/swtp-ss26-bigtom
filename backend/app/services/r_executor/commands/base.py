@@ -1,3 +1,4 @@
+"""Abstract base for R commands: shared paths, timeout and the argv contract."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -10,7 +11,13 @@ if TYPE_CHECKING:
 
 @dataclass
 class RCommand(ABC):
-    """Abstrakte Basisklasse für alle ausführbaren R-Befehle."""
+    """Abstract base class for every executable R command.
+
+    Holds the fields common to all commands (script, job, sample sheet) and the
+    container/path helpers, and defines the ``build_cmd`` contract each concrete
+    command implements.
+    """
+
     script:       str
     job_id:       str
     job_dir:      str
@@ -25,22 +32,24 @@ class RCommand(ABC):
 
     @property
     def docker_job_dir(self) -> str:
+        """Return the job directory as seen inside the R worker container."""
         return f"/app/jobs/{self.job_id}"
 
     @property
     def script_path(self) -> str:
+        """Return the R script path inside the R worker container."""
         return f"/app/r_backend/{self.script}"
 
     @abstractmethod
     def build_cmd(self) -> list[str]:
-        """Erzeugt die exakte Argumentenliste für den docker exec Aufruf."""
+        """Return the exact argument list for the ``docker exec`` invocation."""
         ...
 
     def parse_stdout(self, result: ExecutionResult) -> ExecutionResult:
-        """Optionaler Hook zur Nachbereitung (z. B. Laden von JSON-Statistiken)."""
+        """Post-process the result (e.g. load JSON statistics); a no-op by default."""
         return result
 
     @property
     def mode_label(self) -> str:
-        """Lesbarer Klassenname für strukturiertes Logging."""
+        """Return a readable class name for structured logging."""
         return type(self).__name__

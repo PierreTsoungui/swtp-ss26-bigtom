@@ -1,11 +1,16 @@
-"""Liest und validiert die zentrale Backend-Konfiguration."""
+"""Reads and validates the central backend configuration.
+
+Every tunable is sourced from an environment variable with a sensible default,
+so the same image runs unchanged across dev/CI/production and can be overridden
+without code changes.
+"""
 
 import os
 from pathlib import Path
 
 
 def _get_positive_float(name: str, default: float) -> float:
-    """Liest eine positive Kommazahl aus der Umgebung."""
+    """Read a positive float from the environment."""
     raw_value = os.getenv(name, str(default))
     try:
         value = float(raw_value)
@@ -18,7 +23,7 @@ def _get_positive_float(name: str, default: float) -> float:
 
 
 def _get_positive_int(name: str, default: int) -> int:
-    """Liest eine positive Ganzzahl aus der Umgebung."""
+    """Read a positive integer from the environment."""
     raw_value = os.getenv(name, str(default))
     try:
         value = int(raw_value)
@@ -28,6 +33,12 @@ def _get_positive_int(name: str, default: int) -> int:
     if value <= 0:
         raise ValueError(f"{name} must be greater than zero")
     return value
+
+
+def _get_csv_list(name: str, default: str) -> list[str]:
+    """Read a comma-separated environment variable into a list of trimmed values."""
+    raw_value = os.getenv(name, default)
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
 
 
 JOB_BASE_DIR = Path(os.getenv("JOB_BASE_DIR", "./jobs"))
@@ -56,3 +67,20 @@ STAGING_CLEANUP_INTERVAL_SECONDS = _get_positive_int(
 # BLAS — so this does not nest threads or fight the container's *_NUM_THREADS=1.
 # A conservative default keeps headroom when several jobs run at once.
 DMR_CORES = _get_positive_int("DMR_CORES", 4)
+
+# ── Upload limits ─────────────────────────────────────────────────────────────
+# Byte ceilings for an upload, configured in megabytes for readability. The IDAT
+# payload of a typical run is ~30 MB; the generous default leaves headroom for
+# larger studies. The sample sheet is always small.
+MAX_TOTAL_UPLOAD_BYTES = _get_positive_int("MAX_TOTAL_UPLOAD_MB", 900) * 1024 * 1024
+MAX_SAMPLE_SHEET_BYTES = _get_positive_int("MAX_SAMPLE_SHEET_MB", 10) * 1024 * 1024
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+# Allowed browser origins for the API. Defaults to the local dev frontends; in
+# production set CORS_ALLOWED_ORIGINS to the deployed frontend origin(s), e.g.
+# "https://app.example.com". Comma-separated. A literal "*" disables the origin
+# allowlist (not recommended together with credentials).
+CORS_ALLOWED_ORIGINS = _get_csv_list(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:8080,https://localhost,https://127.0.0.1",
+)

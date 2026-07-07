@@ -1,311 +1,144 @@
-import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock
-from datetime import datetime, timedelta
+"""Tests for the normalization-preview API.
+
+Fully isolated from the working directory: the route's jobs base is redirected
+into ``tmp_path``, so nothing is read from or written to the real ./jobs
+directory and the tests do not depend on the process CWD.
+"""
 import json
 from pathlib import Path
 
+import pytest
+from fastapi.testclient import TestClient
+
+from app.api.routes import normalization_preview as preview_route
 from app.main import app
-from app.services.job_manager import create_job, jobs, transition_job
-from app.services.job_manager import JobPhase, JobStatusValue
+from app.services.job_manager import (
+    JobPhase,
+    JobStatusValue,
+    create_job,
+    jobs,
+    transition_job,
+)
 
 client = TestClient(app)
-
-# =========================================================
-# TEST DATA PATHS
-# =========================================================
-JOBS_DIR = Path("jobs").resolve()
 
 
 @pytest.fixture
 def job_id():
-    """Create a test job and return its ID."""
     jobs.clear()
-    job = create_job("test-job-123")
-    print("\n[TEST] Created Job:", job.job_id)
-    return job.job_id
+    return create_job("test-job-123").job_id
 
 
 @pytest.fixture
-def job_dir(job_id):
-    """Create a temporary job directory with test files."""
-    job_path = JOBS_DIR / job_id
+def job_dir(job_id, tmp_path, monkeypatch):
+    """Redirect the route's jobs base into tmp_path and return the job directory."""
+    jobs_base = tmp_path / "jobs"
+    monkeypatch.setattr(preview_route, "JOBS_DIR", jobs_base)
+    job_path = jobs_base / job_id
     job_path.mkdir(parents=True, exist_ok=True)
-    yield str(job_path)
-    import shutil
-    shutil.rmtree(job_path, ignore_errors=True)
+    return job_path
 
 
-# =========================================================
-# HELPER FUNCTIONS
-# =========================================================
+def _write_preview(job_path: Path, methods: dict) -> None:
+    """Write preview_plots.json plus the density PNG and PCA JSON it references.
 
-def create_preview_plots_json(job_dir: str, plots: dict):
-    """Create preview_plots.json in the job directory."""
-    plots_path = Path(job_dir) / "preview_plots.json"
-    with open(plots_path, "w", encoding="utf-8") as f:
-        json.dump(plots, f, indent=2)
-    return plots_path
-
-
-def create_plot_files(job_dir: str, plots: dict):
-    """Create dummy PNG files for testing."""
-    job_path = Path(job_dir)
-    for method, items in plots.items():
-        for plot in items:
-            filename = plot.get("file")
-            if filename:
-                (job_path / filename).touch()
+    ``methods`` maps ``method -> {"density": <png name>, "pca": <json name>}``.
+    """
+    (job_path / "preview_plots.json").write_text(json.dumps(methods), encoding="utf-8")
+    for artifacts in methods.values():
+        if artifacts.get("density"):
+            (job_path / artifacts["density"]).touch()
+        if artifacts.get("pca"):
+            (job_path / artifacts["pca"]).write_text('{"points": []}', encoding="utf-8")
 
 
-def setup_job_for_preview(job_id: str):
-    """Setup job with correct transitions for preview testing."""
-    transition_job(
-        job_id,
-        new_phase=JobPhase.UPLOADED,
-        new_status=JobStatusValue.COMPLETED,
-        progress_percent=100,
-        current_step="Upload complete"
-    )
-    transition_job(
-        job_id,
-        new_phase=JobPhase.FILTERING,
-        new_status=JobStatusValue.RUNNING,
-        progress_percent=0,
-        current_step="Starting filtering..."
-    )
-    transition_job(
-        job_id,
-        new_phase=JobPhase.FILTERING,
-        new_status=JobStatusValue.COMPLETED,
-        progress_percent=100,
-        current_step="Filtering complete"
-    )
+def _mark_preview_ready(job_id: str) -> None:
+    """Drive a job through the transitions up to a completed preview."""
+    for phase, status, pct in (
+        (JobPhase.UPLOADED, JobStatusValue.COMPLETED, 100),
+        (JobPhase.FILTERING, JobStatusValue.RUNNING, 0),
+        (JobPhase.FILTERING, JobStatusValue.COMPLETED, 100),
+        (JobPhase.NORMALIZATION_PREVIEW, JobStatusValue.RUNNING, 0),
+        (JobPhase.NORMALIZATION_PREVIEW, JobStatusValue.COMPLETED, 100),
+    ):
+        transition_job(job_id, new_phase=phase, new_status=status, progress_percent=pct)
 
 
-def set_preview_ready(job_id: str):
-    """Set job to preview ready state."""
-    transition_job(
-        job_id,
-        new_phase=JobPhase.NORMALIZATION_PREVIEW,
-        new_status=JobStatusValue.RUNNING,
-        progress_percent=0,
-        current_step="Starting preview..."
-    )
-    transition_job(
-        job_id,
-        new_phase=JobPhase.NORMALIZATION_PREVIEW,
-        new_status=JobStatusValue.COMPLETED,
-        progress_percent=100,
-        current_step="Preview complete"
-    )
+# ── GET /preview/normalization/{job_id} ───────────────────────────────────────
 
-
-# =========================================================
-# TEST: POST /preview/normalization/{job_id}
-# =========================================================
-
-def test_start_preview_returns_202(job_id, job_dir):
-    """Test: POST /preview/normalization/{job_id} returns 202 Accepted"""
-    
-    setup_job_for_preview(job_id)
-
-    response = client.post(
-        f"/api/v1/preview/normalization/{job_id}"
-    )
-
-    print("\n[POST RESPONSE]")
-    print(response.json())
-
-    # POST endpoint may not exist - preview is started automatically by pipeline
-    if response.status_code == 405:
-        print("[INFO] POST endpoint does not exist - preview is started automatically")
-        assert response.status_code == 405
-        return
-
-    assert response.status_code == 202
-    data = response.json()
-    assert data["job_id"] == job_id
-    assert data["status"] == "accepted"
-
-
-# =========================================================
-# TEST: GET /preview/normalization/{job_id} - 409 Not Ready
-# =========================================================
-
-def test_preview_not_ready_returns_409(job_id):
-    """Test: GET returns 409 when preview not ready"""
-
-    transition_job(
-        job_id,
-        new_phase=JobPhase.UPLOADED,
-        new_status=JobStatusValue.COMPLETED,
-        progress_percent=0,
-        current_step="Upload complete"
-    )
-
-    response = client.get(
-        f"/api/v1/preview/normalization/{job_id}"
-    )
-
-    print("\n[409 RESPONSE]")
-    print(response.json())
-
-    assert response.status_code == 409
-    data = response.json()
-    assert data["detail"]["error"] == "PREVIEW_NOT_READY"
-
-
-# =========================================================
-# TEST: GET /preview/normalization/{job_id} - 200 OK
-# =========================================================
-
-def test_preview_returns_5_plots(job_id, job_dir):
-    """Test: GET returns 5 plots when preview is ready"""
-
-    preview_plots = {
-        "raw": [
-            {"plot_kind": "density", "file": "density_raw.png"},
-            {"plot_kind": "pca", "file": "pca_raw.png"}
-        ],
-        "noob": [
-            {"plot_kind": "density", "file": "density_noob.png"},
-            {"plot_kind": "pca", "file": "pca_noob.png"}
-        ],
-        "quantile": [
-            {"plot_kind": "density", "file": "density_quantile.png"},
-            {"plot_kind": "pca", "file": "pca_quantile.png"}
-        ],
-        "swan": [
-            {"plot_kind": "density", "file": "density_swan.png"},
-            {"plot_kind": "pca", "file": "pca_swan.png"}
-        ],
-        "funnorm": [
-            {"plot_kind": "density", "file": "density_funnorm.png"},
-            {"plot_kind": "pca", "file": "pca_funnorm.png"}
-        ]
+def test_preview_returns_all_methods_when_ready(job_id, job_dir):
+    methods = {
+        m: {"density": f"density_{m}.png", "pca": f"pca_{m}.json"}
+        for m in ("raw", "noob", "quantile", "swan", "funnorm")
     }
+    _write_preview(job_dir, methods)
+    _mark_preview_ready(job_id)
 
-    create_preview_plots_json(job_dir, preview_plots)
-    create_plot_files(job_dir, preview_plots)
-
-    setup_job_for_preview(job_id)
-    set_preview_ready(job_id)
-
-    response = client.get(
-        f"/api/v1/preview/normalization/{job_id}"
-    )
-
-    print("\n[GET RESPONSE]")
-    print(response.json())
+    response = client.get(f"/api/v1/preview/normalization/{job_id}")
 
     assert response.status_code == 200
     data = response.json()
-    assert "plots" in data
-    assert len(data["plots"]) == 5
+    assert data["job_id"] == job_id
+    assert {m["method"] for m in data["methods"]} == set(methods)
 
 
-# =========================================================
-# TEST: GET /preview/normalization/{job_id} - Expired (if implemented)
-# =========================================================
-
-def test_expired_job_returns_410(job_id, job_dir):
-    """Test: GET returns 410 when session expired (if expires_at check is implemented)"""
-    
-    # This test checks if the endpoint correctly handles expired sessions.
-    # If expires_at is not checked in the code, the test will pass with 200.
-    # If it is checked, it will return 410.
-    
-    # Create dummy preview_plots.json
-    preview_plots = {
-        "raw": [{"plot_kind": "density", "file": "density_raw.png"}]
-    }
-    create_preview_plots_json(job_dir, preview_plots)
-    create_plot_files(job_dir, preview_plots)
-
-    job = jobs.get(job_id)
-    assert job is not None
-
-    # Set expiration to past
-    job.__dict__["expires_at"] = datetime.now() - timedelta(hours=1)
-
-    setup_job_for_preview(job_id)
-    set_preview_ready(job_id)
-
-    response = client.get(
-        f"/api/v1/preview/normalization/{job_id}"
+def test_preview_not_ready_returns_409(job_id):
+    transition_job(
+        job_id,
+        new_phase=JobPhase.UPLOADED,
+        new_status=JobStatusValue.COMPLETED,
+        progress_percent=0,
+        current_step="Upload complete",
     )
-
-    print("\n[EXPIRED RESPONSE]")
-    print(response.json())
-
-    # Based on current code (without expires_at check), the endpoint returns 200
-    # This test documents the current behavior
-    if response.status_code == 410:
-        data = response.json()
-        assert data["detail"]["error"] == "SESSION_EXPIRED"
-    else:
-        # expires_at check is not implemented, so it returns 200
-        assert response.status_code == 200
-        print("[INFO] expires_at check is NOT implemented - test passes with 200")
+    response = client.get(f"/api/v1/preview/normalization/{job_id}")
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "PREVIEW_NOT_READY"
 
 
-# =========================================================
-# TEST: GET /preview/normalization/{job_id} - 404 Not Found
-# =========================================================
-
-def test_preview_job_not_found():
-    """Test: GET returns 404 for non-existent job"""
-
-    response = client.get(
-        f"/api/v1/preview/normalization/non-existent-id"
-    )
-
+def test_preview_missing_plots_file_returns_404(job_id, job_dir):
+    # The job is ready, but preview_plots.json was never written.
+    _mark_preview_ready(job_id)
+    response = client.get(f"/api/v1/preview/normalization/{job_id}")
     assert response.status_code == 404
-    data = response.json()
-    assert data["detail"]["error"] == "JOB_NOT_FOUND"
+    assert response.json()["detail"]["error"] == "PREVIEW_NOT_READY"
 
 
-# =========================================================
-# TEST: GET /preview/normalization/{job_id}/{plot_name}
-# =========================================================
+def test_preview_unknown_job_returns_404():
+    response = client.get("/api/v1/preview/normalization/does-not-exist")
+    assert response.status_code == 404
+    assert response.json()["detail"]["error"] == "JOB_NOT_FOUND"
 
-def test_get_plot_image_returns_400_invalid_plot_name(job_id):
-    """Test: GET returns 400 for invalid plot name"""
 
-    response = client.get(
-        f"/api/v1/preview/normalization/{job_id}/invalid_name.png"
-    )
+def test_post_preview_is_not_allowed(job_id):
+    # The preview runs automatically within the upload pipeline; there is no
+    # manual POST trigger, so the method is not allowed.
+    response = client.post(f"/api/v1/preview/normalization/{job_id}")
+    assert response.status_code == 405
 
+
+# ── GET /preview/normalization/{job_id}/{plot_name} ───────────────────────────
+
+def test_plot_image_served_when_present(job_id, job_dir):
+    (job_dir / "density_raw.png").write_bytes(b"\x89PNG fake")
+    response = client.get(f"/api/v1/preview/normalization/{job_id}/density_raw.png")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+
+
+def test_plot_image_invalid_name_returns_400(job_id, job_dir):
+    # Not an allowed density_* prefix.
+    response = client.get(f"/api/v1/preview/normalization/{job_id}/not_allowed.png")
     assert response.status_code == 400
-    data = response.json()
-    assert "Ungültiger Plot-Name" in str(data) or "Invalid" in str(data)
+    assert "Invalid" in str(response.json())
 
 
-def test_get_plot_image_returns_404_for_missing_plot(job_id, job_dir):
-    """Test: GET returns 404 when plot file is missing"""
-
-    existing_plot = "density_raw.png"
-    (Path(job_dir) / existing_plot).touch()
-
-    preview_plots = {
-        "raw": [{"plot_kind": "density", "file": existing_plot}]
-    }
-    create_preview_plots_json(job_dir, preview_plots)
-
-    non_existent_plot = "density_non_existent.png"
-    response = client.get(
-        f"/api/v1/preview/normalization/{job_id}/{non_existent_plot}"
-    )
-
+def test_plot_image_missing_file_returns_404(job_id, job_dir):
+    response = client.get(f"/api/v1/preview/normalization/{job_id}/density_missing.png")
     assert response.status_code == 404
 
 
-def test_get_plot_image_returns_404_job_not_found():
-    """Test: GET returns 404 when job not found"""
-
+def test_plot_image_unknown_job_returns_404():
     response = client.get(
-        f"/api/v1/preview/normalization/non-existent-id/plot.png"
+        "/api/v1/preview/normalization/does-not-exist/density_raw.png"
     )
-
     assert response.status_code == 404

@@ -1,4 +1,5 @@
 # app/api/routes/batch.py
+"""Routes for batch correction, SVD plots and the downstream analysis run."""
 from fastapi import APIRouter, Body, Query, Request, status
 from fastapi.responses import FileResponse
 
@@ -18,6 +19,7 @@ router = APIRouter()
 
 @router.get("/{job_id}/history", response_model=BatchHistoryResponse)
 def get_batch_history(job_id: str):
+    """Return the batch-correction history (rounds and current state) for a job."""
     job_dir      = batch_service.get_job_dir_or_404(job_id)
     history_data = batch_service.load_history(job_dir, job_id)
     return history_data
@@ -37,7 +39,7 @@ def get_svd_plot(job_id: str, round_id: int, format: str = Query("png", pattern=
     if not plot_file.exists():
         raise BatchException(
             ErrorTypes.PLOT_NOT_FOUND,
-            detail=f"SVD-Plot für Runde {round_id} nicht gefunden.",
+            detail=f"SVD plot for round {round_id} not found.",
         )
 
     if is_pdf:
@@ -63,6 +65,7 @@ async def run_batch_correction(
     payload: BatchSettingsPayload,
     request: Request,
 ):
+    """Validate the batch settings and start a batch-correction run in the background."""
     job_dir  = batch_service.get_job_dir_or_404(job_id)
     settings = payload.batch_correction
 
@@ -76,7 +79,7 @@ async def run_batch_correction(
     if settings.batch_variable not in available_cols:
         raise BatchException(
             ErrorTypes.INVALID_BATCH_VARIABLE,
-            detail=f"Spalte '{settings.batch_variable}' ist nicht als Variable im SampleSheet verfügbar.",
+            detail=f"Column '{settings.batch_variable}' is not available as a variable in the sample sheet.",
             provided=settings.batch_variable,
             available=available_cols,
         )
@@ -85,7 +88,7 @@ async def run_batch_correction(
     if invalid_covariates:
         raise BatchException(
             ErrorTypes.INVALID_COVARIATE,
-            detail=f"Ungültige Kovariate(n): {', '.join(invalid_covariates)}.",
+            detail=f"Invalid covariate(s): {', '.join(invalid_covariates)}.",
             provided=invalid_covariates,
             available=available_cols,
         )
@@ -93,7 +96,7 @@ async def run_batch_correction(
     if settings.batch_variable in settings.covariates:
         raise BatchException(
             ErrorTypes.COVARIATE_EQUALS_BATCH,
-            detail="Die Batch-Variable darf nicht gleichzeitig als Kovariate verwendet werden.",
+            detail="The batch variable must not also be used as a covariate.",
             provided_batch_variable=settings.batch_variable,
             provided_covariates=settings.covariates,
         )
@@ -102,7 +105,7 @@ async def run_batch_correction(
     if current_job and current_job.status == JobStatusValue.RUNNING.value:
         raise BatchException(
             ErrorTypes.BATCH_NOT_ALLOWED,
-            detail="Eine Pipeline läuft bereits für diesen Job.",
+            detail="A pipeline is already running for this job.",
         )
 
     history_data = batch_service.load_history(job_dir, job_id)
@@ -114,7 +117,7 @@ async def run_batch_correction(
             new_phase=JobPhase.BATCH,
             new_status=JobStatusValue.RUNNING,
             progress_percent=0,
-            current_step="Starte Batch-Korrektur...",
+            current_step="Starting batch correction...",
         )
     except Exception as e:
         raise BatchException(
@@ -158,9 +161,9 @@ async def skip_batch_correction(
     # the corrected data; otherwise the uncorrected normalized data.
     has_correction = (job_dir / "corrected_data.rds").exists()
     step = (
-        "Starte Downstream-Analyse mit batch-korrigierten Daten..."
+        "Starting downstream analysis with batch-corrected data..."
         if has_correction
-        else "Batch-Korrektur übersprungen. Starte Downstream-Analyse..."
+        else "Batch correction skipped. Starting downstream analysis..."
     )
 
     transition_job(
@@ -189,6 +192,7 @@ async def skip_batch_correction(
 
 @router.get("/{job_id}/batch-options", response_model=BatchOptionsResponse)
 def get_batch_options(job_id: str):
+    """Return the sample-sheet columns eligible as batch variable or covariate."""
     job_dir = batch_service.get_job_dir_or_404(job_id)
     columns = batch_service.get_eligible_columns(job_dir)
     return {

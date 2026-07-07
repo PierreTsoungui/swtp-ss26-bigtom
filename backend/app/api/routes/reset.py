@@ -1,4 +1,5 @@
 # app/api/routes/reset.py
+"""Route for cancelling and permanently deleting a job."""
 from __future__ import annotations
 
 import logging
@@ -30,7 +31,7 @@ async def reset_job(request: Request, job_id: str):
         logger.exception("[reset] Deletion failed: job_id=%s", job_id)
         raise AppException(
             ErrorTypes.RESET_FAILED,
-            detail=f"Die Daten des Jobs '{job_id}' konnten nicht vollständig gelöscht werden.",
+            detail=f"The data for job '{job_id}' could not be fully deleted.",
             instance=request.url.path,
             job_id=job_id,
         ) from exc
@@ -38,7 +39,7 @@ async def reset_job(request: Request, job_id: str):
     if not outcome.found:
         raise AppException(
             ErrorTypes.JOB_NOT_FOUND,
-            detail=f"Kein Job mit der ID '{job_id}' gefunden",
+            detail=f"No job found with id '{job_id}'",
             instance=request.url.path,
             job_id=job_id,
         )

@@ -1,6 +1,6 @@
 # app/services/heatmap_service.py
+"""Heatmap service: CpG selection, the heatmap.R pipeline, and grouping options."""
 import asyncio
-import csv
 import json
 import logging
 import re
@@ -15,12 +15,16 @@ from app.models.heatmap import GroupingPayload
 from app.services import job_manager
 from app.services.table_filter import apply_filters
 from app.services.r_executor import run_r_script, HeatmapCommand
-from app.services.batch_service import find_sample_sheet_name
+from app.services.job_paths import JOBS_DIR, resolve_job_dir
+from app.services.samplesheet_parser import (
+    find_sample_sheet_name,
+    read_data_section,
+    columns_by_index,
+)
 from app.services.job_manager import transition_job, set_progress, get_job, JobPhase, JobStatusValue
 
 logger = logging.getLogger(__name__)
 
-JOBS_DIR         = Path("jobs").resolve()
 MAX_CPGS         = 500
 HEATMAP_FILENAME = "heatmap.png"
 HEATMAP_INPUT_CSV = "heatmap_input.csv"   # filtered CpG IDs handed to R (single filter source)
@@ -29,13 +33,12 @@ HEATMAP_INPUT_CSV = "heatmap_input.csv"   # filtered CpG IDs handed to R (single
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_job_dir_or_404(job_id: str) -> Path:
-    job_dir = JOBS_DIR / job_id
-    if not job_dir.exists() or not job_dir.is_dir():
-        raise AppException(
-            ErrorTypes.JOB_NOT_FOUND,
-            detail=f"Job '{job_id}' wurde nicht gefunden."
-        )
-    return job_dir
+    """Return the job's directory under ``JOBS_DIR`` or raise 404.
+
+    A thin wrapper around the shared resolver: the lookup/error logic lives in
+    ``job_paths`` while the module-level ``JOBS_DIR`` stays patchable in tests.
+    """
+    return resolve_job_dir(JOBS_DIR, job_id)
 
 
 def _find_dmp_rds(job_dir: Path) -> Path:
@@ -51,17 +54,18 @@ def _find_dmp_rds(job_dir: Path) -> Path:
     raise AppException(
         ErrorTypes.FILE_NOT_FOUND,
         detail=(
-            f"Keine DMP-Ergebnis-RDS-Datei in Job '{job_dir.name}' gefunden. "
-            "Erwartet: 'dmp_results.rds' oder ein Dateiname mit 'dmp'."
+            f"No DMP result RDS file found in job '{job_dir.name}'. "
+            "Expected 'dmp_results.rds' or a filename containing 'dmp'."
         )
     )
 
 
 def _build_r_env(grouping: GroupingPayload) -> dict:
-    """
-    Environment for heatmap.R. Filtering is NOT passed here anymore — the CpG
-    selection is decided once in the backend (``prepare_heatmap_input``) and
-    handed to R as ``heatmap_input.csv``. R only renders.
+    """Build the environment for heatmap.R.
+
+    Filtering is NOT passed here anymore — the CpG selection is decided once in
+    the backend (``prepare_heatmap_input``) and handed to R as
+    ``heatmap_input.csv``. R only renders.
     """
     env: dict = {
         "HEATMAP_GROUP1":   grouping.primary,
@@ -128,21 +132,19 @@ async def run_heatmap_pipeline_task(
     grouping:    GroupingPayload,
     cancel_event: asyncio.Event,
 ) -> None:
+    """Run heatmap.R in the Docker container, streaming status via on_progress.
+
+    Started exclusively through start_job_pipeline(), which:
+      - creates and registers the cancel_event
+      - registers the asyncio task (for deterministic /reset waiting)
+      - handles unregister_cancel_event + unregister_job_task in its finally
+
+    Therefore: do not create an own event and do not unregister manually here.
+    The transition to HEATMAP+RUNNING already happens in the route.
     """
-    Führt heatmap.R im Docker-Container aus und aktualisiert den Job-Status
-    live per on_progress-Callback.
+    set_progress(job_id, percent=0, message="Starting heatmap generation...")
 
-    Wird ausschließlich über start_job_pipeline() gestartet, das:
-      - cancel_event erzeugt und registriert
-      - den asyncio.Task registriert (für deterministisches /reset-Warten)
-      - unregister_cancel_event + unregister_job_task im finally übernimmt
-
-    Deshalb: kein eigenes Event erzeugen, kein manuelles unregister hier.
-    transition_job zu HEATMAP+RUNNING erfolgt bereits in der Route.
-    """
-    set_progress(job_id, percent=0, message="Starte Heatmap-Generierung...")
-
-    # ── Progress-Callback ──────────────────────────────────────────────────
+    # ── Progress callback ──────────────────────────────────────────────────
     async def on_progress(data: dict):
         if not isinstance(data, dict):
             return
@@ -152,7 +154,7 @@ async def run_heatmap_pipeline_task(
             pct   = 5 + int((step / total) * 90)
             set_progress(job_id, percent=pct, message=data.get("message", ""))
 
-    # ── R-Skript aufrufen ──────────────────────────────────────────────────
+    # ── Invoke the R script ────────────────────────────────────────────────
     r_env = _build_r_env(grouping)
 
     result = await run_r_script(
@@ -171,22 +173,22 @@ async def run_heatmap_pipeline_task(
 
     # ── Cancellation ───────────────────────────────────────────────────────
     if result.is_cancelled:
-        logger.info("Heatmap-Generierung abgebrochen: job_id=%s", job_id)
+        logger.info("Heatmap generation cancelled: job_id=%s", job_id)
         return
 
     # ── Timeout ────────────────────────────────────────────────────────────
     if result.is_timeout:
-        logger.error("Heatmap-Generierung Timeout: job_id=%s", job_id)
+        logger.error("Heatmap generation timed out: job_id=%s", job_id)
         transition_job(
             job_id,
             new_phase=JobPhase.HEATMAP,
             new_status=JobStatusValue.FAILED,
-            current_step="Fehler: heatmap.R hat das Zeitlimit überschritten.",
+            current_step="Error: heatmap.R exceeded its time limit.",
             error={"detail": "Heatmap generation timeout."},
         )
         return
 
-    # ── Fehlerfall ─────────────────────────────────────────────────────────
+    # ── Failure (specialized: too many CpGs) ───────────────────────────────
     if not result.is_success:
         too_many = _parse_too_many_cpgs(result.stdout)
 
@@ -205,24 +207,24 @@ async def run_heatmap_pipeline_task(
             job_id,
             new_phase=JobPhase.HEATMAP,
             new_status=JobStatusValue.FAILED,
-            current_step=error_payload["detail"],
+            current_step=str(error_payload["detail"]),
             error=error_payload,
         )
         return
 
-    # ── Erfolg ─────────────────────────────────────────────────────────────
+    # ── Success ────────────────────────────────────────────────────────────
     transition_job(
         job_id,
         new_phase=JobPhase.HEATMAP,
         new_status=JobStatusValue.COMPLETED,
         progress_percent=100,
-        current_step="Heatmap erfolgreich generiert.",
+        current_step="Heatmap generated successfully.",
     )
     transition_job(
         job_id,
         new_phase=JobPhase.RESULTS,
         new_status=JobStatusValue.WAITING,
-        current_step="Heatmap abgeschlossen. Zurück zur Ergebnisansicht.",
+        current_step="Heatmap finished. Back to the results view.",
     )
 
 
@@ -277,53 +279,27 @@ def _parse_heatmap_metadata(stdout: str, job_dir: Path) -> dict:
     return {
         "detected_cpgs":   detected_cpgs,
         "plotted_samples": plotted_samples,
-        "message":         "Heatmap erfolgreich generiert. PNG kann abgerufen werden.",
+        "message":         "Heatmap generated successfully. The PNG can be retrieved.",
     }
 
 
 def _read_samplesheet_columns(job_dir: Path) -> tuple[list[str], dict[int, list[str]], int]:
+    """Return a column-oriented view of the sample sheet.
+
+    The result is ``(headers, {col_index: [non-empty values]}, total_samples)``.
+    A thin adapter over the shared :func:`samplesheet_parser.read_data_section`
+    so both the strict grouping finder and the permissive annotation finder share
+    exactly one parser.
     """
-    Parses the sample sheet's [Data] section once and returns
-    ``(headers, {col_index: [non-empty values]}, total_samples)``.
-
-    Shared by both the strict grouping finder and the permissive annotation
-    finder so the parsing lives in exactly one place.
-    """
-    sample_sheet_name = find_sample_sheet_name(str(job_dir))
-    sheet_path = job_dir / sample_sheet_name
-
-    with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
-        lines = f.readlines()
-
-    data_index = next((i for i, line in enumerate(lines) if "[Data]" in line), -1)
-    data_lines = lines[data_index + 1:] if data_index != -1 else lines
-    data_lines = [line.strip() for line in data_lines if line.strip()]
-
-    if not data_lines:
-        return [], {}, 0
-
-    delimiter = ";" if ";" in data_lines[0] else ","
-    rows      = list(csv.reader(data_lines, delimiter=delimiter))
-    headers   = [h.strip() for h in rows[0] if h.strip()]
-    data_rows = rows[1:]
-    total_samples = len(data_rows)
-
-    num_cols   = len(headers)
-    col_values: dict[int, list[str]] = {i: [] for i in range(num_cols)}
-    for row in data_rows:
-        for i in range(num_cols):
-            val = row[i].strip() if i < len(row) else ""
-            if val:
-                col_values[i].append(val)
-
-    return headers, col_values, total_samples
+    headers, data_rows = read_data_section(job_dir)
+    return headers, columns_by_index(headers, data_rows), len(data_rows)
 
 
 def get_grouping_options_from_samplesheet(job_dir: Path) -> list:
-    """
-    Strict grouping finder (used e.g. for batch/comparison columns): a column
-    qualifies only if it has ≥2 distinct values, every value occurs ≥2×, and the
-    number of groups is ≤ 50 % of the samples.
+    """Return columns usable for strict grouping (e.g. batch/comparison columns).
+
+    A column qualifies only if it has ≥2 distinct values, every value occurs ≥2×,
+    and the number of groups is ≤ 50 % of the samples.
     """
     try:
         headers, col_values, total_samples = _read_samplesheet_columns(job_dir)
@@ -350,12 +326,12 @@ def get_grouping_options_from_samplesheet(job_dir: Path) -> list:
     except Exception as e:
         raise AppException(
             ErrorTypes.INVALID_CSV_CONTENT,
-            detail=f"SampleSheet konnte für die Heatmap nicht analysiert werden: {e}",
+            detail=f"The SampleSheet could not be analyzed for the heatmap: {e}",
         )
 
 
 def _classify_column(values: list[str], n_distinct: int, total_samples: int) -> str:
-    """categorical | continuous | identifier — a hint for the annotation UI/plot."""
+    """Categorical | continuous | identifier — a hint for the annotation UI/plot."""
     is_numeric = bool(values) and all(_is_number(v) for v in values)
     # A numeric column with many distinct values is continuous (e.g. "age"),
     # even when every value is unique — check this before the identifier rule.
@@ -375,10 +351,11 @@ def _is_number(value: str) -> bool:
 
 
 def find_annotation_columns(job_dir: Path) -> list[dict]:
-    """
-    Permissive annotation finder for primary/secondary heatmap groups: returns
-    **every** sample-sheet column that has at least one non-empty value, with a
-    type hint (categorical / continuous / identifier) and the distinct count.
+    """Return every sample-sheet column offered as a heatmap annotation.
+
+    Permissive by design: returns **every** column that has at least one
+    non-empty value, with a type hint (categorical / continuous / identifier) and
+    the distinct count.
 
     Unlike :func:`get_grouping_options_from_samplesheet` this does NOT exclude
     continuous columns (e.g. ``age``) or identifiers — the user chooses; the plot
@@ -407,5 +384,5 @@ def find_annotation_columns(job_dir: Path) -> list[dict]:
     except Exception as e:
         raise AppException(
             ErrorTypes.INVALID_CSV_CONTENT,
-            detail=f"SampleSheet konnte für die Heatmap nicht analysiert werden: {e}",
+            detail=f"The SampleSheet could not be analyzed for the heatmap: {e}",
         )

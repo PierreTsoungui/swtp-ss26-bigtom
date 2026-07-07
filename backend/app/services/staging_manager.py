@@ -45,12 +45,12 @@ def _resolve_session_dir(session_id: str) -> Path:
     try:
         uuid.UUID(session_id)
     except (ValueError, AttributeError, TypeError):
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Ungültige Session-ID: {session_id!r}")
+        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Invalid session id: {session_id!r}")
 
     base = _base_dir()
     session_dir = (base / session_id).resolve()
     if not session_dir.is_relative_to(base):
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, "Ungültige Session-ID.")
+        raise AppException(ErrorTypes.SESSION_NOT_FOUND, "Invalid session id.")
     return session_dir
 
 
@@ -63,10 +63,10 @@ def require_session(session_id: str) -> Path:
     """Return the session directory, or raise NOT_FOUND / EXPIRED."""
     session_dir = _resolve_session_dir(session_id)
     if not session_dir.is_dir():
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Upload-Session nicht gefunden: {session_id}")
+        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Upload session not found: {session_id}")
     if _is_expired(session_dir):
         delete_session(session_id)
-        raise AppException(ErrorTypes.SESSION_EXPIRED, "Die Upload-Session ist abgelaufen.")
+        raise AppException(ErrorTypes.SESSION_EXPIRED, "The upload session has expired.")
     return session_dir
 
 

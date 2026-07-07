@@ -1,20 +1,14 @@
+"""Pydantic schemas for the generic, paginated table API."""
 from pydantic import BaseModel
 from typing import Any
 
 
 class ColumnMeta(BaseModel):
-    """
-    Metadatenbeschreibung einer Tabellenspalte.
+    """Metadata for one table column.
 
-    Wird vom Frontend genutzt, um Tabellen dynamisch zu rendern
-    (z. B. Typformatierung, Sortierung, Filterlogik).
-
-    Erwartete Typen:
-    - string
-    - integer
-    - float
-
-    erweiterbar
+    Used by the frontend to render tables dynamically (type formatting, sorting,
+    filter logic). Expected types are ``string``, ``integer`` and ``float``
+    (extensible).
     """
 
     name: str
@@ -22,11 +16,10 @@ class ColumnMeta(BaseModel):
 
 
 class Pagination(BaseModel):
-    """
-    Pagination-Metadaten für seitenweises Laden großer Tabellen.
+    """Pagination metadata for paging through large tables.
 
-    Die Werte beziehen sich immer auf den vollständigen Datensatz
-    des jeweiligen Jobs, nicht nur auf die aktuell geladene Seite.
+    The values always refer to the full dataset of the given job, not only the
+    currently loaded page.
     """
 
     page: int
@@ -36,34 +29,11 @@ class Pagination(BaseModel):
 
 
 class TableResponse(BaseModel):
-    """
-    Standardisierte API-Response für tabellarische Jobdaten.
+    """Standardized API response for tabular job data.
 
-    Beispiel:
-    {
-        "pagination": {
-            "page": 1,
-            "page_size": 100,
-            "total_rows": 5421,
-            "total_pages": 55
-        },
-        "columns": [
-            {"name": "sample_id", "type": "string"},
-            {"name": "score", "type": "float"}
-        ],
-        "data": [
-            {
-                "sample_id": "A001",
-                "score": 0.91
-            }
-        ]
-    }
-
-    Hinweise:
-    - `columns` definiert die stabile Tabellenstruktur.
-    - `data` enthält die eigentlichen Zeilenwerte.
-    - Die Response ist bewusst generisch gehalten, damit unterschiedliche
-      Analyse-Pipelines dieselbe Tabellen-API verwenden können.
+    ``columns`` defines the stable table structure and ``data`` holds the actual
+    row values. The response is intentionally generic so different analysis
+    pipelines can reuse the same table API.
     """
 
     pagination: Pagination

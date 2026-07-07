@@ -1,13 +1,13 @@
+"""Shared filtering for the DMP/DMR tables (and the heatmap CpG selection)."""
 import pandas as pd
 from fastapi import HTTPException
 from typing import Any
 
 from app.core.error_types import ErrorTypes, problem_detail
 
+
 def normalize_filters(query_params: dict) -> dict:
-    """
-    Extrahiert nur filter_* Parameter aus request.query_params
-    """
+    """Extract only the ``filter_*`` query parameters, stripping the prefix."""
     filters = {}
 
     for k, v in query_params.items():
@@ -18,6 +18,7 @@ def normalize_filters(query_params: dict) -> dict:
 
 
 def to_float(value: Any):
+    """Parse ``value`` as a float, raising HTTP 400 on invalid input."""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -89,10 +90,14 @@ def _normalize_chr(value: Any) -> str:
     return s[3:] if s.startswith("chr") else s
 
 
-# APPLY FILTERS 
+# APPLY FILTERS
 
 def apply_filters(df: pd.DataFrame, table: str, filters: dict) -> pd.DataFrame:
+    """Apply the table's filter map to a DataFrame and return the matching rows.
 
+    Unknown tables and unknown filter keys are ignored, so an empty or partial
+    filter set is always valid.
+    """
     if table not in FILTER_MAP:
         return df
 

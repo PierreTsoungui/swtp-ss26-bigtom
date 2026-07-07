@@ -1,4 +1,9 @@
 # app/services/job_manager.py
+"""In-memory job registry and phase/status state machine.
+
+Holds the live job records, the allowed-transition graph, and the cancel-event
+and background-task registries used to drive and reset the pipeline.
+"""
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -21,7 +26,8 @@ job_tasks:     Dict[str, asyncio.Task]  = {}     # active pipeline tasks (s. pip
 # ── Enums ────────────────────────────────────────────────────────────────────
 
 class JobStatusValue(str, Enum):
-    """Betriebszustand eines Jobs innerhalb einer Phase."""
+    """Operational state of a job within a phase."""
+
     RUNNING   = "running"
     WAITING   = "waiting"
     COMPLETED = "completed"
@@ -29,7 +35,8 @@ class JobStatusValue(str, Enum):
 
 
 class JobPhase(str, Enum):
-    """Technischer Pipeline-Schritt."""
+    """Technical pipeline step a job is currently in."""
+
     UPLOADED              = "uploaded"
     FILTERING             = "filtering"
     NORMALIZATION_PREVIEW = "normalization_preview"
@@ -41,7 +48,7 @@ class JobPhase(str, Enum):
     HEATMAP               = "heatmap"
 
 
-# ── Erlaubte Übergänge ───────────────────────────────────────────────────────
+# ── Allowed transitions ──────────────────────────────────────────────────────
 _ALLOWED_TRANSITIONS: Dict[
     Tuple[JobPhase, JobStatusValue],
     Set[Tuple[JobPhase, JobStatusValue]],
@@ -139,15 +146,16 @@ _ALLOWED_TRANSITIONS: Dict[
 }
 
 
-# ── Kern-API ─────────────────────────────────────────────────────────────────
+# ── Core API ─────────────────────────────────────────────────────────────────
 
 def create_job(job_id: str) -> JobStatus:
+    """Register a new job in the UPLOADED/WAITING state and return it."""
     job = JobStatus(
         job_id=job_id,
         status=JobStatusValue.WAITING.value,
         phase=JobPhase.UPLOADED.value,
         progress_percent=0,
-        current_step="Dateien hochgeladen, warte auf Verarbeitung...",
+        current_step="Files uploaded, waiting for processing...",
         error=None,
     )
     jobs[job_id] = job
@@ -159,10 +167,29 @@ def transition_job(
     new_phase: JobPhase,
     new_status: JobStatusValue,
     *,
-    progress_percent: int = None,
-    current_step: str = None,
-    error: Dict[str, Any] = None,
-) -> JobStatus:
+    progress_percent: Optional[int] = None,
+    current_step: Optional[str] = None,
+    error: Optional[Dict[str, Any]] = None,
+) -> Optional[JobStatus]:
+    """Move a job to a new phase/status, enforcing the allowed-transition graph.
+
+    Args:
+        job_id: The job to transition.
+        new_phase: The target pipeline phase.
+        new_status: The target status within that phase.
+        progress_percent: New progress value, if it should change.
+        current_step: New human-readable status line, if it should change.
+        error: Problem body to attach when transitioning to FAILED.
+
+    Returns:
+        The updated job, or ``None`` if the job is currently being reset (the
+        transition is then silently dropped).
+
+    Raises:
+        JobSessionExpiredError: If the in-memory job session no longer exists.
+        InvalidTransitionError: If the transition is not allowed from the
+            current state.
+    """
     # Reset takes precedence over any transition. While a job is being reset
     # its background task may still emit trailing transitions until it observes
     # the cancel event — these are expected and silently dropped instead of
@@ -184,10 +211,10 @@ def transition_job(
 
     if target not in allowed:
         msg = (
-            f"[transition_job] Ungültiger Übergang für Job '{job_id}': "
+            f"[transition_job] Invalid transition for job '{job_id}': "
             f"({current[0].value}, {current[1].value}) → "
             f"({new_phase.value}, {new_status.value}). "
-            f"Erlaubt: {[(p.value, s.value) for p, s in allowed]}"
+            f"Allowed: {[(p.value, s.value) for p, s in allowed]}"
         )
         logger.error(msg)
         raise InvalidTransitionError(job_id=job_id, message=msg)
@@ -216,7 +243,11 @@ def transition_job(
 
 
 def set_progress(job_id: str, percent: int, message: str) -> Optional[JobStatus]:
-    # Drop progress updates for jobs that are being reset (see transition_job).
+    """Update a running job's progress and status line.
+
+    Returns the updated job, or ``None`` if the job is unknown or being reset
+    (progress updates are dropped during a reset; see :func:`transition_job`).
+    """
     if job_id in resetting_jobs:
         return None
     job = jobs.get(job_id)
@@ -230,62 +261,67 @@ def set_progress(job_id: str, percent: int, message: str) -> Optional[JobStatus]
 
 
 def get_job(job_id: str) -> Optional[JobStatus]:
+    """Return the job with the given id, or ``None`` if it is unknown."""
     return jobs.get(job_id)
 
 
 def delete_job(job_id: str) -> bool:
+    """Remove a job from the registry. Return True if it existed."""
     if job_id in jobs:
         del jobs[job_id]
         return True
     return False
 
 
-# ── Cancel-Event-Tracking (für den neuen Command-basierten Executor) ─────────
+# ── Cancel-event tracking ────────────────────────────────────────────────────
 
 def register_cancel_event(job_id: str, event: asyncio.Event) -> None:
-    """Registriert das Abbruch-Event für einen laufenden Job."""
+    """Register the cancel event for a running job."""
     cancel_events[job_id] = event
 
 
 def unregister_cancel_event(job_id: str) -> None:
-    """Entfernt das Cancel-Event nach Abschluss des Jobs."""
+    """Remove a job's cancel event once the job has finished."""
     cancel_events.pop(job_id, None)
 
 
 def get_cancel_event(job_id: str) -> Optional[asyncio.Event]:
-    """Gibt das Cancel-Event zurück, falls vorhanden (z.B. für Sub-Services)."""
+    """Return a job's cancel event if one is registered (e.g. for sub-services)."""
     return cancel_events.get(job_id)
 
 
 def trigger_cancel(job_id: str) -> bool:
-    """
-    Setzt das Cancel-Event des Jobs (z.B. vom Reset-Endpunkt).
-    Gibt True zurück wenn ein aktives Event gefunden und gesetzt wurde.
+    """Set a job's cancel event (e.g. from the reset endpoint).
+
+    Returns True if an active, unset event was found and signalled.
     """
     event = cancel_events.get(job_id)
     if event and not event.is_set():
         event.set()
-        logger.info("[trigger_cancel] Cancel-Event gesetzt: job_id=%s", job_id)
+        logger.info("[trigger_cancel] Cancel event set: job_id=%s", job_id)
         return True
     return False
 
 
-# ── Background-Task-Registry ─────────────────────────────────────────────────
-# Ergänzung zur Cancel-Event-Registry: hält die asyncio.Task-Referenz selbst,
-# damit pipeline_task.py (und potenziell eine künftige Shutdown-Routine) weiß,
-# welche Pipeline-Tasks gerade für einen Job aktiv sind. Wird ausschließlich
-# von pipeline_task.start_job_pipeline() befüllt — Services rufen das nicht
-# direkt auf (siehe r_executor_spec.md Abschnitt 6, Regel 3).
+# ── Background-task registry ─────────────────────────────────────────────────
+# Companion to the cancel-event registry: holds the asyncio.Task reference itself
+# so pipeline_task.py (and a potential future shutdown routine) knows which
+# pipeline tasks are currently active for a job. Populated exclusively by
+# pipeline_task.start_job_pipeline() — services do not call it directly (see
+# r_executor_spec.md section 6, rule 3).
 
 def register_job_task(job_id: str, task: asyncio.Task) -> None:
+    """Register the active pipeline task for a job."""
     job_tasks[job_id] = task
 
 
 def unregister_job_task(job_id: str) -> None:
+    """Remove a job's pipeline task reference once it has finished."""
     job_tasks.pop(job_id, None)
 
 
 def get_job_task(job_id: str) -> Optional[asyncio.Task]:
+    """Return a job's active pipeline task, or ``None`` if there is none."""
     return job_tasks.get(job_id)
 
 
@@ -295,8 +331,7 @@ def get_job_task(job_id: str) -> Optional[asyncio.Task]:
 # transition_job/set_progress call into a silent no-op (see those functions).
 
 def begin_reset(job_id: str) -> bool:
-    """Claim the reset slot for a job. Returns False if a reset is already
-    active for it.
+    """Claim the reset slot for a job, returning False if one is already active.
 
     No lock needed: the event loop is single-threaded and there is no await
     between the membership test and the insert, so this is atomic.
@@ -313,4 +348,5 @@ def end_reset(job_id: str) -> None:
 
 
 def is_resetting(job_id: str) -> bool:
+    """Return True if a reset is currently in progress for the job."""
     return job_id in resetting_jobs
