@@ -12,6 +12,8 @@ import {
 } from "@mui/material";
 import type { TableColumn, TableData } from "../../types";
 import { formatCellValue } from "../../utils/formatCellValue";
+import {useEffect, useRef, useState} from "react";
+import ArrowForward from '@mui/icons-material/ArrowForward';
 
 /**
  * Props for the AnalysisTable component.
@@ -42,6 +44,25 @@ export function AnalysisTable({
   onSort,
   onPageChange = () => {},
 }: AnalysisTableProps) {
+
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const hasScroll = container.scrollLeft + container.clientWidth < container.scrollWidth;
+      setCanScrollRight(hasScroll);
+    };
+    container.addEventListener("scroll", handleScroll);
+    handleScroll();
+
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+
   if (!data || !data.columns || !data.data) {
     return (
       <div className="text-center py-12 bg-neutral-background rounded-md border border-neutral-borderDefault">
@@ -62,8 +83,29 @@ export function AnalysisTable({
         />
       )}
       {/* Table */}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <TableContainer component={Paper} variant="outlined">
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2, position: "relative" }}>
+        <TableContainer
+            component={Paper}
+            variant="outlined"
+            ref={tableContainerRef}
+            sx={{
+              position: "relative",
+              // Scroll-Schatten auf der rechten Seite
+              ...(canScrollRight && {
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: "30px",
+                  background: "linear-gradient(to left, rgba(0,0,0,0.08), transparent)",
+                  pointerEvents: "none",
+                  zIndex: 10,
+                },
+              }),
+            }}
+        >
           <Table size="small">
             <TableHead>
               <TableRow sx={{ backgroundColor: "grey.50" }}>
@@ -106,6 +148,24 @@ export function AnalysisTable({
             </TableBody>
           </Table>
         </TableContainer>
+
+        {/* Chevron-Icon Indicator */}
+        {canScrollRight && (
+            <Box
+                sx={{
+                  position: "absolute",
+                  right: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  animation: "pulse 2s infinite",
+                  pointerEvents: "none",
+                  zIndex: 20,
+                }}
+                className="text-primary opacity-70"
+            >
+              <ArrowForward />
+            </Box>
+        )}
       </Box>
 
       {/* Bottom pagination */}
