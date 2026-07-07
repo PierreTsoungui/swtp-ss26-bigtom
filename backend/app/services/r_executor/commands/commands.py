@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core import config
 from app.services.r_executor.commands.base import RCommand
 from app.services.r_executor.result import ExecutionResult
 
@@ -183,6 +184,11 @@ class DmrAnalysisCommand(RCommand):
     extra_args:      list[str] = field(default_factory=list)
     timeout_seconds: int       = 1200
 
+    # Heaviest step: bootstrap over all CpGs. Peak ~11 GiB in the benchmark, and
+    # it uses DMR_CORES bootstrap workers → weight both dimensions accordingly.
+    mem_gb = config.PIPELINE_DMR_MEMORY_GB
+    cores = config.DMR_CORES
+
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for dmr.R."""
         return [
@@ -205,6 +211,10 @@ class DmpAnalysisCommand(RCommand):
 
     extra_args:      list[str] = field(default_factory=list)
     timeout_seconds: int       = 900
+
+    # Moderate: per-CpG statistics, no region search. ~4 GiB in the benchmark.
+    mem_gb = config.PIPELINE_DMP_MEMORY_GB
+    cores = 1
 
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for dmp.R."""

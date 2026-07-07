@@ -37,6 +37,8 @@ class ErrorTypes:
     NO_SAMPLE_SHEET      = ErrorType("/errors/no-sample-sheet", 400, "No sample sheet")
     NO_IDAT_FILES        = ErrorType("/errors/no-idat-files", 400, "No IDAT files")
     UNPAIRED_IDATS       = ErrorType("/errors/unpaired-idats", 400, "Unpaired IDAT files")
+    TOO_MANY_SAMPLES     = ErrorType("/errors/too-many-samples", 400, "Too many samples")
+    STORAGE_LIMIT_EXCEEDED = ErrorType("/errors/storage-limit-exceeded", 507, "Storage limit exceeded")
     INVALID_SELECTION    = ErrorType("/errors/invalid-selection", 400, "Invalid selection")
     INVALID_COLUMN_MAPPING = ErrorType("/errors/invalid-column-mapping", 400, "Invalid column mapping")
     SESSION_NOT_FOUND    = ErrorType("/errors/session-not-found", 404, "Upload session not found")

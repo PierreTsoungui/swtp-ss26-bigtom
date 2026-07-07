@@ -15,7 +15,7 @@ from fastapi import UploadFile
 
 from app.core.error_types import AppException, ErrorTypes
 from app.models.filter import FilterSettings
-from app.services import job_manager
+from app.services import intake_guards, job_manager
 from app.services.file_handler import (
     save_idat_files,
     save_sample_sheet,
@@ -44,6 +44,16 @@ def persist_upload_files(
     ``AppException`` is raised (rendered as an RFC-9457 problem by the global
     handler). ``instance`` is the request path, included in the error body.
     """
+    # Intake guards first — reject an oversized cohort / full disk before writing
+    # anything, rolling back the (empty) job dir the route already created. Each
+    # sample is a Grn+Red IDAT pair, so sample count = len(idat_files) // 2.
+    try:
+        intake_guards.enforce_storage_limit(instance)
+        intake_guards.enforce_sample_limit(len(idat_files) // 2, instance)
+    except AppException:
+        clean_job_files(job_id)
+        raise
+
     try:
         save_idat_files(idat_files, job_dir)
         save_sample_sheet(sample_sheet, job_dir)
