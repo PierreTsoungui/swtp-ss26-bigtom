@@ -41,7 +41,7 @@ JOB_CLEANUP_INTERVAL_SECONDS = _get_positive_int(
 # Unconfirmed uploads live here until the user commits a selection. Kept as a
 # sibling of JOB_BASE_DIR so the commit can move files atomically (same
 # filesystem) into the final job directory.
-STAGING_BASE_DIR = Path(os.getenv("STAGING_BASE_DIR", "./staging"))
+STAGING_BASE_DIR = Path(os.environ.get("JOB_BASE_DIR", "/app/jobs")) / "staging"
 STAGING_RETENTION_HOURS = _get_positive_float("STAGING_RETENTION_HOURS", 2)
 STAGING_CLEANUP_INTERVAL_SECONDS = _get_positive_int(
     "STAGING_CLEANUP_INTERVAL_SECONDS",

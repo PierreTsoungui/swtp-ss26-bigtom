@@ -1,10 +1,46 @@
 FROM python:3.11-slim
+
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+
+RUN addgroup --system app && adduser --system --ingroup app app
+
 COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY --chown=app:app . .
+
+USER app
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+#FROM python:3.11-slim
+#
+## System-Updates minimal halten, keine unnötigen Tools
+#RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+#
+#WORKDIR /app
+#
+#RUN addgroup --system app && adduser --system --ingroup app app
+#
+#COPY requirements.txt .
+#RUN pip install --no-cache-dir -r requirements.txt
+#
+#COPY --chown=app:app . .
+#
+#USER app
+#
+#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+#FROM python:3.11-slim
+#WORKDIR /app
+#RUN apt-get update && apt-get install -y docker.io && rm -rf /var/lib/apt/lists/*
+#COPY requirements.txt .
+#RUN pip install -r requirements.txt
+#COPY . .
+#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 
 

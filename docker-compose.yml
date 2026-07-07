@@ -1,53 +1,121 @@
-#services:
-#  frontend:
-#    build:
-#      context: .
-#      dockerfile: ./frontend/Dockerfile
-#    ports:
-#      - "80:80"
-#      - "443:443"
-#    depends_on:
-#      - backend
-#    volumes:
-#      - ./certs/bigtom-local.pem:/etc/nginx/certs/bigtom-local.pem:ro
-#      - ./certs/bigtom-local-key.pem:/etc/nginx/certs/bigtom-local-key.pem:ro
-#
-#  backend:
-#    build: ./backend
-#    environment:
-#      - PYTHONUNBUFFERED=1
-#      - JOB_BASE_DIR=${JOB_BASE_DIR:-/app/jobs}
-#      - JOB_RETENTION_HOURS=${JOB_RETENTION_HOURS:-24}
-#      - JOB_CLEANUP_INTERVAL_SECONDS=${JOB_CLEANUP_INTERVAL_SECONDS:-86400}
-#      - DMR_CORES=${DMR_CORES:-4}
-#    ports:
-#      - "8000:8000"
-#    volumes:
-#      - ./jobs:/app/jobs
-#      - ./r_backend:/app/r_backend
-#      - /var/run/docker.sock:/var/run/docker.sock
-#
-#  r_worker:
-#    build: ./r_backend
-#    security_opt:
-#      - seccomp:unconfined
-#    ulimits:
-#      nproc:
-#        soft: 65536
-#        hard: 65536
-#      nofile:
-#        soft: 65536
-#        hard: 65536
-#      stack: 67108864
-#    environment:
-#      - OMP_NUM_THREADS=1
-#      - OPENBLAS_NUM_THREADS=1
-#      - MKL_NUM_THREADS=1
-#      - BLAS_NUM_THREADS=1
-#      - BIOCPARALLEL_WORKER_NUMBER=1
-#      - R_BIOC_PARALLEL_WORKERS=1
-#    volumes:
-#      - ./r_backend:/app/r_backend
-#      - ./data:/app/data
-#      - ./jobs:/app/jobs
-#    command: tail -f /dev/null
+services:
+
+  # ---------------------------------------------------------------
+  # NEU: Docker Socket Proxy
+  # Einziger Service, der den echten Host-Socket sieht (read-only).
+  # Exponiert nur eine gefilterte Teilmenge der Docker API intern.
+  # ---------------------------------------------------------------
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-socket-proxy
+    environment:
+      # Nur das Nötigste erlauben:
+      - CONTAINERS=1   # nötig, um Container per Name zu finden (Voraussetzung für EXEC)
+      - EXEC=1         # erlaubt "docker exec"
+      - POST=1         # exec ist technisch ein POST-Request an die API
+      # Alles andere explizit sperren:
+      - IMAGES=0
+      - NETWORKS=0
+      - VOLUMES=0
+      - BUILD=0
+      - COMMIT=0
+      - CONFIGS=0
+      - DISTRIBUTION=0
+      - INFO=0
+      - NODES=0
+      - PLUGINS=0
+      - SECRETS=0
+      - SERVICES=0
+      - SESSION=0
+      - SWARM=0
+      - SYSTEM=0
+      - TASKS=0
+      - AUTH=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend-internal
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+      - /var/lib/haproxy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+    volumes:
+      - ./certs/bigtom-local.pem:/etc/nginx/certs/bigtom-local.pem:ro
+      - ./certs/bigtom-local-key.pem:/etc/nginx/certs/bigtom-local-key.pem:ro
+    networks:
+      - backend-internal
+
+  backend:
+    build: ./backend
+    environment:
+      - PYTHONUNBUFFERED=1
+      - JOB_BASE_DIR=${JOB_BASE_DIR:-/app/jobs}
+      - JOB_RETENTION_HOURS=${JOB_RETENTION_HOURS:-24}
+      - JOB_CLEANUP_INTERVAL_SECONDS=${JOB_CLEANUP_INTERVAL_SECONDS:-86400}
+      - DMR_CORES=${DMR_CORES:-4}
+      # NEU: Docker-CLI im Backend redet jetzt mit dem Proxy statt dem lokalen Socket
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./jobs:/app/jobs
+      - ./r_backend:/app/r_backend
+      # ENTFERNT: - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - docker-socket-proxy
+      - r_worker
+    networks:
+      - backend-internal
+
+  r_worker:
+    build: ./r_backend
+    # security_opt: seccomp:unconfined  # TODO: durch eigenes, minimal erweitertes Profil ersetzen
+    ulimits:
+      nproc:
+        soft: 65536
+        hard: 65536
+      nofile:
+        soft: 65536
+        hard: 65536
+      stack: 67108864
+    environment:
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - BLAS_NUM_THREADS=1
+      - BIOCPARALLEL_WORKER_NUMBER=1
+      - R_BIOC_PARALLEL_WORKERS=1
+    volumes:
+      - ./r_backend:/app/r_backend
+      - ./data:/app/data
+      - ./jobs:/app/jobs
+    command: tail -f /dev/null
+    networks:
+      - backend-internal
+
+networks:
+  backend-internal:
+    driver: bridge
