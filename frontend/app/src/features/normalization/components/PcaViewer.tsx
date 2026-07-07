@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { PcaData } from "../types";
-import { Button } from "../../../shared/components/Button";
-import { Modal } from "../../../shared/components/Modal";
+import { Button } from "@shared/components/Button.tsx";
+import { Modal } from "@shared/components/Modal.tsx";
 import PcaPlot from "./PcaPlot";
 import {
   PCA_COLORS,
@@ -9,10 +9,10 @@ import {
   defaultGroupColors,
   uniqueGroups,
 } from "../utils/pcaColors";
-import { exportSvgAsPng } from "../../../shared/plots/exportSvg";
-import { exportSvgAsPdf } from "../../../shared/plots/exportSvgAsPdf";
-import ErrorMessage from "../../../shared/errors/ErrorMessage";
-import { logger } from "../../../shared/utils/logger";
+import { exportSvgAsPng } from "@shared/plots/exportSvg.ts";
+import { exportSvgAsPdf } from "@shared/plots/exportSvgAsPdf.ts";
+import ErrorMessage from "@shared/errors/ErrorMessage";
+import { logger } from "@shared/utils/logger.ts";
 
 /**
  * Interface for the props of the PcaViewer component.

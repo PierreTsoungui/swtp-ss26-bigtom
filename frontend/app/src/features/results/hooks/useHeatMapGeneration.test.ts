@@ -2,9 +2,9 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useHeatMapGeneration } from "./useHeatMapGeneration";
-import { useJobPolling } from "../../../shared/hooks/useJobPolling";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
 import { useGenerateHeatMap } from "./useGenerateHeatMap";
-import { JobPhase, type JobStatus, JobStatusValue } from "../../../shared/types/JobTypes";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 import type { HeatMapRequest } from "../types";
 
 vi.mock("../../../shared/hooks/useJobPolling", () => ({ useJobPolling: vi.fn() }));

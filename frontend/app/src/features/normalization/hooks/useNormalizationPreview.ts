@@ -1,6 +1,6 @@
 import type { NormalizationPreview } from "../types";
-import { ProblemError, type ProblemDetail } from "../../../shared/errors/ErrorTypes.ts";
-import { useAsyncResource } from "../../../shared/hooks/useAsyncResource";
+import { ProblemError, type ProblemDetail } from "@shared/errors/ErrorTypes.ts";
+import { useAsyncResource } from "@shared/hooks/useAsyncResource.ts";
 
 /** The error shapes the normalization preview can surface. */
 type PreviewError = ProblemDetail | Error | string;

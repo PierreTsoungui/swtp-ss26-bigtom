@@ -12,13 +12,13 @@ import { ArrowDropDown } from "@mui/icons-material";
 import { useState } from "react";
 import { useParams } from "react-router";
 
-import { Button } from "../../../../shared/components/Button";
+import { Button } from "@shared/components/Button.tsx";
 import { useHeatMapOptions } from "../../hooks/useHeatMapOptions.ts";
 import { useHeatMapGeneration } from "../../hooks/useHeatMapGeneration.ts";
-import Progressbar from "../../../../shared/components/Progressbar.tsx";
-import ErrorMessage from "../../../../shared/errors/ErrorMessage.tsx";
-import { PlotView } from "../../../../shared/plots";
-import HelpButton from "../../../../shared/help/HelpButton.tsx";
+import Progressbar from "@shared/components/Progressbar.tsx";
+import ErrorMessage from "@shared/errors/ErrorMessage.tsx";
+import { PlotView } from "@shared/plots";
+import HelpButton from "@shared/help/HelpButton.tsx";
 
 /** Hard limit mirrored from the backend (see heatmap-konzept.md §5). */
 const MAX_CPGS = 500;

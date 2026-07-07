@@ -1,5 +1,5 @@
 import type { FilteringStatsType } from "../types.ts";
-import { useAsyncResource } from "../../../shared/hooks/useAsyncResource";
+import { useAsyncResource } from "@shared/hooks/useAsyncResource.ts";
 
 /**
  * Result of the {@link useFilterStats} hook.

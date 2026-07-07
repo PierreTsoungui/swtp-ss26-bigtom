@@ -2,9 +2,9 @@ import { type NavigateFunction, useNavigate, useParams } from "react-router";
 import { Alert, AlertTitle } from "@mui/material";
 import CheckIcon from "@mui/icons-material/Check";
 
-import { useJobPolling } from "../../shared/hooks/useJobPolling";
-import Progressbar from "../../shared/components/Progressbar.tsx";
-import type { JobStatus } from "../../shared/types/JobTypes.ts";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
+import Progressbar from "@shared/components/Progressbar.tsx";
+import type { JobStatus } from "@shared/types/JobTypes.ts";
 import { FilteringStats } from "./components/FilteringStats";
 import InfoPanel from "./components/InfoPanel.tsx";
 import { useFilterStats } from "./hooks/useFilterStats.ts";

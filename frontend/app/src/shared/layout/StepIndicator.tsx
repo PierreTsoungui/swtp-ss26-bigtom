@@ -19,16 +19,16 @@ interface StepIndicatorProps {
  */
 export function StepIndicator({ currentStepId }: StepIndicatorProps) {
   return (
-    <nav aria-label="Schrittanzeige" className="w-full">
+    <nav aria-label="Step indicator" className="w-full">
       <ol className="flex flex-wrap items-center justify-center gap-2 text-sm sm:gap-3">
         {workflowSteps.map((step) => {
           const isCurrent = step.id === currentStepId;
           const isCompleted = currentStepId !== undefined && step.id < currentStepId;
           const statusText = isCurrent
-            ? "Aktueller Schritt"
+            ? "Current step"
             : isCompleted
-              ? "Abgeschlossen"
-              : "Ausstehend";
+              ? "Completed"
+              : "Pending";
 
           return (
             <li

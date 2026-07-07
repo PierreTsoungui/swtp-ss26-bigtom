@@ -5,15 +5,15 @@ import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import { useNormalizationSubmit } from "./hooks/useNormalizationSubmit";
 import { orderMethods } from "./utils/orderMethods";
 import { shouldNavigateToBatch } from "./utils/normalizationState";
-import { useJobPolling } from "../../shared/hooks/useJobPolling.ts";
-import Progressbar from "../../shared/components/Progressbar.tsx";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
+import Progressbar from "@shared/components/Progressbar.tsx";
 import PcaViewer from "./components/PcaViewer.tsx";
 import LoadingScreen from "./components/LoadingScreen.tsx";
 import MethodCard from "./components/MethodCard.tsx";
-import type { JobStatus } from "../../shared/types/JobTypes.ts";
-import HelpButton from "../../shared/help/HelpButton.tsx";
-import { Button } from "../../shared/components/Button";
-import ErrorMessage from "../../shared/errors/ErrorMessage.tsx";
+import type { JobStatus } from "@shared/types/JobTypes.ts";
+import HelpButton from "@shared/help/HelpButton.tsx";
+import { Button } from "@shared/components/Button.tsx";
+import ErrorMessage from "@shared/errors/ErrorMessage.tsx";
 
 /**
  * Page for selecting and initiating the data normalization method.
@@ -124,7 +124,7 @@ export function NormalizationPage() {
           onClick={() => void handleConfirm()}
           disabled={isDisabled}
         >
-          {isSubmitting ? "Starting..." : `Confirm method`}
+          {isSubmitting ? "Skipping..." : `Confirm method`}
         </Button>
       </div>
     </main>

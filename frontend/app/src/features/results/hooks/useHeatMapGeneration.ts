@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { useJobPolling } from "../../../shared/hooks/useJobPolling";
-import { JobPhase, type JobStatus, JobStatusValue } from "../../../shared/types/JobTypes";
-import type { ProblemDetail } from "../../../shared/errors/ErrorTypes";
-import type { PlotSource } from "../../../shared/plots";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
+import type { ProblemDetail } from "@shared/errors/ErrorTypes.ts";
+import type { PlotSource } from "@shared/plots";
 import { useGenerateHeatMap } from "./useGenerateHeatMap";
 import type { HeatMapRequest } from "../types";
 

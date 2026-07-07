@@ -1,4 +1,4 @@
-import { JobPhase, type JobStatus, JobStatusValue } from "../../../shared/types/JobTypes";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 
 /**
  * Pure, framework-agnostic derivations of the analysis page's UI state from a

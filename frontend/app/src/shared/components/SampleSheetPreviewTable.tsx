@@ -71,5 +71,3 @@ export function SampleSheetPreviewTable({ preview, error }: SampleSheetPreviewTa
     </>
   );
 }
-
-export default SampleSheetPreviewTable;

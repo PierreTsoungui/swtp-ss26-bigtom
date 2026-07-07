@@ -1,5 +1,5 @@
 import type { HeatMapOptionsResponse } from "../types";
-import { useAsyncResource } from "../../../shared/hooks/useAsyncResource";
+import { useAsyncResource } from "@shared/hooks/useAsyncResource.ts";
 
 /**
  * Fetches available metadata columns for heatmap grouping and annotation.

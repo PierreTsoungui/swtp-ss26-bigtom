@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { BatchRoundTracker } from "./batchRoundTracker";
-import { JobPhase, JobStatusValue, type JobStatus } from "../../../shared/types/JobTypes.ts";
+import { JobPhase, JobStatusValue, type JobStatus } from "@shared/types/JobTypes.ts";
 
 /** Build a minimal JobStatus for a given phase/status. */
 const mk = (phase: JobPhase, status: JobStatusValue): JobStatus => ({

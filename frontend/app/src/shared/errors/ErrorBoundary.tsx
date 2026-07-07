@@ -65,20 +65,38 @@ class ErrorBoundaryBase extends Component<ErrorBoundaryProps, ErrorBoundaryState
   }
 }
 
+
+/**
+ * Props for the {@link ErrorBoundary} component.
+ */
+interface ErrorBoundaryProps {
+  /**
+   * The child components to be rendered and monitored for errors.
+   */
+  children: ReactNode;
+
+  /**
+   * Optional callback triggered when the error state changes.
+   * Useful for hiding layout elements like sidebars or headers during an error.
+   *
+   * @param hasError - True if an error was caught, false if reset.
+   */
+  onErrorStateChange?: (hasError: boolean) => void;
+}
+
+
+
 /**
  * Application error boundary.
  *
  * Wraps {@link ErrorBoundaryBase} and derives its reset key from the current
  * route, so navigating to another page automatically clears a caught error and
  * re-renders the target page.
- *
- * @param props.children - The subtree to protect.
- * @param props.onErrorStateChange - Notified when the caught-error state toggles.
  */
 export function ErrorBoundary({
   children,
   onErrorStateChange,
-}: Pick<ErrorBoundaryProps, "children" | "onErrorStateChange">) {
+}: ErrorBoundaryProps) {
   const location = useLocation();
 
   return (

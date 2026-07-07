@@ -1,6 +1,6 @@
 import type { BatchParametersResponse } from "../types.ts";
-import { logger } from "../../../shared/utils/logger";
-import { useAsyncResource } from "../../../shared/hooks/useAsyncResource";
+import { logger } from "@shared/utils/logger.ts";
+import { useAsyncResource } from "@shared/hooks/useAsyncResource.ts";
 
 /**
  * Result of the {@link useBatchParameters} hook.

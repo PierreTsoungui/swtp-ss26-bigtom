@@ -8,9 +8,9 @@ import {
   Select,
   TextField,
 } from "@mui/material";
-import HelpButton from "../../../shared/help/HelpButton.tsx";
-import { colors } from "../../../shared/theme/colors";
-import { Button } from "../../../shared/components/Button";
+import HelpButton from "@shared/help/HelpButton.tsx";
+import { colors } from "@shared/theme/colors.ts";
+import { Button } from "@shared/components/Button.tsx";
 import type { BatchFormData, BatchParametersResponse, GroupSelection } from "../types";
 import { defaultGroupSelection, isComparisonReady, levelsOf, valuesOf } from "../utils/batchForm";
 import BatchSampleSheetPreviewModal from "./BatchSampleSheetPreviewModal.tsx";

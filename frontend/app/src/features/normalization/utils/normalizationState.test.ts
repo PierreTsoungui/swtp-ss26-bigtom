@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { shouldNavigateToBatch } from "./normalizationState";
-import { JobPhase, type JobStatus, JobStatusValue } from "../../../shared/types/JobTypes";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 
 /** Builds a job status with sensible defaults, overridable per test. */
 function status(overrides: Partial<JobStatus> = {}): JobStatus {

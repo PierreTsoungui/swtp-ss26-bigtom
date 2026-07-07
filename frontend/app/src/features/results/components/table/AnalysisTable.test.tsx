@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest"; // Added missing vi import
+import { describe, it, expect, vi } from "vitest";
 
 import { AnalysisTable } from "./AnalysisTable";
 import type { TableData } from "../../types";

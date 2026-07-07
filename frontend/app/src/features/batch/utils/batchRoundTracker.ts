@@ -1,4 +1,4 @@
-import { JobPhase, JobStatusValue, type JobStatus } from "../../../shared/types/JobTypes.ts";
+import { JobPhase, JobStatusValue, type JobStatus } from "@shared/types/JobTypes.ts";
 
 /**
  * Tracks a single batch-correction round so the UI can tell a *genuine*

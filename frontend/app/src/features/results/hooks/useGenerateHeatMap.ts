@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { HeatMapRequest, HeatMapResponse } from "../types";
-import { readApiError } from "../../../shared/errors/apiError.ts";
+import { readApiError } from "@shared/errors/apiError.ts";
 
 /**
  * Orchestrates the generation of a heatmap based on selected filters and grouping options.

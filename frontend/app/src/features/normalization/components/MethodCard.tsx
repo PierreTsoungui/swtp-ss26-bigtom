@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import type { MethodPreview, NormalizationMethod } from "../types";
 import PcaPlot from "./PcaPlot";
 import { defaultGroupColors } from "../utils/pcaColors";
-import { PlotView, type PlotSource } from "../../../shared/plots";
-import { Button } from "../../../shared/components/Button";
+import { PlotView, type PlotSource } from "@shared/plots";
+import { Button } from "@shared/components/Button.tsx";
 
 /**
  * Props for the MethodCard component.

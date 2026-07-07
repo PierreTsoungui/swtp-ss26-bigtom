@@ -1,6 +1,6 @@
 import type { TableFilters } from "./useTableFilters";
 import type { TableData } from "../types";
-import { useAsyncResource } from "../../../shared/hooks/useAsyncResource";
+import { useAsyncResource } from "@shared/hooks/useAsyncResource.ts";
 
 /**
  * Result of the {@link useTableData} hook.

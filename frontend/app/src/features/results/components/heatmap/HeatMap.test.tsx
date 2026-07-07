@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent, within, act } from "@testing-librar
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import HeatMap from "./HeatMap";
-import { JobPhase, JobStatusValue } from "../../../../shared/types/JobTypes.ts";
+import { JobPhase, JobStatusValue } from "@shared/types/JobTypes.ts";
 
 let fetchMock: Mock<(url: string) => Promise<Response>>;
 

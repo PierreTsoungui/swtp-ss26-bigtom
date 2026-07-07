@@ -26,7 +26,7 @@ import MultiHitFilter from "./filters/MultiHitFilter.tsx";
 import XYChromosomesFilter from "./filters/XYChromosomesFilter.tsx";
 import { SampleQuality } from "./filters/SampleQuality.tsx";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import HelpButton from "../../../shared/help/HelpButton.tsx";
+import HelpButton from "@shared/help/HelpButton.tsx";
 
 /**
  * Props for the FilterPanel component.

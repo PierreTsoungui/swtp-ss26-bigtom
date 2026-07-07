@@ -1,5 +1,5 @@
 import { TableContainer } from "./components/table/TableContainer.tsx";
-import HelpButton from "../../shared/help/HelpButton.tsx";
+import HelpButton from "@shared/help/HelpButton.tsx";
 
 /**
  * Main results view providing an interactive data exploration interface.

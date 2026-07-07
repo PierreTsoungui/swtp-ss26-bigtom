@@ -12,8 +12,8 @@ import { exportTableCsv } from "../../hooks/exportTableCsv";
 import HeatMap from "../heatmap/HeatMap.tsx";
 import SkeletonTable from "./SkeletonTable.tsx";
 import { TableExportButton } from "./TableExportButton";
-import ErrorMessage from "../../../../shared/errors/ErrorMessage";
-import { logger } from "../../../../shared/utils/logger";
+import ErrorMessage from "@shared/errors/ErrorMessage";
+import { logger } from "@shared/utils/logger.ts";
 
 /**
  * Central orchestrator for the results view, managing the lifecycle of data tables and exports.

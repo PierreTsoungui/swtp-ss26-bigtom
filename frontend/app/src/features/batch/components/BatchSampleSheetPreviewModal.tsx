@@ -1,8 +1,8 @@
 import type { SampleSheetPreview } from "../types";
 import { previewSampleSheet } from "../hooks/batchApi";
-import { Modal } from "../../../shared/components/Modal";
-import { SampleSheetPreviewTable } from "../../../shared/components/SampleSheetPreviewTable";
-import { useAsyncResource } from "../../../shared/hooks/useAsyncResource";
+import { Modal } from "@shared/components/Modal.tsx";
+import { SampleSheetPreviewTable } from "@shared/components/SampleSheetPreviewTable.tsx";
+import { useAsyncResource } from "@shared/hooks/useAsyncResource.ts";
 
 /**
  * Props for the BatchSampleSheetPreviewModal component.

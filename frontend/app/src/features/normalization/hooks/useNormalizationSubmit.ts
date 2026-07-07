@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import type { ProblemDetail } from "../../../shared/errors/ErrorTypes.ts";
+import type { ProblemDetail } from "@shared/errors/ErrorTypes.ts";
 import type { NormalizationMethod } from "../types";
 
 /**

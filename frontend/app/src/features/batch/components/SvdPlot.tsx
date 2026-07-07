@@ -1,6 +1,6 @@
 import React from "react";
 import type { BatchRound } from "../types";
-import { PlotView, type PlotSource } from "../../../shared/plots";
+import { PlotView, type PlotSource } from "@shared/plots";
 
 /**
  * Props for the SvdPlot component.

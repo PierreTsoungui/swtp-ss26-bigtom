@@ -2,9 +2,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AnalysisPage } from "./AnalysisPage";
-import { useJobPolling } from "../../shared/hooks/useJobPolling";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
 import { useFilterStats } from "./hooks/useFilterStats";
-import { JobPhase, type JobStatus, JobStatusValue } from "../../shared/types/JobTypes.ts";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 import type { FilteringStatsType } from "./types";
 
 const { mockNavigate } = vi.hoisted(() => ({

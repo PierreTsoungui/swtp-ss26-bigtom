@@ -1,8 +1,8 @@
 import { previewSheet } from "../hooks/uploadApi";
 import type { SheetPreview } from "../types";
-import { Modal } from "../../../shared/components/Modal";
-import { SampleSheetPreviewTable } from "../../../shared/components/SampleSheetPreviewTable";
-import { useAsyncResource } from "../../../shared/hooks/useAsyncResource";
+import { Modal } from "@shared/components/Modal.tsx";
+import { SampleSheetPreviewTable } from "@shared/components/SampleSheetPreviewTable.tsx";
+import { useAsyncResource } from "@shared/hooks/useAsyncResource.ts";
 
 /**
  * Props for the UploadSampleSheetPreviewModal component.

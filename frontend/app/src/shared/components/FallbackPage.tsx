@@ -1,5 +1,6 @@
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { Button } from "./Button";
+import BackButton from "@shared/components/BackButton.tsx";
 
 /** The situations the fallback page can represent. */
 type FallbackVariant = "not-found" | "error";
@@ -37,22 +38,10 @@ const fallbackContent: Record<FallbackVariant, { title: string; description: str
  */
 export function FallbackPage({ variant, onReset }: FallbackPageProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const content = fallbackContent[variant];
 
   const handleHome = () => {
     onReset?.();
-    void navigate("/");
-  };
-
-  const handleBack = () => {
-    onReset?.();
-
-    if (window.history.length > 1 || location.key !== "default") {
-      void navigate(-1);
-      return;
-    }
-
     void navigate("/");
   };
 
@@ -75,9 +64,7 @@ export function FallbackPage({ variant, onReset }: FallbackPageProps) {
           <Button variant="primary" onClick={handleHome}>
             Go to start page
           </Button>
-          <Button variant="secondary" onClick={handleBack}>
-            Back
-          </Button>
+          <BackButton />
         </div>
       </div>
     </section>

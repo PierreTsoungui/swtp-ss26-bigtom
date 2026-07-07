@@ -3,10 +3,10 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BatchPage } from "./BatchPage";
-import { useJobPolling } from "../../shared/hooks/useJobPolling";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
 import { useBatchParameters } from "./hooks/useBatchParameters";
 import { useBatchCorrection } from "./hooks/useBatchCorrection";
-import { JobPhase, type JobStatus, JobStatusValue } from "../../shared/types/JobTypes.ts";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 import type { BatchParametersResponse } from "./types";
 
 const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }));

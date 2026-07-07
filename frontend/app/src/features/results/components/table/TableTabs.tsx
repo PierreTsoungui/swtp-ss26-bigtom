@@ -1,4 +1,4 @@
-import HelpButton from "../../../../shared/help/HelpButton";
+import HelpButton from "@shared/help/HelpButton";
 
 /**
  * Props for the TableTabs component.

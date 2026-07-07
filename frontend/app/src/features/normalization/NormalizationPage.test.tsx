@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NormalizationPage } from "./NormalizationPage";
 import { useNormalizationPreview } from "./hooks/useNormalizationPreview";
 import { useNormalizationSubmit } from "./hooks/useNormalizationSubmit";
-import { useJobPolling } from "../../shared/hooks/useJobPolling";
-import { JobPhase, type JobStatus, JobStatusValue } from "../../shared/types/JobTypes.ts";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 import type { MethodPreview, NormalizationPreview } from "./types";
 
 const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }));

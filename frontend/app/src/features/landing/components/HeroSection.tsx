@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 
-import { buttonClasses } from "../../../shared/components/buttonStyles";
+import { buttonClasses } from "@shared/components/buttonStyles.ts";
 import { LandingLogo } from "./LandingLogo";
 
 /**

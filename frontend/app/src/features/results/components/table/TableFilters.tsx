@@ -2,7 +2,7 @@ import { useState } from "react";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import type { DmpFilters, DmrFilters } from "../../hooks/useTableFilters.ts";
-import { Button } from "../../../../shared/components/Button";
+import { Button } from "@shared/components/Button.tsx";
 
 // Filter definitions per table.
 const FILTER_DEFINITIONS = {

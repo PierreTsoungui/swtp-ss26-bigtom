@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-import Progressbar from "../../shared/components/Progressbar";
-import { useJobPolling } from "../../shared/hooks/useJobPolling";
-import { JobStatusValue } from "../../shared/types/JobTypes.ts";
+import Progressbar from "@shared/components/Progressbar.tsx";
+import { useJobPolling } from "@shared/hooks/useJobPolling.ts";
+import { JobStatusValue } from "@shared/types/JobTypes.ts";
 import { BatchForm } from "./components/BatchForm";
 import { SvdPlot } from "./components/SvdPlot";
 import { useBatchCorrection } from "./hooks/useBatchCorrection";

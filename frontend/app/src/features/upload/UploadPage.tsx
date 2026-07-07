@@ -8,8 +8,8 @@ import FileReviewList from "./components/FileReviewList";
 import UploadSampleSheetPreviewModal from "./components/UploadSampleSheetPreviewModal";
 import FilterPanel from "./components/FilterPanel.tsx";
 import type { SampleSheetCandidate } from "./types";
-import HelpButton from "../../shared/help/HelpButton.tsx";
-import { Button } from "../../shared/components/Button";
+import HelpButton from "@shared/help/HelpButton.tsx";
+import { Button } from "@shared/components/Button.tsx";
 
 /**
  * Main view for data ingestion, implementing the "Inspect → Review → Commit" workflow.

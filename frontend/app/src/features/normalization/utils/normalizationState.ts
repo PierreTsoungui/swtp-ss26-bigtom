@@ -1,4 +1,4 @@
-import { JobPhase, type JobStatus, JobStatusValue } from "../../../shared/types/JobTypes";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 
 /**
  * Pure derivations of the normalization page's navigation state from a polled

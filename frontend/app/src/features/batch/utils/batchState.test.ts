@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { JobPhase, type JobStatus, JobStatusValue } from "../../../shared/types/JobTypes";
+import { JobPhase, type JobStatus, JobStatusValue } from "@shared/types/JobTypes.ts";
 import type { BatchErrorDetail } from "../types";
 import { hasReachedResults, isDownstreamRunning, isSystemError } from "./batchState";
 

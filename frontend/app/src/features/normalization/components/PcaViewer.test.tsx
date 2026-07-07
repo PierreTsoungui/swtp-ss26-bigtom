@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import PcaViewer from "./PcaViewer";
 import type { PcaData } from "../types";
-import { exportSvgAsPng } from "../../../shared/plots/exportSvg";
-import { exportSvgAsPdf } from "../../../shared/plots/exportSvgAsPdf";
+import { exportSvgAsPng } from "@shared/plots/exportSvg.ts";
+import { exportSvgAsPdf } from "@shared/plots/exportSvgAsPdf.ts";
 
 vi.mock("../../../shared/plots/exportSvg", () => ({
   exportSvgAsPng: vi.fn().mockResolvedValue(undefined),
