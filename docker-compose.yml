@@ -54,6 +54,8 @@ services:
     depends_on:
       - backend
     read_only: true
+    security_opt:
+      - no-new-privileges:true
     tmpfs:
       - /tmp:size=512M,mode=1777
       - /var/cache/nginx:size=64M,mode=1777
@@ -76,6 +78,8 @@ services:
       - JOB_CLEANUP_INTERVAL_SECONDS=${JOB_CLEANUP_INTERVAL_SECONDS:-86400}
       - DMR_CORES=${DMR_CORES:-4}
       - DOCKER_HOST=tcp://docker-socket-proxy:2375 # Docker-CLI im Backend redet jetzt mit dem Proxy statt dem lokalen Socket
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "8000:8000"
     volumes:
@@ -111,6 +115,8 @@ services:
       - ALL
     cap_add:
       - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./r_backend:/app/r_backend
       - ./data:/app/data
