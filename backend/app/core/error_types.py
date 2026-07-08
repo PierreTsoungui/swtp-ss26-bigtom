@@ -1,7 +1,7 @@
 # app/core/error_types.py
 """RFC 9457 problem types, the ``AppException`` base and the FastAPI handler."""
 from typing import Dict, Any, Optional
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 
 

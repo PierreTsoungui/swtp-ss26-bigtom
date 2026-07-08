@@ -1,7 +1,7 @@
 # app/models/heatmap.py
 """Pydantic schemas for the heatmap API (grouping, options and run response)."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Dict, List, Optional
 
 
@@ -60,10 +60,7 @@ class AnnotationColumn(BaseModel):
 class HeatmapOptionsResponse(BaseModel):
     """Sample-sheet columns available as heatmap annotations for a job."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     job_id:            str
     available_columns: List[AnnotationColumn]
-
-    class Config:
-        """Pydantic configuration: allow construction from object attributes."""
-
-        from_attributes = True

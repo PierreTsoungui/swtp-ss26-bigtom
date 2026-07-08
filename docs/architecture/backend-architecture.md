@@ -1,319 +1,313 @@
-# Architecture Specification: MethylAnalyzer Backend
+# Architecture Specification: Backend
 
-**Scope:** `backend/app/` — the FastAPI application that orchestrates the
-methylation-analysis pipeline
+**Scope:** `backend/app/` — the FastAPI application that orchestrates the DNA-methylation analysis pipeline.
+**Audience:** Backend developers · reviewers · maintainers · new team members · supervisors
+**Status:** Stable
+**Last reviewed:** 2026-07-08
 
----
-
-## 1. Overview
-
-The backend is an asynchronous HTTP API that drives a multi-step DNA-methylation
-analysis pipeline (filtering → normalization → batch correction → differential
-analysis → heatmap). The numerically heavy work is **not** done in Python: it is
-delegated to R scripts that run inside a separate Docker container. The Python
-backend's job is **orchestration**: accept uploads, sequence the pipeline steps,
-track each job's state, stream progress to the frontend, and serve the resulting
-artifacts.
-
-**Architectural style:** a classic **layered architecture** (API → Services →
-Domain/IO, with Core cross-cutting) combined with **asynchronous, fire-and-forget
-pipeline execution** and **process-isolated compute** (R via `docker exec`).
-
-### 1.1 System context
-
-```
-┌────────────┐   HTTP/JSON (REST, /api/v1)   ┌──────────────────────┐
-│  Frontend  │  ─────────────────────────►   │   Backend (FastAPI)  │
-│  (browser) │   ◄─────────────────────────  │   Python, async      │
-└────────────┘   202 + status polling        └──────────┬───────────┘
-                                                         │ docker exec (subprocess)
-                                                         │ line-based JSON over stdout
-                                              ┌──────────▼───────────┐
-                                              │   R worker container │
-                                              │   (minfi, limma, …)  │
-                                              └──────────┬───────────┘
-                                                         │ reads/writes
-                                              ┌──────────▼───────────┐
-                                              │  Shared job volume   │
-                                              │  jobs/<job_id>/…      │
-                                              └──────────────────────┘
-```
-
-The Python backend and the R worker communicate in two ways only: (1) the backend
-launches R via `docker exec` and reads its stdout/stderr; (2) both sides exchange
-data through files in the shared `jobs/<job_id>/` directory.
+> This document is the **reference architecture** and the **central entry point** for the backend documentation. It explains how the backend is structured and *why*, and how its parts interact — at an architectural level. It deliberately does **not** repeat implementation detail that a dedicated document already owns; instead it introduces each topic and links to the page responsible for it ([§11](#11-documentation-map)).
 
 ---
 
-## 2. Layer model
+## Table of Contents
 
-| Layer | Directory | Responsibility | Must NOT |
+- [1. Purpose & Architectural Principles](#1-purpose--architectural-principles)
+- [2. Technology Stack](#2-technology-stack)
+- [3. System Context](#3-system-context)
+- [4. Layered Architecture](#4-layered-architecture)
+- [5. The Layers](#5-the-layers)
+- [6. Cross-Cutting Concerns](#6-cross-cutting-concerns)
+- [7. Reference Flow: Upload => Preview](#7-reference-flow-upload--preview)
+- [8. Runtime & Deployment](#8-runtime--deployment)
+- [9. Extension Points](#9-extension-points)
+- [10. Architecture Decisions & Known Boundaries](#10-architecture-decisions--known-boundaries)
+- [11. Documentation Map](#11-documentation-map)
+
+---
+
+## 1. Purpose & Architectural Principles
+
+The backend is an **asynchronous HTTP API** that drives a multi-step methylation-analysis pipeline: *filtering => normalization => batch correction => differential analysis => heatmap*. The numerically heavy work is **not** done in Python. It is delegated to R scripts that run in a separate Docker container. The backend's responsibility is **orchestration**: accept uploads, sequence the pipeline, track each job's state, stream progress to the frontend, and serve the resulting artifacts.
+
+The architecture is organized around four principles:
+
+1. **Orchestration, not computation.** Python coordinates; R computes. The boundary between the two is narrow and explicit ([§3](#3-system-context)), which keeps the Python codebase small and the numerical code independently testable and replaceable.
+2. **Strict layering with a one-way dependency rule.** Every module belongs to exactly one layer, and dependencies only ever point downward ([§4](#4-layered-architecture)). This keeps the blast radius of a change local and makes the codebase navigable.
+3. **Uniform asynchronous execution.** Long-running work never blocks a request. Every pipeline step follows the same *validate => transition => schedule => 202* pattern ([§6.2](#62-asynchronous-pipeline-execution)), so a new step is added by following an existing one, not by inventing a mechanism.
+4. **Explicit, enforced job state.** A job is a small state machine. Every state change goes through a single guarded function, so illegal transitions are impossible by construction ([§6.1](#61-job-lifecycle--state-machine)).
+
+The combined effect is that a component can be understood, reviewed, tested, or extended in isolation.
+
+---
+
+## 2. Technology Stack
+
+| Technology | Role |
+|---|---|
+| [Python](https://www.python.org/) 3.11 | Backend language |
+| [FastAPI](https://fastapi.tiangolo.com/) | Async HTTP framework, routing, validation, OpenAPI |
+| [Pydantic](https://docs.pydantic.dev/) v2 | Request/response schemas and the domain model |
+| [Uvicorn](https://www.uvicorn.org/) | ASGI server (single process, one event loop) |
+| [pandas](https://pandas.pydata.org/) | Loading, filtering and paginating the result tables |
+| [Docker](https://www.docker.com/) | Process isolation for the R worker (invoked via `docker exec`) |
+| [pytest](https://docs.pytest.org/) | Test suite — see [testing-strategy.md](../testing/testing-strategy.md) |
+
+Concrete versions are pinned in `backend/requirements.txt`; this table names the major version the architecture assumes. Configuration is entirely environment-driven — see [configuration.md](../backend/configuration.md).
+
+---
+
+## 3. System Context
+
+The platform is three cooperating containers plus a shared volume. The backend sits between the browser and the R worker.
+
+```mermaid
+flowchart TD
+    FE["Frontend (browser SPA)"]
+    BE["Backend (FastAPI, async)"]
+    RW["R worker container<br/>(minfi, limma, ChAMP, …)"]
+    VOL[("Shared job volume<br/>jobs/&lt;job_id&gt;/")]
+
+    FE -- "HTTP/JSON · REST /api/v1 · 202 + status polling" --> BE
+    BE -- "docker exec · line-based JSON over stdout" --> RW
+    BE -- "reads/writes artifacts" --> VOL
+    RW -- "reads/writes artifacts" --> VOL
+```
+
+The backend and the R worker communicate over **exactly two channels**:
+
+1. **Control** — the backend launches R with `docker exec <container> Rscript …` and reads its stdout/stderr. R streams structured progress as one JSON object per line ([§6.4](#64-r-execution--progress-protocol)).
+2. **Data** — both sides exchange files through the shared `jobs/<job_id>/` directory. This file contract is the actual integration surface and is specified in [job-directory-layout.md](../contracts/job-directory-layout.md).
+
+The full C4 context/container diagrams and the end-to-end sequence live in [system-overview.md](./system-overview.md); this section is the orientation subset.
+
+---
+
+## 4. Layered Architecture
+
+The application is a classic layered architecture. Directories map one-to-one onto layers.
+
+```text
+backend/app/
+├── main.py                 # Composition root: app, CORS, exception handler, lifespan
+├── api/routes/             # HTTP adapters (one router per domain)
+├── services/               # Business logic: orchestration, domain/IO, infrastructure
+│   └── r_executor/         # The only subsystem that runs R
+├── models/                 # Pydantic schemas + the JobStatus domain model
+└── core/                   # Cross-cutting: config, errors, logging, resource governor, atomic IO
+```
+
+| Layer | Directory | Responsibility | Must **not** |
 |---|---|---|---|
-| **API / Routes** | `app/api/routes/` | HTTP adapter: validate input, map errors to HTTP, set the initial state transition, schedule the pipeline, serve artifacts. | Contain R calls, heavy file I/O, or multi-step orchestration. |
-| **Services** | `app/services/` | All business logic: pipeline orchestration, domain helpers, and infrastructure (state, execution, cleanup). | Depend on FastAPI request/response objects. |
-| **Models** | `app/models/` | Pydantic schemas for request/response bodies and the `JobStatus` domain model. | Contain behavior beyond validation. |
-| **Core** | `app/core/` | Cross-cutting concerns: configuration, logging, error model, exceptions. | Depend on routes or services. |
-| **R backend** | `r_backend/` (separate process) | Numerical computation. | — |
+| **API / Routes** | `app/api/routes/` | HTTP adapter: validate input, map errors to HTTP, perform the initial state transition, schedule the pipeline, serve artifacts. | Contain R calls, heavy file I/O, or multi-step orchestration. |
+| **Services** | `app/services/` | All business logic: pipeline orchestration, domain/IO helpers, and runtime infrastructure (state, execution, cleanup). | Depend on FastAPI request/response objects. |
+| **Models** | `app/models/` | Pydantic schemas for the HTTP contract and the `JobStatus` domain object. | Contain behaviour beyond validation. |
+| **Core** | `app/core/` | Cross-cutting concerns: configuration, error model, logging, resource governance, atomic persistence. | Depend on routes or services. |
+| **R backend** | `r_backend/` *(separate process)* | Numerical computation. | — |
 
-**Dependency rule:** dependencies point downward only. Routes depend on services
-and models; services depend on core and other services; core depends on nothing
-in the app. The R backend is reached exclusively through the `r_executor`
-subpackage.
+**Dependency rule.** Dependencies point downward only: routes => services => core; services may use other services; core depends on nothing inside the app. The R backend is reached **exclusively** through the `r_executor` subpackage ([§5.5](#55-r-execution)). This rule is what keeps the layers meaningful, and it is the first thing a reviewer should check.
 
 ---
 
-## 3. Module reference
+## 5. The Layers
 
-### 3.1 `app/main.py` — composition root
-Creates the `FastAPI` app, registers the RFC-9457 exception handler, configures
-CORS, mounts all routers under `/api/v1`, and runs a **lifespan** hook that starts
-and stops the background job-cleanup loop. Calls `setup_logging()` at import time.
+This section describes each layer's role at an architectural level. Per-module signatures, parameters, side effects and dependencies are the domain of [services-reference.md](../backend/services-reference.md); the tables below are for orientation only.
 
-### 3.2 `app/api/routes/` — the API layer
+### 5.1 API — `app/api/routes/`
 
-| Router | Endpoint(s) | Purpose |
+Each router is a **thin HTTP adapter**. It validates the request (Pydantic + guards), performs the single synchronous state transition into a `RUNNING` state, schedules the background pipeline, and returns `202 Accepted`. Artifact endpoints (`GET`) stream files back with the correct content type. Routers never orchestrate multi-step work and never call R directly.
+
+| Router | Endpoints | Purpose |
 |---|---|---|
-| `upload.py` | `POST /upload` | Validate IDAT files + sample sheet, create the job, schedule the **filtering → normalization-preview** pipeline. |
-| `status.py` | `GET /status/{job_id}` | Return the current `JobStatus` (the frontend polls this). |
+| `upload.py` | `POST /upload/inspect`, `GET /upload/{sid}/preview`, `POST /upload/commit`, `DELETE /upload/{sid}`, `POST /upload` *(deprecated)* | Two-phase folder/ZIP upload (inspect => commit) plus the legacy single-shot upload. Starts the filtering => normalization-preview pipeline. |
+| `status.py` | `GET /status/{job_id}` | The job's current `JobStatus` (the frontend polls this). |
 | `stats.py` | `GET /filter/{job_id}/stats` | Serve `filter_stats.json`. |
-| `normalization_preview.py` | `GET /preview/normalization/{job_id}`, `…/{plot_name}` | Serve `preview_plots.json` and the preview PNGs. |
-| `normalize.py` | `POST /normalize/{job_id}` | Start normalization with a chosen method, then SVD round 0. |
+| `normalization_preview.py` | `GET /preview/normalization/{job_id}`, `…/{plot_name}` | Serve the preview manifest and PNGs. |
+| `normalize.py` | `POST /normalize/{job_id}` | Run normalization with a chosen method, then SVD round 0. |
 | `batch.py` | `POST /batch/{job_id}`, `…/skip`, `GET …/history`, `…/svd-plot/{n}`, `…/batch-options` | Run/iterate batch correction; enter downstream analysis. |
 | `heatmap.py` | `POST /heatmap/{job_id}`, `GET …`, `…/options` | Generate and serve the heatmap. |
 | `reset.py` | `POST /reset/{job_id}` | Cancel a running job and delete it. |
-| `table.py` | `GET /table/{job_id}/{table}`, `…/export` | Paginated/filterable DMR/DMP result tables (CSV export). |
+| `table.py` | `GET /table/{job_id}/{table}`, `…/export` | Paginated, filterable DMP/DMR result tables and CSV export. |
 
-### 3.3 `app/services/` — the service layer
+`main.py` additionally exposes `GET /` (identity) and `GET /health` (liveness/readiness probe). The complete request/response contract, including the RFC 9457 error format, is specified in [api-contract.md](./api-contract.md).
 
-Three roles share this directory; the distinction is conceptual, not enforced by
-sub-folders:
+### 5.2 Services — `app/services/`
 
-**(a) Pipeline orchestration** — `async` coroutines that sequence R steps and
-state transitions. Each receives a `cancel_event` and does **not** manage the task
-lifecycle itself (that is `pipeline_task`'s job).
-- `normalize_service.run_normalization_pipeline` — normalization + SVD round 0.
-- `normalization_preview_service.run_normalization_preview` — preview plots; detects PNGs and writes `preview_plots.json`.
-- `batch_service.run_batch_pipeline_task` — batch correction + SVD round N.
-- `batch_service.run_downstream_analysis_task` — DMR + DMP analysis.
-- `heatmap_service.run_heatmap_pipeline_task` — heatmap generation.
-- `upload_service.run_upload_pipeline` — filtering + preview. `upload_service.persist_upload_files` handles upload persistence with rollback.
+The service layer holds three conceptual roles. The split is by responsibility, not by sub-folder.
 
-**(b) Domain / IO helpers** — pure, synchronous utilities.
-- `file_handler.py` — IDAT/sample-sheet validation and persistence, job-dir setup.
-- `samplesheet_utils.py` — derive grouping columns from a sample sheet.
-- `table_handler.py` / `table_filter.py` — load result RDS/CSV into pandas, filter, paginate, export.
+**(a) Pipeline orchestration** — `async` coroutines that sequence R steps and state transitions. Each receives a `cancel_event` and never manages its own task lifecycle (that belongs to `pipeline_task`, [§6.2](#62-asynchronous-pipeline-execution)). Examples: `upload_service`, `normalize_service`, `normalization_preview_service`, `batch_service`, `heatmap_service`.
 
-**(c) Infrastructure** — the runtime backbone.
-- `job_manager.py` — the **job state machine** + the in-memory registries (`jobs`, `cancel_events`, `job_tasks`, `resetting_jobs`). Single source of truth for job state.
-- `pipeline_task.py` — owns the background-task lifecycle: creates the `cancel_event`, registers/clears the task, guarantees cleanup. Two entry points: `run_job_pipeline` (for FastAPI `BackgroundTasks`) and `start_job_pipeline` (fire-and-forget task).
-- `reset_service.py` — orchestrates cancellation + deletion of a job (idempotent, concurrency-safe).
-- `job_cleanup_service.py` — periodic deletion of expired `jobs/<id>/` directories.
-- `r_executor/` — subprocess execution of R commands (see §3.5).
+**(b) Domain / IO helpers** — pure, synchronous utilities: upload validation/persistence, the two-phase upload machinery, sample-sheet parsing/canonicalization, and result-table loading/filtering.
 
-### 3.4 `app/models/` — schemas
-Pydantic models, **one module per domain**: `job.py` (`JobStatus`,
-`StatusResponse`), `upload.py` (`UploadResponse`), `normalize.py`
-(`NormalizeRequest/Response`), `filter.py` (`FilterSettings` + sub-filters),
-`batch.py`, `heatmap.py`, `table.py`. `JobStatus` is the in-memory domain object
-the state machine mutates; the `*Response` models are the HTTP contract.
+**(c) Infrastructure** — the runtime backbone: job state, background-task lifecycle, reset, cleanup, and R execution.
 
-### 3.5 `app/services/r_executor/` — the execution subpackage
-The only place that knows how to run R. See [r-executor.md](./r-executor.md).
-- `executor.py::run_r_script(command, cancel_event, on_progress)` — starts the subprocess, streams output, enforces the per-command timeout, drains stdout/stderr, resolves to an `ExecutionResult`.
-- `commands/` — one `RCommand` dataclass per R script (`FilteringCommand`, `NormalizationCommand`, `BatchCorrectionCommand`, …). Each builds its own `docker exec` argv (Command pattern).
-- `result.py` — `ExecutionResult` + `ExecutionStatus` (`completed` / `failed` / `cancelled` / `timeout`).
-- `protocol.py` — `extract_json_objects()`, the robust scanner for the R JSON stream.
+| Module | Role | Group |
+|---|---|---|
+| `job_manager` | Job state machine + in-memory registries (single source of truth for job state). | infra |
+| `job_paths` | Central resolution and validation of a job's directory (`JOBS_DIR / job_id`). | infra |
+| `pipeline_task` | Owns the background-task lifecycle: creates the `cancel_event`, registers/clears the task, guarantees cleanup. | infra |
+| `pipeline_outcome` | Shared translation of an R step's result into cancel/timeout/failure transitions. | infra |
+| `reset_service` | Cancel + delete a job; idempotent and concurrency-safe. | infra |
+| `job_cleanup_service` | TTL-based deletion of expired job/staging directories. | infra |
+| `r_executor/` | Subprocess execution of R commands ([§5.5](#55-r-execution)). | infra |
+| `upload_service` | Legacy single-shot upload: persist with rollback, run the first pipeline phase. | orchestration |
+| `upload_inspect_service` / `upload_commit_service` | Two-phase upload: classify a staged upload, then commit the confirmed selection into a job. | domain |
+| `staging_manager` | Lifecycle of staging sessions (UUID-validated, TTL, path-safe). | domain |
+| `archive_utils` | Safe ZIP extraction (Zip-Slip guard, size/count limits). | domain |
+| `samplesheet_normalizer` / `samplesheet_parser` | Canonicalize any upload to one Illumina `SampleSheet.csv`; parse its `[Data]` section. | domain |
+| `file_handler` | IDAT/sample-sheet validation and persistence, job-dir setup. | domain |
+| `intake_guards` | Reject a job at intake if it would exceed the sample or disk budget. | domain |
+| `batch_service` / `heatmap_service` / `normalize_service` / `normalization_preview_service` | Per-phase pipeline orchestration. | orchestration |
+| `table_handler` / `table_filter` | Load result CSV into pandas; filter, sort, paginate, export. | domain |
 
-### 3.6 `app/core/` — cross-cutting
-- `config.py` — env-driven config: `JOB_BASE_DIR`, `JOB_RETENTION_HOURS`, `JOB_CLEANUP_INTERVAL_SECONDS` (validated).
-- `error_types.py` — `ErrorTypes` catalogue, `problem_detail()` (RFC 9457), `AppException`, and the `app_exception_handler`.
-- `exceptions.py` — `InvalidTransitionError` (→ HTTP 409).
-- `logging_config.py` — `setup_logging()`; see [logging-backend.md](./logging-backend.md).
+### 5.3 Models — `app/models/`
+
+Pydantic schemas, **one module per domain** (`job`, `upload`, `normalize`, `filter`, `batch`, `heatmap`, `table`). `JobStatus` is the in-memory domain object the state machine mutates; the `*Response`/`*Request` models are the HTTP contract validated at the boundary. Models carry no behaviour beyond validation.
+
+### 5.4 Core — `app/core/`
+
+Cross-cutting concerns with no dependency on routes or services:
+
+- `config` — environment-driven configuration, validated at import (fail-fast). See [configuration.md](../backend/configuration.md).
+- `error_types` / `exceptions` — the RFC 9457 problem model, `AppException`, and the FastAPI handler ([§6.6](#66-error-model)).
+- `logging_config` — structured logging setup; see [logging-backend.md](./logging-backend.md).
+- `resource_governor` — the admission-control queue that bounds concurrent R memory/CPU usage ([§6.5](#65-resource-governance--intake-guards)).
+- `atomic_io` — crash-safe JSON persistence (temp file + `os.replace`), used for job artifacts that must never be left half-written.
+- `upload_limits` — the single source of truth for upload size/count/allow-list limits.
+
+### 5.5 R execution
+
+The `app/services/r_executor/` subpackage is the **only** subsystem that knows how to run R. It hides the `docker exec` mechanics behind a small, uniform interface so pipeline services stay free of subprocess concerns. `run_r_script(command, cancel_event, on_progress)` starts the subprocess, streams and parses its output, enforces the per-command timeout, honours cancellation, and resolves to one `ExecutionResult`. Each R script is represented by an `RCommand` dataclass (Command pattern) that builds its own argv and declares its resource weight.
+
+This subsystem has its own dedicated specification — see [r-executor.md](./r-executor.md). Do not add subprocess logic elsewhere.
 
 ---
 
-## 4. Cross-cutting mechanisms
+## 6. Cross-Cutting Concerns
 
-### 4.1 Job lifecycle & state machine
-A job is a `(phase, status)` pair plus progress metadata, held in
-`job_manager.jobs[job_id]`. **Every** state change goes through
-`transition_job()`, which validates the move against `_ALLOWED_TRANSITIONS`; an
-illegal move raises `InvalidTransitionError` → HTTP 409. This makes the set of
-reachable states explicit and prevents inconsistent transitions under
-concurrency. See §6 for the full table.
+Each concern below is described at the architectural level (what it is, why it exists) and points to the document that owns the detail.
 
-### 4.2 Asynchronous pipeline execution
-Pipeline steps take minutes, so routes never block on them. The pattern is
-uniform:
+### 6.1 Job lifecycle & state machine
 
-1. The route validates input and performs the **initial** `transition_job` to a
-   `RUNNING` state (synchronously, so a follow-up status poll cannot race ahead).
-2. The route schedules the pipeline through `pipeline_task`, passing a factory
-   `lambda cancel_event: <service_coroutine>(…, cancel_event)`.
+A job is a `(phase, status)` pair plus progress metadata, held in `job_manager`. **Every** state change goes through `transition_job()`, which validates the move against an explicit allowed-transition graph; an illegal move raises `InvalidTransitionError` => HTTP 409. This makes the reachable states explicit and prevents inconsistent transitions under concurrency. Terminal statuses are `waiting`, `running`, `completed`, `failed`; recovery edges let a user retry a failed step without re-running the whole pipeline.
+
+The full state table, the diagram, and who triggers each transition (route vs. pipeline task) are specified in [job-lifecycle.md](./job-lifecycle.md).
+
+### 6.2 Asynchronous pipeline execution
+
+Pipeline steps take minutes, so routes never block on them. The pattern is uniform and mandatory:
+
+1. The route validates input and performs the **initial** `transition_job` into a `RUNNING` state *synchronously*, so a follow-up status poll cannot race ahead.
+2. The route schedules the pipeline through `pipeline_task`, passing a factory `lambda cancel_event: <service_coroutine>(…, cancel_event)`.
 3. The route returns `202 Accepted` immediately.
-4. `pipeline_task` creates the `cancel_event`, registers the task, runs the
-   coroutine, and clears both registrations in a `finally` block.
+4. `pipeline_task` creates the `cancel_event`, registers the task, runs the coroutine, and clears both registrations in a `finally` block.
 
-### 4.3 Cancellation & reset
-Cancellation is **cooperative**. `POST /reset/{job_id}` → `reset_service` sets the
-job's `cancel_event`; the running pipeline observes it (the executor reacts within
-O(1)), the service returns cleanly, and `reset_service` deletes the job. Only the
-executor ever kills the R subprocess. While a reset is in progress the job is
-marked in `resetting_jobs`, which turns any trailing `transition_job` into a
-silent no-op. See [r-executor.md](./r-executor.md) §6.
+Services therefore never create a `cancel_event` or register a task themselves — that responsibility lives in exactly one place. The frontend observes progress by polling `GET /status/{job_id}`; the progress contract is defined in [pipeline-progress.md](./pipeline-progress.md).
 
-### 4.4 R subprocess protocol
-R scripts emit one JSON object per stdout line (`utils/progress.R`):
-`{"type":"progress",…}`, `{"type":"error",…}`, `{"type":"done",…}`,
-`{"type":"plot",…}`. The executor parses these, forwards `progress`/`error`/`done`
-to the caller's `on_progress` callback (which usually calls
-`job_manager.set_progress`), and captures the last `error` message into
-`ExecutionResult.extra["r_error"]`. A non-zero exit code maps to
-`ExecutionStatus.FAILED`. See [pipeline-progress.md](./pipeline-progress.md).
+### 6.3 Cancellation & reset
 
-### 4.5 Error model
-All API errors are RFC 9457 Problem Details produced by `problem_detail()` /
-`AppException`. Domain code raises `AppException` (or `InvalidTransitionError`);
-`app_exception_handler` renders them to the correct status code and JSON body.
+Cancellation is **cooperative**. `POST /reset/{job_id}` delegates to `reset_service`, which sets the job's `cancel_event`; the running pipeline observes it, the executor terminates the R subprocess, the service returns cleanly, and the job directory is deleted. Only the executor ever kills the R process. While a reset is in progress the job is flagged in `resetting_jobs`, which turns any trailing `transition_job`/`set_progress` into a silent no-op so a finishing task cannot revive a job that is being deleted. See [r-executor.md](./r-executor.md) for the cancellation protocol.
 
-### 4.6 Job cleanup
-A lifespan-managed background loop (`run_job_cleanup_loop`) periodically deletes
-`jobs/<id>/` directories whose mtime is older than `JOB_RETENTION_HOURS`, off the
-event loop via `asyncio.to_thread`.
+### 6.4 R execution & progress protocol
+
+R scripts emit one JSON object per stdout line (`progress`, `error`, `done`, `plot`). The executor parses these, forwards them to the caller's `on_progress` callback (which usually updates `job_manager`), and captures the last structured error so the API can surface a real cause instead of a raw stderr dump. A non-zero exit maps to a `FAILED` result; an exceeded timeout to `TIMEOUT`. The mechanics are owned by [r-executor.md](./r-executor.md); the JSON event contract by [pipeline-progress.md](./pipeline-progress.md).
+
+### 6.5 Resource governance & intake guards
+
+Because every R step runs inside the single R-worker container, unbounded concurrent uploads would oversubscribe host RAM and trigger the OOM-killer. Two mechanisms prevent this:
+
+- **Admission control** (`core/resource_governor`) — a weighted queue that admits an R step only once its estimated memory and CPU-core need fits the remaining budget; otherwise the step *queues* until capacity frees up (graceful slow-down instead of a crash).
+- **Intake guards** (`services/intake_guards`) — reject a job at upload time if it would exceed the per-job sample cap or the total job-disk budget, giving the user a clear early error instead of a mid-pipeline failure.
+
+Both are sized from environment configuration ([configuration.md](../backend/configuration.md)); the hard container `mem_limit` is the last-resort backstop. The measurement methodology and budgets are documented in [performance-benchmark-concept.md](../performance-benchmark-concept.md).
+
+### 6.6 Error model
+
+All API errors are **RFC 9457 Problem Details**. Domain code raises `AppException` (or its subclasses such as `InvalidTransitionError`); a single FastAPI handler renders them to the correct status code and `application/problem+json` body. Routes therefore do not assemble error responses by hand. The error catalogue and examples are part of [api-contract.md](./api-contract.md).
+
+### 6.7 Configuration
+
+Every tunable is read from an environment variable with a validated default at import time, so the same image runs unchanged across dev/CI/production and a misconfiguration fails fast. The full variable reference (name, default, unit, effect, validation) is [configuration.md](../backend/configuration.md), kept in sync with `.env.example` and `docker-compose.yml`.
+
+### 6.8 Logging
+
+Logging is structured (printf-style, `key=value`), configured centrally, and level-controlled by environment. Conventions and the rationale are in [logging-backend.md](./logging-backend.md).
+
+### 6.9 Data & storage contracts
+
+The backend's most important external contracts are file contracts:
+
+- **Job directory layout** — which file each phase writes and which route reads it: [job-directory-layout.md](../contracts/job-directory-layout.md).
+- **Sample sheet** — the canonical Illumina CSV every upload is normalized to, and the four role mappings: [samplesheet-spec.md](../contracts/samplesheet-spec.md).
+- **Filter mapping** — the end-to-end filter contract (frontend field => query param => backend operator => R column): [filter-mapping.md](../contracts/filter-mapping.md).
+
+### 6.10 Security
+
+Path-traversal defence (UUID/segment-validated job and session ids), safe archive extraction, magic-byte/size file validation, the two-phase upload (nothing enters `jobs/` without confirmation), CORS, and the Docker-socket trade-off are collected in [security.md](../backend/security.md).
+
+### 6.11 Cleanup & retention
+
+Two lifespan-managed background loops delete expired `jobs/<id>/` and `staging/<id>/` directories by mtime, off the event loop. Retention windows are configurable. This is also the data-retention (GDPR) mechanism; see [security.md](../backend/security.md) and [job-lifecycle.md](./job-lifecycle.md).
 
 ---
 
-## 5. Reference flow: upload → preview
+## 7. Reference Flow: Upload => Preview
 
-```
-POST /upload
-  └─ upload.py: validate IDAT + sample sheet  → 400 on failure
-                upload_service.persist_upload_files()  → 400/500 on failure
-                create_job(); transition UPLOADED→COMPLETED
-                background_tasks.add_task(run_job_pipeline, run_upload_pipeline)
-                return 201 {job_id, status: waiting}
+The representative flow below shows the uniform pattern; every other pipeline entry point (`/normalize`, `/batch`, `/heatmap`) has the same shape. Only the architectural steps are shown — the wire-level contract is in [api-contract.md](./api-contract.md).
+
+```text
+POST /upload/inspect         => classify a staged folder/ZIP (staging session), return the manifest
+GET  /upload/{sid}/preview   => preview a candidate sample sheet for role mapping
+POST /upload/commit          => validate the selection + intake guards; move the chosen files into
+                               jobs/<job_id>/; create the job; start the pipeline; return 201
 
 [background] pipeline_task.run_job_pipeline
   └─ register cancel_event + task
      upload_service.run_upload_pipeline(cancel_event):
         transition FILTERING/RUNNING
-        run_r_script(FilteringCommand)  ──► R (init_filter.R) ──► filter_stats.json, filtered_data.rds
-        transition FILTERING/COMPLETED → NORMALIZATION_PREVIEW/RUNNING
+        run_r_script(FilteringCommand)            => init_filter.R  => filter_stats.json, filtered_data.rds
+        transition FILTERING/COMPLETED => NORMALIZATION_PREVIEW/RUNNING
         run_normalization_preview(cancel_event):
-            run_r_script(NormalizationPreviewCommand) ──► R ──► *.png
-            scan PNGs → preview_plots.json
-            transition NORMALIZATION_PREVIEW/COMPLETED → NORMALIZATION/WAITING
+            run_r_script(NormalizationPreviewCommand) => *.png / *.json
+            scan artifacts => preview_plots.json
+            transition NORMALIZATION_PREVIEW/COMPLETED => NORMALIZATION/WAITING
      finally: unregister cancel_event + task
 
 Frontend polls GET /status/{job_id} throughout.
 ```
 
-The same shape applies to `/normalize`, `/batch`, `/batch/skip`, and `/heatmap`.
+The legacy `POST /upload` performs inspect+commit in a single request and remains for backwards compatibility; new clients use the two-phase flow.
 
 ---
 
-## 6. State machine reference
+## 8. Runtime & Deployment
 
-**Phases:** `uploaded`, `filtering`, `normalization_preview`, `normalization`,
-`svd`, `batch`, `analysis`, `results`, `heatmap`.
-**Statuses:** `waiting`, `running`, `completed`, `failed`.
+- **Process model.** A single Uvicorn/FastAPI process with one event loop. All job state is **in-memory**; pipeline steps are asyncio tasks on that loop. A restart loses in-flight job state but not the files on disk.
+- **R worker.** A long-lived Docker container the backend `exec`s into. The backend must reach the Docker socket to launch R.
+- **Shared storage.** `jobs/<job_id>/` is a volume visible to both the backend (host path) and the R worker (container path); `RCommand` objects translate between the two path views. `staging/<id>/` is a sibling volume for unconfirmed uploads, enabling an atomic move on commit.
+- **Durability.** Files on the volume are durable until TTL cleanup; in-memory job state is ephemeral.
 
-Allowed transitions are defined in `job_manager._ALLOWED_TRANSITIONS`. The happy
-path:
-
-```
-uploaded/waiting → uploaded/completed → filtering/running → filtering/completed
-→ normalization_preview/running → …/completed → normalization/waiting
-→ normalization/running → …/completed → svd/running → …/completed
-→ batch/waiting ─┬─ batch/running → …/completed → svd/running → … → batch/waiting   (correct, loops)
-                 └─ analysis/running → …/completed → results/waiting                 (skip → downstream)
-results/waiting → heatmap/running → …/completed → results/waiting
-```
-
-Recovery edges exist (e.g. `normalization/failed → normalization/running`,
-`batch/failed → batch/running`, `heatmap/failed → results/waiting`) so a user can
-retry a failed step without re-running the whole pipeline.
+The container topology, volumes, the Docker-socket rationale, and R-worker specifics are documented in [docker.md](../deployment/docker.md); TLS/reverse-proxy in [HTTPS.md](../HTTPS.md).
 
 ---
 
-## 7. Runtime & deployment
+## 9. Extension Points
 
-- **Process model:** a single FastAPI process (one event loop). All job state is
-  **in-memory**; pipeline tasks are asyncio tasks on that loop.
-- **R worker:** a long-lived Docker container (`R_WORKER_CONTAINER` in
-  `commands/base.py`). The backend invokes R via `docker exec <container> Rscript …`.
-- **Shared storage:** `jobs/<job_id>/` is a volume visible to both the backend
-  (host path) and the R worker (`/app/jobs/<job_id>`). Command objects translate
-  between host and container paths.
-- **Durable vs ephemeral:** files on the volume are durable (until cleanup);
-  in-memory job state is ephemeral and lost on restart.
+The architecture is designed so common changes follow an existing template rather than inventing a mechanism.
 
-### 7.1 Job directory artifacts (by step)
-`SampleSheet.csv`, IDATs, `filter_settings.json` (upload) · `filter_stats.json`,
-`filtered_data.rds` (filtering) · `density_*.png`, `pca_*.png`,
-`preview_plots.json` (preview) · `normalized_data.rds`, `svd_plot_0.png`
-(normalization) · `corrected_data.rds`, `svd_plot_N.png`, `batch_history.json`
-(batch) · `beta.rds`, DMR/DMP result RDS (analysis) · `heatmap.png` (heatmap).
+- **New endpoint.** Add a router in `app/api/routes/` and a Pydantic model in `app/models/`; keep it thin; raise `AppException` for errors. Register it in `main.py`.
+- **New pipeline step.** Add an `RCommand` subclass in `r_executor/commands/`, a service coroutine that takes `cancel_event`, the new `(phase, status)` transitions to the state machine, and schedule it via `pipeline_task`. **Never** modify `executor.py` for a new step.
+- **State change.** Only through `transition_job` / `set_progress`. Never mutate `JobStatus` directly.
+- **Background work.** Only through `pipeline_task`. Never create the `cancel_event` or register the task in a service or route.
+- **Configuration.** Add the variable to `core/config` with a validated default and document it in [configuration.md](../backend/configuration.md); mirror it in `.env.example` / `docker-compose.yml`.
+- **Logging.** Structured `key=value`, per [logging-backend.md](./logging-backend.md). No f-strings in log calls, no `print`.
 
 ---
 
-## 8. Architecture decisions & recommendations
+## 10. Architecture Decisions & Known Boundaries
 
-### 8.1 Do we need a layer between routes and services?
-**No new physical layer is warranted.** The implicit "pipeline orchestration"
-role already exists inside the service layer and is the correct home for
-sequencing logic. Introducing a separate application/use-case layer (hexagonal
-style) would add indirection without payoff at this project's size. What *is*
-needed is **consistency** of the existing layering:
+The decisions that shape the whole system are recorded as **Architecture Decision Records** in [`decisions/`](./decisions/) — notably: R via `docker exec` rather than an embedded process or HTTP service; file-based communication over a shared volume rather than a database/queue; in-memory job state + polling rather than WebSockets/persistence; the two-phase upload; the `RCommand` pattern; and the RFC 9457 error format. Consult the ADRs for the context and consequences; they are the authoritative record of *why*.
 
-- **Recommendation R1 (consistency) — DONE.** Upload orchestration now lives in
-  `upload_service.py` (`run_upload_pipeline` + `persist_upload_files`);
-  `routes/upload.py` is a thin adapter. The rule "routes contain no
-  orchestration" now holds without exception.
+The following are **deliberate boundaries, not defects**:
 
-### 8.2 Further recommendations
-
-- **R2 — Consolidate sample-sheet parsing.** Column-detection logic is duplicated
-  across `batch_service.get_available_columns_from_samplesheet`,
-  `heatmap_service.get_grouping_options_from_samplesheet`, and
-  `samplesheet_utils`. Unify into `samplesheet_utils` and have both callers use
-  it. This also addresses the Python/R column-mismatch class of bugs (the batch
-  variable a route accepts must be one R's `read.metharray.sheet` actually
-  exposes).
-- **R3 — Externalize the worker container name.** `R_WORKER_CONTAINER` is
-  hard-coded in `commands/base.py`; move it to `core/config.py` (env-driven) so
-  deployments and tests can override it.
-- **R4 — Configurable timeout.** `RCommand.timeout_seconds` has sensible
-  per-command defaults; expose a global override via env (`R_SCRIPT_TIMEOUT_SECONDS`).
-- **R5 — (Future) `RBackend` seam.** The executor is coupled to `docker exec`. An
-  interface with `DockerRBackend` / `MockRBackend` implementations would make the
-  pipeline services unit-testable without Docker.
-- **R6 — (Future) `JobRepository` seam.** `job_manager` mixes the state machine
-  (domain) with module-level dict storage. A thin repository interface would
-  decouple them and is the prerequisite for persistence or multi-worker scaling
-  (see §8.3).
-
-### 8.3 Known boundaries (by design, not defects)
-- **Single-process, in-memory state.** No horizontal scaling; a restart loses all
-  in-flight job state (files survive). Acceptable for the current single-instance
-  deployment; revisit via R6 + an external store (Redis/DB) if scaling is needed.
-- **Docker coupling.** The backend must be able to reach the Docker socket to
-  `exec` into the worker.
-
----
-
-## 9. Conventions (contributor checklist)
-
-- **New endpoint:** add a router in `app/api/routes/`, a Pydantic
-  request/response in `app/models/`, raise `AppException`/`problem_detail` for
-  errors. Keep it thin.
-- **New pipeline step:** add an `RCommand` subclass in `r_executor/commands/`,
-  add a service coroutine taking `cancel_event`, add the `(phase, status)`
-  transitions to `_ALLOWED_TRANSITIONS`, and schedule it via `pipeline_task`.
-  **Never** modify `executor.py` for a new step.
-- **State change:** only through `transition_job` / `set_progress`. Never mutate
-  `JobStatus` directly.
-- **Background work:** only through `pipeline_task`. Never create the
-  `cancel_event` or register the task in a service or route.
-- **Logging:** printf-style, key=value, per [logging-backend.md](./logging-backend.md).
-  No f-strings in log calls, no `print`.
+- **Single-process, in-memory state.** No horizontal scaling; a restart loses in-flight job state (files survive). Acceptable for the current single-instance deployment. Introducing an external store (Redis/DB) behind a repository seam is the path to scaling.
+- **Docker coupling.** The backend requires access to the Docker socket to `exec` into the worker — a documented trade-off (see [security.md](../backend/security.md)).

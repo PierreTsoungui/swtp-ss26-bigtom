@@ -22,14 +22,14 @@ def to_float(value: Any):
     try:
         return float(value)
     except (TypeError, ValueError):
-      raise HTTPException(
+        raise HTTPException(
             status_code=400,
             detail=problem_detail(
                 error_type=ErrorTypes.INVALID_PARAMETER,
                 detail=f"Invalid filter value: {value}",
                 instance="/api/table",
-            )
-        )
+            ),
+        ) from None
     
 
 # FILTER DEFINITIONS

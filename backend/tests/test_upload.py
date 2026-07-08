@@ -3,7 +3,6 @@ import pytest
 from fastapi.testclient import TestClient
 from pathlib import Path
 import sys
-import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -12,7 +11,7 @@ from app.main import app
 client = TestClient(app)
 
 
-# TEST DATA PATHS: Der Pfad  kann angepasst werden, um auf die Testdaten zu verweisen.
+# TEST DATA PATHS: adjust this path to point at your test data.
 
 TEST_DATA_DIR     = Path(__file__).resolve().parents[1].parent / "jobs" / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
 SAMPLE_SHEET_PATH = Path(__file__).resolve().parents[1].parent / "jobs" / "07b7fa29-8a9d-418d-bc16-8308a2b387fd" / "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"

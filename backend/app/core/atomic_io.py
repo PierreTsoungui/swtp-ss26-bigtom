@@ -7,6 +7,7 @@ subsequent read. These helpers write to a temporary file in the same directory
 and atomically ``os.replace`` it into place, so a reader ever only sees the old
 or the new complete file — never a half-written one.
 """
+import contextlib
 import json
 import os
 import tempfile
@@ -34,10 +35,8 @@ def write_json_atomic(path: Path | str, data: Any, *, indent: int | None = None)
         os.replace(tmp_name, path)
     except BaseException:
         # Never leave a stray temp file behind if writing or replacing fails.
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_name)
-        except OSError:
-            pass
         raise
 
 

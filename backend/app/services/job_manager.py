@@ -6,7 +6,6 @@ and background-task registries used to drive and reset the pipeline.
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, Optional, Any, Set, Tuple
 

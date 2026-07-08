@@ -82,7 +82,7 @@ def read_data_section(job_dir: Path) -> tuple[list[str], list[list[str]]]:
         raise AppException(
             ErrorTypes.INVALID_CSV_CONTENT,
             detail=f"The SampleSheet could not be read: {exc}",
-        )
+        ) from exc
 
 
 def columns_by_index(

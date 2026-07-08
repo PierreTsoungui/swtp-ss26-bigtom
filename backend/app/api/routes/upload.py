@@ -184,7 +184,7 @@ def _parse_filter_settings(raw: str, request: Request) -> FilterSettings:
                 f"Failed to parse filter_settings: {exc}",
                 request.url.path,
             ),
-        )
+        ) from exc
     except KeyError:
         raise HTTPException(
             status_code=400,
@@ -193,7 +193,7 @@ def _parse_filter_settings(raw: str, request: Request) -> FilterSettings:
                 'filter_settings is missing from the request body. Expected: {"filter_settings": {...}}',
                 request.url.path,
             ),
-        )
+        ) from None
 
     try:
         return FilterSettings.model_validate(parsed)
@@ -201,4 +201,4 @@ def _parse_filter_settings(raw: str, request: Request) -> FilterSettings:
         raise HTTPException(
             status_code=400,
             detail=problem_detail(ErrorTypes.INVALID_FILTER_PARAM, str(exc), request.url.path),
-        )
+        ) from exc

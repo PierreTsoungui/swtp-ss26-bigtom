@@ -123,7 +123,7 @@ async def run_batch_correction(
         raise BatchException(
             ErrorTypes.INVALID_STATE_TRANSITION,
             detail=str(e),
-        )
+        ) from e
 
     settings_dict = settings.model_dump()
 

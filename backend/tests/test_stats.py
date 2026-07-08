@@ -1,6 +1,5 @@
 import sys
 import time
-import pytest
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -18,7 +17,7 @@ class TestFilterWithRealData:
     def poll_status(self, job_id: str, max_polls: int = 5, interval: float = 0.5):
         """Simulate frontend polling"""
         status_history = []
-        for i in range(max_polls):
+        for _ in range(max_polls):
             response = client.get(f"/api/v1/status/{job_id}")
             if response.status_code == 200:
                 status_history.append(response.json())
@@ -46,7 +45,7 @@ class TestFilterWithRealData:
             print(f"   Poll {i+1}: Phase={data['phase']}, Progress={data['progress_percent']}%")
             time.sleep(0.5)
         
-        print(f" 3 status updates received")
+        print(" 3 status updates received")
     
     def test_progress_increases_over_time(self, idat_files, sample_sheet):
         """Test: Progress increases with each poll"""
@@ -55,7 +54,7 @@ class TestFilterWithRealData:
         upload_response = client.post("/api/v1/upload", files=files)
         job_id = upload_response.json()["job_id"]
         
-        print(f"\n Progress history:")
+        print("\n Progress history:")
         
         progress_values = []
         for i in range(6):
@@ -82,7 +81,7 @@ class TestFilterWithRealData:
         upload_response = client.post("/api/v1/upload", files=files)
         job_id = upload_response.json()["job_id"]
         
-        print(f"\n Stats queries during filtering:")
+        print("\n Stats queries during filtering:")
         
         responses = []
         for i in range(3):
@@ -125,7 +124,7 @@ class TestFilterCompletion:
         upload_response = client.post("/api/v1/upload", files=files)
         job_id = upload_response.json()["job_id"]
         
-        print(f"\n Waiting for filtering to complete...")
+        print("\n Waiting for filtering to complete...")
         
         if self.wait_for_completion(job_id):
             print("Filtering complete")

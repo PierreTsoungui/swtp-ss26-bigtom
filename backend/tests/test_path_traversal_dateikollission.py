@@ -168,7 +168,7 @@ def test_save_both_sample_sheet_and_idat(tmp_path):
         create_upload_file("sample2.idat"),
     ]
 
-    sheet_path = save_sample_sheet(sheet, tmp_path)
+    save_sample_sheet(sheet, tmp_path)
     idat_paths = save_idat_files(idat_files, tmp_path)
 
     assert (tmp_path / "SampleSheet.csv").exists()
@@ -184,7 +184,7 @@ def test_save_sample_sheet_with_empty_content(tmp_path):
     tmp_path.mkdir(parents=True, exist_ok=True)
     file = create_upload_file("sheet.csv", b"")
 
-    saved_path = save_sample_sheet(file, tmp_path)
+    save_sample_sheet(file, tmp_path)
 
     expected_path = tmp_path / "SampleSheet.csv"
     assert expected_path.exists()

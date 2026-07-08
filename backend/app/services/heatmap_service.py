@@ -12,16 +12,11 @@ import pandas as pd
 
 from app.core.error_types import AppException, ErrorTypes
 from app.models.heatmap import GroupingPayload
-from app.services import job_manager
 from app.services.table_filter import apply_filters
 from app.services.r_executor import run_r_script, HeatmapCommand
 from app.services.job_paths import JOBS_DIR, resolve_job_dir
-from app.services.samplesheet_parser import (
-    find_sample_sheet_name,
-    read_data_section,
-    columns_by_index,
-)
-from app.services.job_manager import transition_job, set_progress, get_job, JobPhase, JobStatusValue
+from app.services.samplesheet_parser import read_data_section, columns_by_index
+from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
 
 logger = logging.getLogger(__name__)
 
@@ -327,7 +322,7 @@ def get_grouping_options_from_samplesheet(job_dir: Path) -> list:
         raise AppException(
             ErrorTypes.INVALID_CSV_CONTENT,
             detail=f"The SampleSheet could not be analyzed for the heatmap: {e}",
-        )
+        ) from e
 
 
 def _classify_column(values: list[str], n_distinct: int, total_samples: int) -> str:
@@ -385,4 +380,4 @@ def find_annotation_columns(job_dir: Path) -> list[dict]:
         raise AppException(
             ErrorTypes.INVALID_CSV_CONTENT,
             detail=f"The SampleSheet could not be analyzed for the heatmap: {e}",
-        )
+        ) from e

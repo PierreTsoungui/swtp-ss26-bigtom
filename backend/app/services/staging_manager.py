@@ -45,7 +45,9 @@ def _resolve_session_dir(session_id: str) -> Path:
     try:
         uuid.UUID(session_id)
     except (ValueError, AttributeError, TypeError):
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Invalid session id: {session_id!r}")
+        raise AppException(
+            ErrorTypes.SESSION_NOT_FOUND, f"Invalid session id: {session_id!r}"
+        ) from None
 
     base = _base_dir()
     session_dir = (base / session_id).resolve()

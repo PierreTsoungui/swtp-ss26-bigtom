@@ -170,8 +170,13 @@ def test_lifespan_starts_cleanup_task(monkeypatch):
         started = asyncio.Event()
         keep_running = asyncio.Event()
 
-        async def fake_cleanup_loop():
-            """Simulate a continuously running cleanup service."""
+        async def fake_cleanup_loop(*args, **kwargs):
+            """Simulate a continuously running cleanup loop.
+
+            Accepts arbitrary arguments because ``lifespan`` starts the loop once
+            for the job directory and again (with keyword arguments) for the
+            staging directory.
+            """
             started.set()
             await keep_running.wait()
 
