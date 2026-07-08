@@ -1,4 +1,5 @@
 # app/api/routes/heatmap.py
+"""Routes for the heatmap: annotation options, running it and fetching the image."""
 from fastapi import APIRouter, Query, status
 from fastapi.responses import FileResponse
 
@@ -23,12 +24,14 @@ _MEDIA_TYPES  = {"png": "image/png", "pdf": "application/pdf"}
 
 @router.get("/{job_id}/options", response_model=HeatmapOptionsResponse, status_code=status.HTTP_200_OK)
 def get_heatmap_options(job_id: str):
+    """Return the sample-sheet columns available as heatmap annotations."""
     job_dir = heatmap_service.get_job_dir_or_404(job_id)
     return {"job_id": job_id, "available_columns": find_annotation_columns(job_dir)}
 
 
 @router.post("/{job_id}", response_model=HeatmapRunResponse, status_code=status.HTTP_202_ACCEPTED)
 async def run_heatmap(job_id: str, payload: HeatmapRequest):
+    """Validate the grouping/filters and start a heatmap run in the background."""
     job_dir = heatmap_service.get_job_dir_or_404(job_id)
 
     # The job directory can outlive its in-memory session (e.g. after a backend
@@ -41,7 +44,7 @@ async def run_heatmap(job_id: str, payload: HeatmapRequest):
     if current_job.status == JobStatusValue.RUNNING.value:
         raise AppException(
             ErrorTypes.HEATMAP_NOT_ALLOWED,
-            detail="Eine Pipeline läuft bereits für diesen Job.",
+            detail="A pipeline is already running for this job.",
         )
 
     # ── Validate the chosen annotation columns against the sample sheet ──────
@@ -49,21 +52,21 @@ async def run_heatmap(job_id: str, payload: HeatmapRequest):
     if payload.grouping.primary not in available:
         raise AppException(
             ErrorTypes.INVALID_GROUPING_COLUMN,
-            detail=f"Primäre Gruppierungsspalte '{payload.grouping.primary}' nicht im SampleSheet.",
+            detail=f"Primary grouping column '{payload.grouping.primary}' is not in the sample sheet.",
             provided=payload.grouping.primary,
             available=available,
         )
     if payload.grouping.secondary and payload.grouping.secondary not in available:
         raise AppException(
             ErrorTypes.INVALID_GROUPING_COLUMN,
-            detail=f"Sekundäre Gruppierungsspalte '{payload.grouping.secondary}' nicht im SampleSheet.",
+            detail=f"Secondary grouping column '{payload.grouping.secondary}' is not in the sample sheet.",
             provided=payload.grouping.secondary,
             available=available,
         )
     if payload.grouping.secondary and payload.grouping.primary == payload.grouping.secondary:
         raise AppException(
             ErrorTypes.INVALID_GROUPING_COLUMN,
-            detail="Primäre und sekundäre Gruppierungsspalte dürfen nicht identisch sein.",
+            detail="The primary and secondary grouping columns must not be identical.",
         )
 
     dmp_rds    = heatmap_service._find_dmp_rds(job_dir)
@@ -77,7 +80,7 @@ async def run_heatmap(job_id: str, payload: HeatmapRequest):
         new_phase=JobPhase.HEATMAP,
         new_status=JobStatusValue.RUNNING,
         progress_percent=0,
-        current_step="Heatmap-Generierung gestartet...",
+        current_step="Heatmap generation started...",
     )
 
     start_job_pipeline(
@@ -94,20 +97,21 @@ async def run_heatmap(job_id: str, payload: HeatmapRequest):
         "heatmap_metadata": {
             "detected_cpgs":   selected_cpgs,
             "plotted_samples": 0,
-            "message":         "Heatmap-Generierung gestartet.",
+            "message": "Heatmap generation started.",
         },
     }
 
 
 @router.get("/{job_id}", status_code=status.HTTP_200_OK)
 def get_heatmap(job_id: str, format: str = Query("png", pattern="^(png|pdf)$")):
+    """Return the rendered heatmap for a job as a PNG (default) or PDF file."""
     job_dir = heatmap_service.get_job_dir_or_404(job_id)
     file_path = job_dir / _OUTPUT_FILES[format]
 
     if not file_path.exists():
         raise AppException(
             ErrorTypes.PLOT_NOT_FOUND,
-            detail=f"Heatmap ({format.upper()}) für Job '{job_id}' noch nicht verfügbar.",
+            detail=f"Heatmap ({format.upper()}) for job '{job_id}' is not available yet.",
         )
 
     return FileResponse(file_path, media_type=_MEDIA_TYPES[format])

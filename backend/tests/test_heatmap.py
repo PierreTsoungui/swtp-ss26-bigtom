@@ -1,18 +1,16 @@
 # tests/test_heatmap.py
 
-import json
 import pytest
 from fastapi.testclient import TestClient
 from pathlib import Path
 import sys
-import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.main import app
+from app.models.job import JobStatus
 from app.services import heatmap_service, job_manager
 from app.core.error_types import ErrorTypes
-from datetime import datetime, timedelta
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -23,7 +21,11 @@ VALID_JOB_ID = "test-heatmap-job"
 
 @pytest.fixture
 def mock_job(tmp_path, monkeypatch):
-    """Create an isolated test environment for a heatmap job."""
+    """Create an isolated heatmap job: patched JOBS_DIR + an in-memory job.
+
+    The job starts in RESULTS/WAITING, the state from which a heatmap run is
+    allowed.
+    """
     monkeypatch.setattr(heatmap_service, "JOBS_DIR", tmp_path)
     monkeypatch.setattr(job_manager, "jobs", {})
 
@@ -31,44 +33,41 @@ def mock_job(tmp_path, monkeypatch):
     job_dir = tmp_path / job_id
     job_dir.mkdir()
 
-    # Create a mock job in job_manager - must be in "waiting" state
-    from app.models.job import JobStatus
-    mock_job_obj = JobStatus(
+    job_manager.jobs[job_id] = JobStatus(
         job_id=job_id,
-        status="waiting",
-        phase="results",
+        status=job_manager.JobStatusValue.WAITING.value,
+        phase=job_manager.JobPhase.RESULTS.value,
         progress_percent=100,
         current_step="Test job",
-        temp_dir=str(job_dir),
-        created_at=datetime.now(),
-        expires_at=datetime.now() + timedelta(hours=24)
     )
-    job_manager.jobs[job_id] = mock_job_obj
 
     return job_id, job_dir
 
 
 @pytest.fixture
 def mock_job_with_samplesheet(mock_job):
-    """Extended fixture: job directory with valid sample sheet and DMP RDS."""
+    """Extend ``mock_job`` with the DMP artifacts a heatmap run consumes.
+
+    A heatmap run needs the sample sheet (grouping columns), the DMP result RDS
+    (``_find_dmp_rds``) and the DMP result CSV (``prepare_heatmap_input`` selects
+    the CpGs from it using the same filter layer as the table view).
+    """
     job_id, job_dir = mock_job
 
-    # Ensure job is in the correct state for heatmap transition
-    job_manager.jobs[job_id].status = "waiting"
-    job_manager.jobs[job_id].phase = "results"
-
-    csv_content = (
+    (job_dir / "SampleSheet.csv").write_text(
         "[Data],,,,\n"
         "Sample_Name,Sample_Group,Sentrix_ID,Sentrix_Position,Sample_Plate\n"
         "HeLa,Cellline,206891110001,R01C01,Plate_1\n"
         "Jurkat,Cellline,206891110002,R02C01,Plate_1\n"
         "Raji,Coriell,206891110001,R03C01,Plate_1\n"
-        "NA12873,Coriell,206891110002,R04C01,Plate_1\n"
+        "NA12873,Coriell,206891110002,R04C01,Plate_1\n",
+        encoding="utf-8",
     )
-    (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
-
-    # Minimal fake RDS file so _find_dmp_rds() finds it
     (job_dir / "dmp_results.rds").write_bytes(b"fake_rds")
+    dmp_rows = "".join(f"cg{i:07d},0.0{i},0.3,chr19\n" for i in range(1, 11))
+    (job_dir / "dmp_results.csv").write_text(
+        "ID,adj.P.Val,deltaBeta,CHR\n" + dmp_rows, encoding="utf-8"
+    )
 
     return job_id, job_dir
 
@@ -76,7 +75,12 @@ def mock_job_with_samplesheet(mock_job):
 # ── GET /options TESTS ────────────────────────────────────────────────────────
 
 def test_get_heatmap_options_success(mock_job_with_samplesheet):
-    """Test successful retrieval of heatmap options."""
+    """The options endpoint returns every column as a typed annotation candidate.
+
+    The heatmap is permissive: it offers every sample-sheet column and annotates
+    each with a type hint (categorical / identifier / continuous) so the frontend
+    can render or de-emphasise it appropriately.
+    """
     job_id, _ = mock_job_with_samplesheet
 
     response = client.get(f"/api/v1/heatmap/{job_id}/options")
@@ -84,9 +88,13 @@ def test_get_heatmap_options_success(mock_job_with_samplesheet):
 
     data = response.json()
     assert data["job_id"] == job_id
-    assert "Sample_Group" in data["available_columns"]
-    assert "Sample_Name" not in data["available_columns"]
-    assert "Sample_Plate" not in data["available_columns"]
+    by_name = {col["name"]: col for col in data["available_columns"]}
+
+    # A low-cardinality biological factor is offered as a categorical annotation.
+    assert by_name["Sample_Group"]["type"] == "categorical"
+    assert by_name["Sample_Group"]["n_distinct"] == 2
+    # A per-sample column is still offered, but flagged as an identifier.
+    assert by_name["Sample_Name"]["type"] == "identifier"
 
 
 def test_get_heatmap_options_job_not_found(mock_job):
@@ -98,24 +106,26 @@ def test_get_heatmap_options_job_not_found(mock_job):
     assert data["type"] == ErrorTypes.JOB_NOT_FOUND.path
 
 
-def test_get_heatmap_options_all_filtered(mock_job):
-    """Test heatmap options when all columns are filtered out."""
+def test_get_heatmap_options_no_annotatable_columns(mock_job):
+    """A sheet whose columns hold no values yields no annotation candidates.
+
+    Only fully empty columns are excluded, so this is the single case in which
+    the permissive finder returns an empty list.
+    """
     job_id, job_dir = mock_job
 
     csv_content = (
-        "[Data],,,\n"
-        "Sample_Name,Project,Barcode\n"
-        "Sample_01,Studie_2026,BC_991\n"
-        "Sample_02,Studie_2026,BC_992\n"
-        "Sample_03,Studie_2026,BC_993\n"
+        "[Data],\n"
+        "Col_A,Col_B\n"
+        ",\n"
+        ",\n"
     )
     (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
 
     response = client.get(f"/api/v1/heatmap/{job_id}/options")
     assert response.status_code == 200
 
-    data = response.json()
-    assert data["available_columns"] == []
+    assert response.json()["available_columns"] == []
 
 
 # ── POST /{job_id} TESTS ──────────────────────────────────────────────────────
@@ -131,14 +141,7 @@ def test_run_heatmap_success(mock_job_with_samplesheet, monkeypatch):
     # Patch the actual function that gets called
     monkeypatch.setattr(heatmap_service, "run_heatmap_pipeline_task", mock_pipeline_task)
 
-    payload = {
-        "grouping": {"primary": "Sample_Group"},
-        "dmp_filter": {
-            "chromosome": "chr19",
-            "start": 53700000,
-            "stop": 54700000
-        }
-    }
+    payload = {"grouping": {"primary": "Sample_Group"}}
 
     response = client.post(f"/api/v1/heatmap/{job_id}", json=payload)
     assert response.status_code == 202
@@ -160,11 +163,7 @@ def test_run_heatmap_with_secondary_grouping(mock_job_with_samplesheet, monkeypa
     payload = {
         "grouping": {
             "primary": "Sample_Group",
-            "secondary": "Sentrix_ID"
-        },
-        "dmp_filter": {
-            "adj_p_value_max": 0.05,
-            "delta_beta_min": 0.2
+            "secondary": "Sentrix_ID",
         }
     }
 
@@ -239,12 +238,13 @@ def test_run_heatmap_job_not_found(mock_job):
     assert data["type"] == ErrorTypes.JOB_NOT_FOUND.path
 
 
-def test_run_heatmap_session_expired(mock_job_with_samplesheet, no_run):
+def test_run_heatmap_session_expired(mock_job_with_samplesheet):
     """Job dir on disk but the in-memory session is gone (e.g. backend restart).
 
     This must yield a clean RFC 9457 410 response, not the unhandled KeyError /
     raw 500 that previously made the frontend fail with
-    "JSON.parse: unexpected character at line 1 column 1".
+    "JSON.parse: unexpected character at line 1 column 1". The 410 is raised
+    before any pipeline work starts, so no run needs to be mocked.
     """
     job_id, _ = mock_job_with_samplesheet
     # Simulate the lost session: files remain, but the job manager forgot the job.

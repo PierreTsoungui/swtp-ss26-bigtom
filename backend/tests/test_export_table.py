@@ -14,19 +14,19 @@ def mock_job(tmp_path):
     job_dir = tmp_path / job_id
     job_dir.mkdir()
 
-    # Erstellt die DMP-Testdatei mit den passenden Backend-Spalten
+    # Create the DMP test file with the columns the backend expects.
     def create_dmp_csv(path):
         with open(path, "w") as f:
-            # Ihr Backend sucht nach 'CHR' und 'ADJ_P'
+            # The backend filters on 'CHR' and 'ADJ_P'.
             f.write("cpg_id,206891110001_R01C01,score,CHR,ADJ_P\n")
             for i in range(100):
                 adj_p = round(0.01 + (i * 0.001), 4)
                 f.write(f"cg{i:08d}_BC11,{i * 0.1},{float(i)},chr1,{adj_p}\n")
 
-    # Erstellt die DMR-Testdatei mit den passenden Backend-Spalten
+    # Create the DMR test file with the columns the backend expects.
     def create_dmr_csv(path):
         with open(path, "w") as f:
-            # Ihr DMR-Backend sucht nach 'CHR' und 'P_VALUE'
+            # The DMR backend filters on 'CHR' and 'P_VALUE'.
             f.write("cpg_id,206891110001_R01C01,score,CHR,P_VALUE\n")
             for i in range(100):
                 p_val = round(0.01 + (i * 0.001), 4)
@@ -164,7 +164,7 @@ def test_export_filter_chr(mock_job):
 def test_export_filter_pvalue(mock_job):
     job_id, tmp_path = mock_job
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        # KORREKTUR: 'filter_adj_p_value' statt 'filter_p_value' für dmp verwendet
+        # DMP filters on 'filter_adj_p_value' (not 'filter_p_value').
         response = client.get(
             f"/api/v1/table/{job_id}/dmp/export"
             "?filter_adj_p_value=0.05"
@@ -175,7 +175,7 @@ def test_export_filter_pvalue(mock_job):
 
 
 # --------------------------------------------------
-# KEINE PAGINATION
+# NO PAGINATION
 # --------------------------------------------------
 
 def test_export_contains_more_rows_than_page(mock_job):
@@ -200,7 +200,7 @@ def test_export_contains_more_rows_than_page(mock_job):
 
 
 # --------------------------------------------------
-# FEHLERFÄLLE
+# ERROR CASES
 # --------------------------------------------------
 
 def test_export_unknown_job(tmp_path):
@@ -215,21 +215,18 @@ def test_export_unknown_job(tmp_path):
 def test_export_unknown_table(mock_job):
     job_id, tmp_path = mock_job
     
-    # Wir senden die Anfrage für eine Tabelle 'abc', die es nicht gibt
+    # Request an unknown table name; the job exists, so the table validation
+    # (not the missing-job check) rejects it with a 400.
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
         response = client.get(
             f"/api/v1/table/{job_id}/abc/export"
         )
 
-    # Wenn Ihr Backend den Namen nicht validiert, sucht es nach 'abc_results.csv'.
-    # Da diese Datei im mock_job nicht existiert, sollte die App 404 oder 400 liefern.
-    # Falls Ihre Route bei fehlender Datei eine leere CSV mit Code 200 erlaubt,
-    # passen wir das Assert hier an den tatsächlichen Zustand Ihrer App an:
-    assert response.status_code in [200, 400, 404]
+    assert response.status_code == 400
 
 
 # --------------------------------------------------
-# DATEINAME
+# FILENAME
 # --------------------------------------------------
 
 def test_export_filename(mock_job):

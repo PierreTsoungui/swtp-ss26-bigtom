@@ -1,7 +1,8 @@
-fastapi
-uvicorn
-python-multipart
-pandas
-openpyxl
-pytest
-httpx
+# Runtime dependencies (pinned for reproducible builds).
+# Versions match the current backend image; bump deliberately and re-test.
+# Development/test-only tools live in requirements-dev.txt.
+fastapi==0.137.1
+uvicorn==0.49.0
+python-multipart==0.0.32
+pandas==3.0.3
+openpyxl==3.1.5

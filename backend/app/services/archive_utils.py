@@ -46,6 +46,7 @@ class ArchiveError(Exception):
     """A ZIP was rejected. ``code`` maps to an HTTP error type in the caller."""
 
     def __init__(self, code: str, message: str):
+        """Store the error ``code`` and the human-readable ``message``."""
         self.code = code
         super().__init__(message)
 
@@ -53,12 +54,15 @@ class ArchiveError(Exception):
 @dataclass(frozen=True)
 class ExtractedFile:
     """A file that was safely written to the destination directory."""
+
     path: Path      # absolute path on disk
     rel_path: str   # path of the member inside the archive (for display)
 
 
 @dataclass
 class ExtractionResult:
+    """Outcome of a safe archive extraction: written files and skipped members."""
+
     files: list[ExtractedFile] = field(default_factory=list)
     # Real, non-junk entries that were *not* extracted (unsupported type).
     skipped_unsupported: list[str] = field(default_factory=list)
@@ -77,7 +81,7 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path) -> ExtractionResult:
     try:
         zf = zipfile.ZipFile(zip_path)
     except zipfile.BadZipFile as exc:
-        raise ArchiveError("invalid", f"Archiv ist beschädigt oder kein ZIP: {exc}") from exc
+        raise ArchiveError("invalid", f"Archive is corrupt or not a ZIP: {exc}") from exc
 
     result = ExtractionResult()
     total_unpacked = 0
@@ -104,13 +108,13 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path) -> ExtractionResult:
             if total_unpacked > MAX_UNPACKED_TOTAL_BYTES:
                 raise ArchiveError(
                     "too_large",
-                    "Entpackte Gesamtgröße überschreitet das Limit.",
+                    "The total unpacked size exceeds the limit.",
                 )
 
             result.files.append(ExtractedFile(path=target, rel_path=rel))
 
     if not result.files:
-        raise ArchiveError("no_supported", "Das Archiv enthält keine verwertbaren Dateien.")
+        raise ArchiveError("no_supported", "The archive contains no usable files.")
 
     return result
 
@@ -118,7 +122,7 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path) -> ExtractionResult:
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _is_junk(member: zipfile.ZipInfo) -> bool:
-    """True for entries we drop silently: directories, symlinks, OS junk, hidden."""
+    """Return True for entries dropped silently: dirs, symlinks, OS junk, hidden."""
     if member.is_dir():
         return True
 
@@ -140,11 +144,11 @@ def _is_junk(member: zipfile.ZipInfo) -> bool:
 def _check_archive_envelope(members: list[zipfile.ZipInfo]) -> None:
     """Cheap up-front guards from the central directory before extracting bytes."""
     if len(members) > MAX_ARCHIVE_FILE_COUNT:
-        raise ArchiveError("too_large", "Das Archiv enthält zu viele Dateien.")
+        raise ArchiveError("too_large", "The archive contains too many files.")
 
     declared_total = sum(m.file_size for m in members)
     if declared_total > MAX_UNPACKED_TOTAL_BYTES:
-        raise ArchiveError("too_large", "Angekündigte entpackte Größe überschreitet das Limit.")
+        raise ArchiveError("too_large", "The declared unpacked size exceeds the limit.")
 
     compressed_total = sum(m.compress_size for m in members)
     if (
@@ -152,7 +156,7 @@ def _check_archive_envelope(members: list[zipfile.ZipInfo]) -> None:
         and compressed_total > 0
         and declared_total / compressed_total > MAX_COMPRESSION_RATIO
     ):
-        raise ArchiveError("too_large", "Verdächtiges Kompressionsverhältnis (mögliche Zip-Bombe).")
+        raise ArchiveError("too_large", "Suspicious compression ratio (possible zip bomb).")
 
 
 def _safe_target(dest_root: Path, member_name: str) -> Path:
@@ -165,15 +169,15 @@ def _safe_target(dest_root: Path, member_name: str) -> Path:
     pure = PurePosixPath(normalized)
 
     if pure.is_absolute() or (len(normalized) > 1 and normalized[1] == ":"):
-        raise ArchiveError("invalid", f"Absoluter Pfad im Archiv abgelehnt: {member_name!r}")
+        raise ArchiveError("invalid", f"Absolute archive path rejected: {member_name!r}")
 
     parts = [p for p in pure.parts if p not in ("", ".")]
     if any(p == ".." for p in parts):
-        raise ArchiveError("invalid", f"Pfad-Traversal im Archiv abgelehnt: {member_name!r}")
+        raise ArchiveError("invalid", f"Archive path traversal rejected: {member_name!r}")
 
     target = dest_root.joinpath(*parts)
     if not target.resolve().is_relative_to(dest_root):
-        raise ArchiveError("invalid", f"Eintrag liegt außerhalb des Zielordners: {member_name!r}")
+        raise ArchiveError("invalid", f"Entry is outside the target directory: {member_name!r}")
 
     return target
 
@@ -196,7 +200,7 @@ def _extract_member(zf: zipfile.ZipFile, member: zipfile.ZipInfo, target: Path) 
                 target.unlink(missing_ok=True)
                 raise ArchiveError(
                     "too_large",
-                    f"Datei überschreitet das Einzeldatei-Limit: {member.filename!r}",
+                    f"File exceeds the single-file limit: {member.filename!r}",
                 )
             dst.write(chunk)
 

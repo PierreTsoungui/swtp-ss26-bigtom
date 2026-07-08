@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 class JobStatus(BaseModel):
     """Internal job model — stored in the job_manager registry."""
+
     job_id:           str
     status:           str
     phase:            str
@@ -23,6 +24,7 @@ class JobStatus(BaseModel):
 
 class StatusResponse(BaseModel):
     """Job status as returned by GET /status/{job_id} (UPPC-conformant)."""
+
     job_id:           str
     status:           str
     phase:            str

@@ -1,5 +1,5 @@
 # app/services/job_cleanup_service.py
-"""Entfernt abgelaufene Job-Verzeichnisse automatisch vom Server."""
+"""Automatically remove expired job directories from the server."""
 import asyncio
 import logging
 import shutil
@@ -20,7 +20,7 @@ def cleanup_expired_jobs(
     retention_hours: float = JOB_RETENTION_HOURS,
     now: float | None = None,
 ) -> int:
-    """Löscht abgelaufene Job-Verzeichnisse und gibt deren Anzahl zurück."""
+    """Delete expired job directories and return how many were removed."""
     jobs_dir = Path(jobs_dir)
     if not jobs_dir.exists():
         logger.info("Job cleanup skipped: directory does not exist: %s", jobs_dir)
@@ -60,7 +60,7 @@ async def run_job_cleanup_loop(
     retention_hours: float = JOB_RETENTION_HOURS,
     interval_seconds: int = JOB_CLEANUP_INTERVAL_SECONDS,
 ) -> None:
-    """Führt die Job-Bereinigung dauerhaft im konfigurierten Intervall aus."""
+    """Run the job cleanup continuously at the configured interval."""
     logger.info(
         "Job cleanup started: directory=%s, retention_hours=%s, interval_seconds=%s",
         jobs_dir, retention_hours, interval_seconds,

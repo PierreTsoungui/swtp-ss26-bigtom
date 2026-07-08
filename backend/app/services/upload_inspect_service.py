@@ -67,7 +67,7 @@ _ROLE_TO_FIELD = {
 async def inspect_upload(files: list[UploadFile]) -> InspectManifest:
     """Stage and classify an upload; return the manifest (raises on fatal error)."""
     if not files:
-        raise AppException(ErrorTypes.NO_SUPPORTED_FILES, "Es wurden keine Dateien hochgeladen.")
+        raise AppException(ErrorTypes.NO_SUPPORTED_FILES, "No files were uploaded.")
 
     session_id, session_dir = staging_manager.create_session()
     try:
@@ -78,7 +78,7 @@ async def inspect_upload(files: list[UploadFile]) -> InspectManifest:
         raise
     except Exception:
         staging_manager.delete_session(session_id)
-        logger.exception("Unerwarteter Fehler beim Inspect: session_id=%s", session_id)
+        logger.exception("Unexpected error during inspect: session_id=%s", session_id)
         raise
 
 
@@ -144,7 +144,7 @@ def _stage_zip_member(upload: UploadFile, session_dir: Path, index: int, skipped
 
 def _check_total(total: int) -> int:
     if total > MAX_UPLOAD_REQUEST_BYTES:
-        raise AppException(ErrorTypes.ARCHIVE_TOO_LARGE, "Upload überschreitet das Gesamtlimit.")
+        raise AppException(ErrorTypes.ARCHIVE_TOO_LARGE, "Upload exceeds the total limit.")
     return total
 
 
@@ -161,7 +161,7 @@ def _stream_to_file(src, target: Path, max_bytes: int) -> int:
             if written > max_bytes:
                 dst.close()
                 target.unlink(missing_ok=True)
-                raise AppException(ErrorTypes.ARCHIVE_TOO_LARGE, "Eine Datei überschreitet das Limit.")
+                raise AppException(ErrorTypes.ARCHIVE_TOO_LARGE, "A file exceeds the limit.")
             dst.write(chunk)
     return written
 
@@ -183,7 +183,7 @@ def _build_manifest(session_id: str, session_dir: Path, source: str, skipped: li
             sheet_files.append((path, rel))
 
     if not sheet_files and not idat_files:
-        raise AppException(ErrorTypes.NO_SUPPORTED_FILES, "Keine verwertbaren Dateien (IDAT/Sample-Sheet) gefunden.")
+        raise AppException(ErrorTypes.NO_SUPPORTED_FILES, "No usable files (IDAT/sample sheet) found.")
 
     candidates, sheet_map, sheet_other = _classify_sheets(sheet_files)
     pairs, pair_map, idat_other = _pair_idats(idat_files)
@@ -333,9 +333,14 @@ def _persist_internal(session_dir: Path, sheet_map: dict[str, str], pair_map: di
 
 
 def load_internal(session_dir: Path) -> dict:
+    """Load the staging session's internal manifest, or raise if it is missing.
+
+    Raises:
+        AppException: ``SESSION_NOT_FOUND`` if the internal manifest is absent.
+    """
     path = session_dir / INTERNAL_MANIFEST
     if not path.exists():
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, "Manifest der Upload-Session fehlt.")
+        raise AppException(ErrorTypes.SESSION_NOT_FOUND, "The upload session manifest is missing.")
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -346,11 +351,11 @@ def build_sheet_preview(session_dir: Path, sheet_id: str, max_rows: int):
     internal = load_internal(session_dir)
     sheet_rel = internal.get("sheets", {}).get(sheet_id)
     if sheet_rel is None:
-        raise AppException(ErrorTypes.INVALID_SELECTION, f"Sample-Sheet nicht gefunden: {sheet_id!r}")
+        raise AppException(ErrorTypes.INVALID_SELECTION, f"Sample sheet not found: {sheet_id!r}")
 
     src = (session_dir / sheet_rel).resolve()
     if not src.is_relative_to(session_dir.resolve()) or not src.is_file():
-        raise AppException(ErrorTypes.INVALID_SELECTION, "Sample-Sheet nicht im Staging.")
+        raise AppException(ErrorTypes.INVALID_SELECTION, "Sample sheet not in staging.")
 
     # Show the raw columns/rows so the preview matches the dropdown options.
     columns, rows = read_sample_sheet_table(src.read_bytes(), src.name)

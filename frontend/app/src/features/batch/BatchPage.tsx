@@ -45,6 +45,7 @@ export function BatchPage() {
     runBatch,
     skipBatch,
     isSubmitting,
+    fetchHistory
   } = useBatchCorrection(job_id);
 
   // Distinguishes a real round completion from the stale BATCH+WAITING status
@@ -90,6 +91,7 @@ export function BatchPage() {
 
     if (batchFinished && showProgressBar) {
       setShowProgressBar(false);
+      void fetchHistory();
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [jobStatus, showProgressBar, navigate, job_id]);

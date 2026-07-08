@@ -1,19 +1,27 @@
 # app/services/batch_service.py
+"""Batch-correction and downstream-analysis services, plus sample-sheet helpers."""
 import asyncio
-import json
-import csv
-import glob
 import logging
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
+from app.core.atomic_io import write_json_atomic, read_json_or_default
 from app.core.config import DMR_CORES
 from app.core.error_types import BatchException, ErrorTypes
 from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
+from app.services.job_paths import JOBS_DIR, resolve_job_dir
+# find_sample_sheet_name is re-exported here so existing importers
+# (heatmap/normalize services, routes) keep resolving it from batch_service.
+from app.services.samplesheet_parser import find_sample_sheet_name, read_data_section
+from app.services.pipeline_outcome import (
+    progress_fields,
+    failure_detail,
+    handle_step_result,
+    StepOutcome,
+)
 from app.services.r_executor import (
     run_r_script,
-    ExecutionResult,
     BatchCorrectionCommand,
     SvdPlotCommand,
     DmrAnalysisCommand,
@@ -24,63 +32,13 @@ from app.services.r_executor import (
 logger = logging.getLogger(__name__)
 
 
-def _failure_detail(result: ExecutionResult, fallback: str) -> str:
-    """Best human-readable reason for a failed R step.
-
-    Prefer the structured message the R script emitted via {"type":"error"}
-    (captured in extra["r_error"]) over the raw stderr dump, which is full of
-    package-loading noise and would otherwise be shown to the user verbatim.
-
-    A timeout is a special case: the R process is SIGKILLed mid-run, so it never
-    emits an error message and its stderr is just the (successful-looking)
-    package/analysis log up to the kill. Dumping that as the "error" is
-    misleading (it looks like a harmless warning). Report the timeout explicitly
-    instead.
-    """
-    if result.is_timeout:
-        return (
-            f"{fallback} Zeitlimit der Analyse überschritten – das R-Skript "
-            "wurde abgebrochen. Bitte mit weniger Proben erneut versuchen oder "
-            "das Zeitlimit erhöhen."
-        )
-    return result.extra.get("r_error") or (result.stderr or "").strip() or fallback
-
-JOBS_DIR = Path("jobs").resolve()
-
-
-def _progress_fields(data: dict) -> tuple[int, str]:
-    """Extract (percent, message) from an R progress message, tolerating the
-    alternative key names R may emit and missing keys."""
-    percent = data.get("percent", data.get("progress_percent", 0))
-    message = data.get("message", data.get("current_step", ""))
-    return percent, message
-
-
-# ── Hilfsfunktionen ──────────────────────────────────────────────────────────
-
+# ── Job directory ─────────────────────────────────────────────────────────────
+# A thin, module-local wrapper around the shared resolver: the lookup/error
+# logic lives once in job_paths, while the module-level JOBS_DIR stays patchable
+# in tests.
 def get_job_dir_or_404(job_id: str) -> Path:
-    job_dir = JOBS_DIR / job_id
-    if not job_dir.exists() or not job_dir.is_dir():
-        raise BatchException(
-            ErrorTypes.JOB_NOT_FOUND,
-            detail=f"Job '{job_id}' wurde nicht gefunden."
-        )
-    return job_dir
-
-
-def find_sample_sheet_name(job_dir: str) -> str:
-    normalized_path = Path(job_dir) / "SampleSheet.csv"
-    if normalized_path.exists():
-        return "SampleSheet.csv"
-
-    matches = glob.glob(str(Path(job_dir) / "*SampleSheet*.csv"))
-    if matches:
-        return Path(matches[0]).name
-
-    raise BatchException(
-        ErrorTypes.SAMPLE_SHEET_NOT_FOUND,
-        detail=f"Keine SampleSheet-Datei in {job_dir} gefunden. Erwartet: 'SampleSheet.csv'"
-    )
+    """Return the job's directory under ``JOBS_DIR`` or raise 404."""
+    return resolve_job_dir(JOBS_DIR, job_id)
 
 
 def next_correction_round(history: dict) -> int:
@@ -96,80 +54,51 @@ def next_correction_round(history: dict) -> int:
     return max((r.get("round", 0) for r in rounds), default=0) + 1
 
 
-def load_history(job_dir: Path, job_id: str) -> dict:
-    history_file = job_dir / "batch_history.json"
-    if not history_file.exists():
-        # Round 0 is the baseline SVD produced by normalization (svd_plot_0.png),
-        # before any correction. The first correction is therefore round 1.
-        initial_history = {
-            "job_id": job_id,
-            "rounds": [
-                {
-                    "round": 0,
-                    "type": "initial",
-                    "svd_plot": f"/api/v1/batch/{job_id}/svd-plot/0",
-                    "settings_used": None,
-                    "timestamp": datetime.now().isoformat()
-                }
-            ],
-            "current_round": 0,
-            "correction_applied": False
-        }
-        with open(history_file, "w", encoding="utf-8") as f:
-            json.dump(initial_history, f, indent=2)
-        return initial_history
+def _build_initial_history(job_id: str) -> dict:
+    """Baseline history for a fresh job (only the round-0 SVD, no correction yet).
 
-    with open(history_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+    Round 0 is the baseline SVD produced by normalization (svd_plot_0.png),
+    before any correction. The first correction is therefore round 1.
+    """
+    return {
+        "job_id": job_id,
+        "rounds": [
+            {
+                "round": 0,
+                "type": "initial",
+                "svd_plot": f"/api/v1/batch/{job_id}/svd-plot/0",
+                "settings_used": None,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ],
+        "current_round": 0,
+        "correction_applied": False,
+    }
+
+
+def load_history(job_dir: Path, job_id: str) -> dict:
+    """Load the batch history, tolerating a missing or corrupt file.
+
+    A damaged ``batch_history.json`` (e.g. a crash mid-write) is treated as "no
+    history": a fresh baseline is written atomically instead of surfacing a 500.
+    """
+    history_file = job_dir / "batch_history.json"
+    if history_file.exists():
+        history = read_json_or_default(history_file, None)
+        if isinstance(history, dict):
+            return history
+        logger.warning(
+            "batch_history.json is unreadable, rebuilding the baseline: job_id=%s", job_id
+        )
+
+    initial_history = _build_initial_history(job_id)
+    save_history(job_dir, initial_history)
+    return initial_history
 
 
 def save_history(job_dir: Path, data: dict) -> None:
-    history_file = job_dir / "batch_history.json"
-    with open(history_file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
-def _read_data_section(job_dir: Path) -> tuple[list[str], list[list[str]]]:
-    """Parse the canonical SampleSheet's [Data] section → (headers, data_rows).
-
-    Headers are padded onto every row so callers can index columns safely.
-    """
-    try:
-        sample_sheet_name = find_sample_sheet_name(str(job_dir))
-        sheet_path = job_dir / sample_sheet_name
-    except FileNotFoundError:
-        raise BatchException(
-            ErrorTypes.SAMPLE_SHEET_NOT_FOUND,
-            detail=f"Es wurde kein Samplesheet im Verzeichnis für Job '{job_dir.name}' gefunden.",
-        )
-
-    try:
-        with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-
-        data_index = next((i for i, line in enumerate(lines) if "[Data]" in line), -1)
-        data_lines = lines[data_index + 1:] if data_index != -1 else lines
-        data_lines = [line.strip() for line in data_lines if line.strip()]
-        if not data_lines:
-            return [], []
-
-        delimiter = ";" if ";" in data_lines[0] else ","
-        rows = list(csv.reader(data_lines, delimiter=delimiter))
-        headers = [h.strip() for h in rows[0] if h.strip()]
-        num_cols = len(headers)
-
-        data_rows = []
-        for row in rows[1:]:
-            padded = [(row[i].strip() if i < len(row) else "") for i in range(num_cols)]
-            data_rows.append(padded)
-        return headers, data_rows
-    except BatchException:
-        raise
-    except Exception as e:
-        raise BatchException(
-            ErrorTypes.INVALID_CSV_CONTENT,
-            detail=f"Das Samplesheet konnte nicht gelesen werden: {str(e)}",
-        )
+    """Persist the batch history atomically (temp file + os.replace)."""
+    write_json_atomic(job_dir / "batch_history.json", data, indent=2)
 
 
 def get_eligible_columns(job_dir: Path) -> list[dict]:
@@ -180,7 +109,7 @@ def get_eligible_columns(job_dir: Path) -> list[dict]:
     guess and no hardcoded column name — the biologist assigns the roles, helped
     by the sample-sheet preview. Returns ``[{"name", "levels"}]``.
     """
-    headers, data_rows = _read_data_section(job_dir)
+    headers, data_rows = read_data_section(job_dir)
     total = len(data_rows)
     if total == 0:
         return []
@@ -205,33 +134,37 @@ def validate_group_selection(job_dir: Path, group_column: str, case_group: str, 
     if col is None:
         raise BatchException(
             ErrorTypes.INVALID_BATCH_VARIABLE,
-            detail=f"Vergleichs-Spalte '{group_column}' ist nicht verfügbar.",
+            detail=f"Comparison column '{group_column}' is not available.",
             provided=group_column,
             available=list(columns),
         )
     if case_group == control_group:
         raise BatchException(
             ErrorTypes.INVALID_SELECTION,
-            detail="Case- und Control-Gruppe müssen unterschiedlich sein.",
+            detail="The case and control groups must be different.",
         )
     for role, value in (("case", case_group), ("control", control_group)):
         if value not in col["values"]:
             raise BatchException(
                 ErrorTypes.INVALID_SELECTION,
-                detail=f"{role}-Gruppe '{value}' kommt in Spalte '{group_column}' nicht vor.",
+                detail=f"The {role} group '{value}' does not occur in column '{group_column}'.",
                 provided=value,
                 available=col["values"],
             )
 
 
 def get_available_columns_from_samplesheet(job_dir: Path) -> list:
-    """Backward-compatible list of eligible column names (no level counts)."""
+    """Eligible grouping column names, without their level counts.
+
+    Used by the batch route to validate that the selected batch variable and
+    covariates refer to real, groupable sample-sheet columns.
+    """
     return [col["name"] for col in get_eligible_columns(job_dir)]
 
 
 def get_samplesheet_preview(job_dir: Path, max_rows: int = 50) -> dict:
     """Tabular preview of the sample sheet so the biologist can assign roles."""
-    headers, data_rows = _read_data_section(job_dir)
+    headers, data_rows = read_data_section(job_dir)
     limit = max(1, min(max_rows, 200))
     return {
         "columns": headers,
@@ -254,16 +187,16 @@ async def run_batch_pipeline_task(
     job_dir: Path,
     cancel_event: asyncio.Event,
 ) -> None:
-    """Runs batch correction (batch_correct.R) followed by the SVD plot."""
+    """Run batch correction (batch_correct.R) followed by the SVD plot."""
     try:
-        logger.info("Starte Batch-Korrektur: job_id=%s", job_id)
-        set_progress(job_id, percent=0, message="Initialisiere Batch-Korrektur...")
+        logger.info("Starting batch correction: job_id=%s", job_id)
+        set_progress(job_id, percent=0, message="Initializing batch correction...")
 
         covariates_str = ",".join(settings_dict.get("covariates", []))
 
         async def on_batch_progress(data: dict) -> None:
             if data.get("type") == "progress":
-                percent, message = _progress_fields(data)
+                percent, message = progress_fields(data)
                 set_progress(job_id, percent=percent, message=message)
 
         correction_result = await run_r_script(
@@ -278,59 +211,44 @@ async def run_batch_pipeline_task(
             on_progress=on_batch_progress,
         )
 
-        if correction_result.is_cancelled:
-            logger.info("Batch-Korrektur abgebrochen: job_id=%s", job_id)
+        if handle_step_result(
+            job_id,
+            correction_result,
+            phase=JobPhase.BATCH,
+            fallback="batch_correct.R exited with an error.",
+            timeout_step="Error: batch_correct.R exceeded its time limit.",
+            timeout_detail="Batch correction timeout.",
+            failure_step="Error during the mathematical batch correction.",
+            cancel_log=f"Batch correction cancelled: job_id={job_id}",
+        ) is not StepOutcome.SUCCESS:
             return
 
-        if correction_result.is_timeout:
-            logger.error("Batch-Korrektur Timeout: job_id=%s", job_id)
-            transition_job(
-                job_id,
-                new_phase=JobPhase.BATCH,
-                new_status=JobStatusValue.FAILED,
-                current_step="Fehler: batch_correct.R hat das Zeitlimit überschritten.",
-                error={"detail": "Batch correction timeout."},
-            )
-            return
-
-        if not correction_result.is_success:
-            detail = _failure_detail(correction_result, "batch_correct.R mit Fehlercode beendet.")
-            logger.error("Batch-Korrektur fehlgeschlagen: job_id=%s detail=%s", job_id, detail)
-            transition_job(
-                job_id,
-                new_phase=JobPhase.BATCH,
-                new_status=JobStatusValue.FAILED,
-                current_step="Fehler während der mathematischen Batch-Korrektur.",
-                error={"detail": detail},
-            )
-            return
-
-        # Batch abgeschlossen → SVD-Phase öffnen
+        # Batch correction done → open the SVD phase.
         transition_job(
             job_id,
             new_phase=JobPhase.BATCH,
             new_status=JobStatusValue.COMPLETED,
             progress_percent=100,
-            current_step="Batch-Korrektur erfolgreich abgeschlossen.",
+            current_step="Batch correction completed successfully.",
         )
         transition_job(
             job_id,
             new_phase=JobPhase.SVD,
             new_status=JobStatusValue.RUNNING,
             progress_percent=0,
-            current_step=f"Starte SVD-Plot-Generierung (Runde {next_round})...",
+            current_step=f"Starting SVD plot generation (round {next_round})...",
         )
 
-        # SVD-Plot generieren
-        logger.info("Generiere SVD-Plot: job_id=%s round=%s", job_id, next_round)
+        # Generate the SVD plot.
+        logger.info("Generating SVD plot: job_id=%s round=%s", job_id, next_round)
 
         async def on_svd_progress(data: dict) -> None:
             if data.get("type") == "progress":
-                percent, message = _progress_fields(data)
+                percent, message = progress_fields(data)
                 set_progress(
                     job_id,
                     percent=percent,
-                    message=f"SVD (Runde {next_round}): {message}",
+                    message=f"SVD (round {next_round}): {message}",
                 )
 
         sample_sheet_name = find_sample_sheet_name(str(job_dir))
@@ -349,69 +267,55 @@ async def run_batch_pipeline_task(
             on_progress=on_svd_progress,
         )
 
-        if plot_result.is_cancelled:
-            logger.info("SVD-Plot abgebrochen: job_id=%s", job_id)
+        if handle_step_result(
+            job_id,
+            plot_result,
+            phase=JobPhase.SVD,
+            fallback="batch_svd.R exited with an error.",
+            timeout_step="Error: batch_svd.R exceeded its time limit.",
+            timeout_detail="SVD plot timeout.",
+            failure_step="Error during SVD plot visualization.",
+            cancel_log=f"SVD plot cancelled: job_id={job_id}",
+        ) is not StepOutcome.SUCCESS:
             return
 
-        if plot_result.is_timeout:
-            logger.error("SVD-Plot Timeout: job_id=%s", job_id)
-            transition_job(
-                job_id,
-                new_phase=JobPhase.SVD,
-                new_status=JobStatusValue.FAILED,
-                current_step="Fehler: batch_svd.R hat das Zeitlimit überschritten.",
-                error={"detail": "SVD plot timeout."},
-            )
-            return
-
-        if not plot_result.is_success:
-            logger.error("SVD-Plot fehlgeschlagen: job_id=%s", job_id)
-            transition_job(
-                job_id,
-                new_phase=JobPhase.SVD,
-                new_status=JobStatusValue.FAILED,
-                current_step="Fehler bei der SVD-Plot-Visualisierung.",
-                error={"detail": plot_result.stderr or "batch_svd.R mit Fehlercode beendet."},
-            )
-            return
-
-        # Historie aktualisieren
-        logger.info("Aktualisiere Batch-Historie: job_id=%s", job_id)
+        # Update the batch history.
+        logger.info("Updating batch history: job_id=%s", job_id)
         history_data = load_history(job_dir, job_id)
         history_data["rounds"].append({
             "round": next_round,
             "type": "correction",
             "svd_plot": f"/api/v1/batch/{job_id}/svd-plot/{next_round}",
             "settings_used": settings_dict,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         history_data["current_round"] = next_round
         history_data["correction_applied"] = True
         save_history(job_dir, history_data)
 
-        # SVD abschließen → Batch-Phase wieder öffnen
+        # SVD done → reopen the batch phase for the next action.
         transition_job(
             job_id,
             new_phase=JobPhase.SVD,
             new_status=JobStatusValue.COMPLETED,
             progress_percent=100,
-            current_step="SVD-Plot erfolgreich generiert.",
+            current_step="SVD plot generated successfully.",
         )
         transition_job(
             job_id,
             new_phase=JobPhase.BATCH,
             new_status=JobStatusValue.WAITING,
-            current_step="Batch-Korrektur abgeschlossen. Warte auf nächste Aktion...",
+            current_step="Batch correction finished. Waiting for the next action...",
         )
-        logger.info("Batch-Workflow abgeschlossen: job_id=%s", job_id)
+        logger.info("Batch workflow completed: job_id=%s", job_id)
 
     except Exception:
-        logger.exception("Kritischer Fehler im Batch-Pipeline-Task: job_id=%s", job_id)
+        logger.exception("Critical error in the batch pipeline task: job_id=%s", job_id)
         transition_job(
             job_id,
             new_phase=JobPhase.BATCH,
             new_status=JobStatusValue.FAILED,
-            current_step="Kritischer Systemfehler.",
+            current_step="Critical system error.",
             error={"detail": "Internal batch pipeline crash."},
         )
 
@@ -427,8 +331,7 @@ async def run_downstream_analysis_task(
     case_group: str = "",
     control_group: str = "",
 ) -> None:
-    """
-    Runs DMR analysis followed by DMP analysis.
+    """Run DMR analysis followed by DMP analysis.
 
     The caller (batch route) owns the ANALYSIS+RUNNING transition.
     ``extract_from_normalized`` selects the beta source (True = uncorrected
@@ -441,18 +344,17 @@ async def run_downstream_analysis_task(
     group_args = [group_column, case_group, control_group]
     try:
         job_dir = Path(job_dir_raw).resolve()
-        logger.info("Starte Downstream-Analyse: job_id=%s", job_id)
+        logger.info("Starting downstream analysis: job_id=%s", job_id)
 
-        set_progress(job_id, percent=0, message="Starte Downstream-Analyse-Pipeline...")
+        set_progress(job_id, percent=0, message="Starting the downstream analysis pipeline...")
 
         sample_sheet_name = find_sample_sheet_name(str(job_dir))
 
-        # Bridge-Schritt: Beta-Extraktion nur wenn Batch übersprungen wurde
+        # Bridge step: extract the beta matrix only when batch correction was skipped.
         if extract_from_normalized:
-            logger.info("Batch übersprungen — extrahiere unkorrigierte Beta-Matrix: job_id=%s", job_id)
-            set_progress(job_id, percent=2, message="Extrahiere Beta-Matrix aus normalisierten Daten...")
+            logger.info("Batch skipped — extracting the uncorrected beta matrix: job_id=%s", job_id)
+            set_progress(job_id, percent=2, message="Extracting the beta matrix from the normalized data...")
 
-            # FIX: nutzt jetzt docker_job_dir (Container-Pfad) statt Host-Pfad.
             extraction_result = await run_r_script(
                 command=BetaExtractionCommand(
                     script="",
@@ -465,33 +367,33 @@ async def run_downstream_analysis_task(
             )
 
             if extraction_result.is_cancelled:
-                logger.info("Beta-Extraktion abgebrochen: job_id=%s", job_id)
+                logger.info("Beta extraction cancelled: job_id=%s", job_id)
                 return
 
             if not extraction_result.is_success:
                 raise RuntimeError(
-                    _failure_detail(extraction_result, "Beta-Extraktion fehlgeschlagen.")
+                    failure_detail(extraction_result, "Beta extraction failed.")
                 )
         else:
             # corrected_data.rds is already a beta matrix (removeBatchEffect on
             # getBeta). DMR/DMP read beta.rds, so make the corrected matrix the
             # analysis input by copying it into place.
-            logger.info("Nutze batch-korrigierte Daten für die Analyse: job_id=%s", job_id)
-            set_progress(job_id, percent=5, message="Lade korrigierte Batch-Daten...")
+            logger.info("Using the batch-corrected data for the analysis: job_id=%s", job_id)
+            set_progress(job_id, percent=5, message="Loading the corrected batch data...")
             corrected_path = job_dir / "corrected_data.rds"
             if not corrected_path.exists():
                 raise RuntimeError(
-                    f"corrected_data.rds nicht gefunden in {job_dir} — Batch-Korrektur "
-                    "lieferte keine Daten."
+                    f"corrected_data.rds not found in {job_dir} — batch correction "
+                    "produced no data."
                 )
             shutil.copyfile(corrected_path, job_dir / "beta.rds")
 
-        # DMR-Analyse
-        logger.info("Starte DMR-Analyse (dmr.R): job_id=%s", job_id)
+        # DMR analysis
+        logger.info("Starting DMR analysis (dmr.R): job_id=%s", job_id)
 
         async def on_dmr_progress(data: dict) -> None:
             if data.get("type") == "progress":
-                percent, message = _progress_fields(data)
+                percent, message = progress_fields(data)
                 set_progress(
                     job_id,
                     percent=10 + int(percent * 0.45),
@@ -516,20 +418,20 @@ async def run_downstream_analysis_task(
         )
 
         if dmr_result.is_cancelled:
-            logger.info("DMR-Analyse abgebrochen: job_id=%s", job_id)
+            logger.info("DMR analysis cancelled: job_id=%s", job_id)
             return
 
         if not dmr_result.is_success:
-            raise RuntimeError(_failure_detail(dmr_result, "Das DMR-Skript hat einen Fehler gemeldet."))
+            raise RuntimeError(failure_detail(dmr_result, "The DMR script reported an error."))
 
-        logger.info("DMR-Analyse erfolgreich: job_id=%s", job_id)
+        logger.info("DMR analysis succeeded: job_id=%s", job_id)
 
-        # DMP-Analyse
-        logger.info("Starte DMP-Analyse (dmp.R): job_id=%s", job_id)
+        # DMP analysis
+        logger.info("Starting DMP analysis (dmp.R): job_id=%s", job_id)
 
         async def on_dmp_progress(data: dict) -> None:
             if data.get("type") == "progress":
-                percent, message = _progress_fields(data)
+                percent, message = progress_fields(data)
                 set_progress(
                     job_id,
                     percent=55 + int(percent * 0.43),
@@ -551,35 +453,35 @@ async def run_downstream_analysis_task(
         )
 
         if dmp_result.is_cancelled:
-            logger.info("DMP-Analyse abgebrochen: job_id=%s", job_id)
+            logger.info("DMP analysis cancelled: job_id=%s", job_id)
             return
 
         if not dmp_result.is_success:
-            raise RuntimeError(_failure_detail(dmp_result, "Das DMP-Skript hat einen Fehler gemeldet."))
+            raise RuntimeError(failure_detail(dmp_result, "The DMP script reported an error."))
 
-        logger.info("DMP-Analyse erfolgreich: job_id=%s", job_id)
+        logger.info("DMP analysis succeeded: job_id=%s", job_id)
 
-        # Analyse abschließen → Results-Phase
+        # Analysis done → move to the results phase.
         transition_job(
             job_id,
             new_phase=JobPhase.ANALYSIS,
             new_status=JobStatusValue.COMPLETED,
             progress_percent=100,
-            current_step="Downstream-Analyse erfolgreich beendet.",
+            current_step="Downstream analysis finished successfully.",
         )
         transition_job(
             job_id,
             new_phase=JobPhase.RESULTS,
             new_status=JobStatusValue.WAITING,
         )
-        logger.info("Downstream-Analyse abgeschlossen: job_id=%s", job_id)
+        logger.info("Downstream analysis completed: job_id=%s", job_id)
 
     except Exception as e:
-        logger.exception("Fehler in der Downstream-Analyse: job_id=%s", job_id)
+        logger.exception("Error in the downstream analysis: job_id=%s", job_id)
         transition_job(
             job_id,
             new_phase=JobPhase.ANALYSIS,
             new_status=JobStatusValue.FAILED,
-            current_step=f"Fehler in der Analyse: {str(e)}",
+            current_step=f"Error in the analysis: {str(e)}",
             error={"detail": str(e)},
         )

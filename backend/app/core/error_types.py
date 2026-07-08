@@ -1,15 +1,23 @@
 # app/core/error_types.py
+"""RFC 9457 problem types, the ``AppException`` base and the FastAPI handler."""
 from typing import Dict, Any, Optional
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 
+
 class ErrorType:
+    """A single RFC 9457 problem type: its URI ``path``, HTTP ``status`` and ``title``."""
+
     def __init__(self, path: str, status: int, title: str):
+        """Store the problem type's URI path, HTTP status code and title."""
         self.path = path
         self.status = status
         self.title = title
 
+
 class ErrorTypes:
+    """Registry of the application's RFC 9457 problem types."""
+
     # Status Errors (404, 410)
     JOB_NOT_FOUND = ErrorType("/errors/job-not-found", 404, "Job not found")
     SESSION_EXPIRED = ErrorType("/errors/session-expired", 410, "Session expired")
@@ -29,6 +37,8 @@ class ErrorTypes:
     NO_SAMPLE_SHEET      = ErrorType("/errors/no-sample-sheet", 400, "No sample sheet")
     NO_IDAT_FILES        = ErrorType("/errors/no-idat-files", 400, "No IDAT files")
     UNPAIRED_IDATS       = ErrorType("/errors/unpaired-idats", 400, "Unpaired IDAT files")
+    TOO_MANY_SAMPLES     = ErrorType("/errors/too-many-samples", 400, "Too many samples")
+    STORAGE_LIMIT_EXCEEDED = ErrorType("/errors/storage-limit-exceeded", 507, "Storage limit exceeded")
     INVALID_SELECTION    = ErrorType("/errors/invalid-selection", 400, "Invalid selection")
     INVALID_COLUMN_MAPPING = ErrorType("/errors/invalid-column-mapping", 400, "Invalid column mapping")
     SESSION_NOT_FOUND    = ErrorType("/errors/session-not-found", 404, "Upload session not found")
@@ -69,9 +79,19 @@ def problem_detail(
     error_type: ErrorType,
     detail: str,
     instance: Optional[str] = None,
-    **extras
+    **extras,
 ) -> Dict[str, Any]:
-    """Erzeugt RFC 9457 konformen Fehler-Body"""
+    """Build an RFC 9457-conformant problem body.
+
+    Args:
+        error_type: The problem type providing ``type``, ``title`` and ``status``.
+        detail: A human-readable explanation specific to this occurrence.
+        instance: Optional URI reference identifying the specific occurrence.
+        **extras: Additional members merged into the problem body.
+
+    Returns:
+        The problem body as a dictionary.
+    """
     body = {
         "type": error_type.path,
         "title": error_type.title,
@@ -83,18 +103,23 @@ def problem_detail(
     body.update(extras)
     return body
 
+
 class AppException(Exception):
-    """Erlaubt es, Fehler direkt mit einem ErrorType-Objekt zu werfen."""
+    """Application error carrying an ``ErrorType`` and a ready RFC 9457 body."""
+
     def __init__(self, error_type, detail: str, instance: Optional[str] = None, **extras):
+        """Build the problem body from ``error_type`` and the given detail/extras."""
         self.status_code = error_type.status
         self.error_body = problem_detail(error_type, detail, instance, **extras)
         super().__init__(detail)
 
+
 BatchException = AppException
 
+
 async def app_exception_handler(request: Request, exc: AppException):
-    """Fängt die AppException ab und transformiert sie in gültiges RFC 9457 JSON"""
+    """Render an ``AppException`` as an RFC 9457 JSON response."""
     return JSONResponse(
         status_code=exc.status_code,
-        content=exc.error_body
+        content=exc.error_body,
     )

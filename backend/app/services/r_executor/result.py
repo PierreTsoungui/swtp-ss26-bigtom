@@ -1,9 +1,12 @@
+"""Outcome types for a finished R execution."""
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Any
 
 
 class ExecutionStatus(str, Enum):
+    """Terminal state of an R execution."""
+
     COMPLETED = "completed"
     FAILED    = "failed"
     CANCELLED = "cancelled"
@@ -12,6 +15,8 @@ class ExecutionStatus(str, Enum):
 
 @dataclass
 class ExecutionResult:
+    """Result of running an R command: status, exit code, captured output."""
+
     status:     ExecutionStatus
     returncode: int | None
     stdout:     str
@@ -20,12 +25,15 @@ class ExecutionResult:
 
     @property
     def is_success(self) -> bool:
+        """Return True if the command completed successfully."""
         return self.status == ExecutionStatus.COMPLETED
 
     @property
     def is_cancelled(self) -> bool:
+        """Return True if the command was cancelled (e.g. by a reset)."""
         return self.status == ExecutionStatus.CANCELLED
 
     @property
     def is_timeout(self) -> bool:
+        """Return True if the command was aborted after exceeding its timeout."""
         return self.status == ExecutionStatus.TIMEOUT

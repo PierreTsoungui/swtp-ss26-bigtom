@@ -1,0 +1,22 @@
+# Docker ignore file for frontend
+.git
+.gitignore
+*.md
+LICENSE
+
+certs/
+.env
+.env.*
+
+backend/
+r_backend/
+data/
+jobs/
+
+**/node_modules
+**/dist
+**/.build
+.cache/
+
+docker-compose.yml
+README.md

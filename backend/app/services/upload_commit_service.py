@@ -14,7 +14,7 @@ from pathlib import Path
 
 from app.core.error_types import AppException, ErrorTypes
 from app.models.upload import ColumnMapping, CommitRequest
-from app.services import job_manager, staging_manager
+from app.services import intake_guards, job_manager, staging_manager
 from app.services.file_handler import clean_job_files, ensure_upload_dir, save_filter_settings
 from app.services.job_manager import JobPhase, JobStatusValue
 from app.services.samplesheet_normalizer import normalize_sample_sheet, read_sample_sheet_table
@@ -36,11 +36,18 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
     if sheet_rel is None:
         raise AppException(
             ErrorTypes.NO_SAMPLE_SHEET,
-            f"Ausgewähltes Sample-Sheet nicht gefunden: {req.selected_sample_sheet_id!r}",
+            f"Selected sample sheet not found: {req.selected_sample_sheet_id!r}",
             instance,
         )
 
     selected_pairs = _resolve_selected_pairs(req.selected_pair_ids, internal.get("pairs", {}), instance)
+
+    # Intake guards — reject an oversized cohort or a full disk BEFORE building
+    # the job dir, so the pipeline never starts work it cannot finish within the
+    # RAM/disk budget (see app.core.config). The container mem_limit is the hard
+    # backstop; these give the user a clear, early message instead.
+    intake_guards.enforce_sample_limit(len(selected_pairs), instance)
+    intake_guards.enforce_storage_limit(instance)
 
     # Validate the role mapping against the chosen sheet *before* touching the
     # job dir, so a bad mapping never leaves a half-built job behind.
@@ -55,12 +62,15 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
         (job_dir / "SampleSheet.csv").write_text(canonical_sheet, encoding="utf-8", newline="")
         save_filter_settings(req.filter_settings.model_dump(), job_dir)
     except AppException:
+        # Structured error: roll back but keep its type/status.
         clean_job_files(job_id)
         raise
     except Exception as exc:
+        # Rollback boundary: clean up the half-built job dir on any other failure
+        # and re-raise as a structured 500 (never swallow).
         clean_job_files(job_id)
         raise AppException(
-            ErrorTypes.SAVE_FAILED, f"Fehler beim Übernehmen der Auswahl: {exc}", instance
+            ErrorTypes.SAVE_FAILED, f"Error while committing the selection: {exc}", instance
         ) from exc
 
     job_manager.create_job(job_id)
@@ -79,15 +89,15 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
 
 def _resolve_selected_pairs(pair_ids: list[str], pair_map: dict, instance: str) -> list[dict]:
     if not pair_ids:
-        raise AppException(ErrorTypes.NO_IDAT_FILES, "Es wurde kein IDAT-Paar ausgewählt.", instance)
+        raise AppException(ErrorTypes.NO_IDAT_FILES, "No IDAT pair was selected.", instance)
 
     resolved = []
     for pid in pair_ids:
         pair = pair_map.get(pid)
         if pair is None:
-            raise AppException(ErrorTypes.INVALID_SELECTION, f"Unbekanntes IDAT-Paar: {pid!r}", instance)
+            raise AppException(ErrorTypes.INVALID_SELECTION, f"Unknown IDAT pair: {pid!r}", instance)
         if not pair.get("grn") or not pair.get("red"):
-            raise AppException(ErrorTypes.UNPAIRED_IDATS, f"IDAT-Paar ist unvollständig: {pid!r}", instance)
+            raise AppException(ErrorTypes.UNPAIRED_IDATS, f"IDAT pair is incomplete: {pid!r}", instance)
         resolved.append(pair)
     return resolved
 
@@ -97,7 +107,7 @@ def _move_idats(session_dir: Path, pairs: list[dict], job_dir: Path) -> None:
         for rel in (pair["grn"], pair["red"]):
             src = (session_dir / rel).resolve()
             if not src.is_relative_to(session_dir.resolve()) or not src.is_file():
-                raise AppException(ErrorTypes.INVALID_SELECTION, f"Datei nicht im Staging: {rel!r}")
+                raise AppException(ErrorTypes.INVALID_SELECTION, f"File not in staging: {rel!r}")
             shutil.move(str(src), str(job_dir / Path(rel).name))
 
 
@@ -121,21 +131,21 @@ def _build_canonical_sheet(
     """
     src = (session_dir / sheet_rel).resolve()
     if not src.is_relative_to(session_dir.resolve()) or not src.is_file():
-        raise AppException(ErrorTypes.INVALID_SELECTION, f"Sample-Sheet nicht im Staging: {sheet_rel!r}", instance)
+        raise AppException(ErrorTypes.INVALID_SELECTION, f"Sample sheet not in staging: {sheet_rel!r}", instance)
 
     content = src.read_bytes()
     try:
         raw_headers, rows = read_sample_sheet_table(content, Path(sheet_rel).name)
     except ValueError as exc:
-        raise AppException(ErrorTypes.INVALID_CSV_CONTENT, f"Sample-Sheet konnte nicht gelesen werden: {exc}", instance) from exc
+        raise AppException(ErrorTypes.INVALID_CSV_CONTENT, f"Sample sheet could not be read: {exc}", instance) from exc
 
     role_map = mapping.as_role_dict()
     missing = [raw for raw in role_map.values() if raw not in raw_headers]
     if missing:
         raise AppException(
             ErrorTypes.INVALID_COLUMN_MAPPING,
-            f"Zugeordnete Spalte(n) sind nicht im Sample-Sheet: {sorted(set(missing))}. "
-            f"Verfügbare Spalten: {raw_headers}.",
+            f"Mapped column(s) are not in the sample sheet: {sorted(set(missing))}. "
+            f"Available columns: {raw_headers}.",
             instance,
         )
 
@@ -168,11 +178,11 @@ def _check_idats_match_sheet(
         example_idat = sorted(selected_pair_ids)[0]
         raise AppException(
             ErrorTypes.INVALID_COLUMN_MAPPING,
-            "Die zugeordneten Spalten passen zu keinem der hochgeladenen IDAT-Paare: "
+            "The mapped columns do not match any of the uploaded IDAT pairs: "
             f"Sentrix_ID='{mapping.sentrix_id}', Sentrix_Position='{mapping.sentrix_position}' "
-            f"ergeben z.B. die Array-ID '{example_sheet}', während die IDAT-Dateien z.B. "
-            f"'{example_idat}' erwarten. Bitte prüfen, welche Spalten Chip-Barcode und "
-            "Position enthalten.",
+            f"produce e.g. the array id '{example_sheet}', while the IDAT files expect "
+            f"e.g. '{example_idat}'. Please check which columns contain the chip barcode "
+            "and the position.",
             instance,
         )
 

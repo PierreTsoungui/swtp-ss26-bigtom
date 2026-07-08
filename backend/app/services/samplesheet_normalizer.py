@@ -101,7 +101,7 @@ def normalize_sample_sheet(
     When omitted, the legacy Illumina alias detection is applied instead — this
     keeps the deprecated single-shot upload and already-canonical sheets working.
 
-    Raises ``ValueError`` (with a human-readable, German message) on any
+    Raises ``ValueError`` with a human-readable error message on any
     structural problem so the upload layer can surface it as a 400.
     """
     raw_headers, rows = read_sample_sheet_table(content, filename)
@@ -131,7 +131,7 @@ def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], L
         grid = _read_csv_grid(content)
     else:
         # validate_sample_sheet gates this, but never trust the caller.
-        raise ValueError(f"Nicht unterstütztes SampleSheet-Format: '{ext}'")
+        raise ValueError(f"Unsupported sample sheet format: '{ext}'")
 
     header_idx = _locate_header_row(grid)
     raw_headers = grid[header_idx]
@@ -141,14 +141,14 @@ def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], L
     # common artefact of Excel exports (a fixed grid width padded with blanks).
     keep = [i for i, name in enumerate(raw_headers) if name.strip()]
     if not keep:
-        raise ValueError("SampleSheet enthält keine benannten Spalten.")
+        raise ValueError("The sample sheet contains no named columns.")
 
     headers = [raw_headers[i].strip() for i in keep]
     rows = [_select_and_pad(row, keep) for row in raw_rows]
     rows = [row for row in rows if any(cell.strip() for cell in row)]
 
     if not rows:
-        raise ValueError("SampleSheet enthält keine Datenzeilen.")
+        raise ValueError("The sample sheet contains no data rows.")
 
     return headers, rows
 
@@ -187,10 +187,12 @@ def _read_excel_grid(content: bytes, ext: str) -> List[List[str]]:
     except ImportError as exc:
         # xlrd is optional; give an actionable message instead of a stack trace.
         raise ValueError(
-            f"Excel-Datei ('{ext}') kann nicht gelesen werden: {exc}"
+            f"Excel file ('{ext}') cannot be read: {exc}"
         ) from exc
     except Exception as exc:
-        raise ValueError(f"Excel-Datei konnte nicht gelesen werden: {exc}") from exc
+        # Narrow in effect: pandas/openpyxl/xlrd raise a variety of types for a
+        # malformed workbook; normalize them to one actionable ValueError.
+        raise ValueError(f"Excel file could not be read: {exc}") from exc
 
     return [[_cell_to_str(cell) for cell in row] for row in df.itertuples(index=False)]
 
@@ -215,7 +217,7 @@ def _detect_delimiter(lines: List[str]) -> str:
         if not line.strip():
             continue
         counts = {d: line.count(d) for d in _CSV_DELIMITERS}
-        best = max(counts, key=counts.get)
+        best = max(counts, key=lambda d: counts[d])
         if counts[best] > 0:
             return best
     return ","
@@ -246,20 +248,20 @@ def _locate_header_row(grid: List[List[str]]) -> int:
     (sheets that ship the data table directly, e.g. the 450K demo sheet).
     """
     if not grid:
-        raise ValueError("SampleSheet ist leer.")
+        raise ValueError("The sample sheet is empty.")
 
     for i, row in enumerate(grid):
         if any(cell.strip().lower() == DATA_MARKER.lower() for cell in row):
             for j in range(i + 1, len(grid)):
                 if any(cell.strip() for cell in grid[j]):
                     return j
-            raise ValueError("SampleSheet enthält [Data], aber keine Tabelle danach.")
+            raise ValueError("The sample sheet contains [Data] but no table after it.")
 
     for i, row in enumerate(grid):
         if any(cell.strip() for cell in row):
             return i
 
-    raise ValueError("SampleSheet enthält keine verwertbaren Zeilen.")
+    raise ValueError("The sample sheet contains no usable rows.")
 
 
 def _canonicalize_headers(headers: List[str]) -> List[str]:
@@ -294,7 +296,7 @@ def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> 
     """
     missing = sorted({raw for raw in mapping.values() if raw not in raw_headers})
     if missing:
-        raise ValueError(f"Zugeordnete Spalte(n) nicht im SampleSheet vorhanden: {missing}")
+        raise ValueError(f"Mapped column(s) not present in the sample sheet: {missing}")
 
     raw_to_role = {raw: role for role, raw in mapping.items()}
     targets = set(mapping.keys())
