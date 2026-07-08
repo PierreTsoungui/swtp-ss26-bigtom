@@ -36,6 +36,8 @@ services:
     networks:
       - backend-internal
     read_only: true
+    cap_drop:
+      - ALL
     tmpfs:
       - /tmp
       - /run
@@ -79,6 +81,8 @@ services:
     volumes:
       - ./jobs:/app/jobs
       - ./r_backend:/app/r_backend
+    cap_drop:
+      - ALL
     depends_on:
       - docker-socket-proxy
       - r_worker
@@ -103,6 +107,10 @@ services:
       - BLAS_NUM_THREADS=1
       - BIOCPARALLEL_WORKER_NUMBER=1
       - R_BIOC_PARALLEL_WORKERS=1
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
     volumes:
       - ./r_backend:/app/r_backend
       - ./data:/app/data
