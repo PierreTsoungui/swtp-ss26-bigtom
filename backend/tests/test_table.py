@@ -311,3 +311,20 @@ def test_dmr_filter_chr_matches_ui_prefixed_value(tmp_path):
         _write_dmr(tmp_path)
         res = client.get("/api/v1/table/job-x/dmr", params={"filter_chr": "chr1"}).json()
         assert {r["ID"] for r in res["data"]} == {"DMR_1"}
+
+def test_dmp_filter_gene_exact(tmp_path):
+    """filter_gene must match only the exact gene symbol (SP6) — not USP6, CASP6, etc."""
+    job_dir = tmp_path / "job-gene"
+    job_dir.mkdir()
+    csv = (
+        "ID,CHR,POS,GENE,FEATURE,CGI,ADJ_P,GROUP1_AVG,GROUP2_AVG,DELTA_BETA\n"
+        "cg1,1,100,SP6,feat,cgi,0.01,0.2,0.5,0.1\n"
+        "cg2,1,200,USP6,feat,cgi,0.02,0.2,0.5,0.1\n"
+        "cg3,1,300,CASP6,feat,cgi,0.03,0.2,0.5,0.1\n"
+    )
+    (job_dir / "dmp_results.csv").write_text(csv, encoding="utf-8")
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        res = client.get("/api/v1/table/job-gene/dmp", params={"filter_gene": "SP6"})
+        assert res.status_code == 200
+        assert res.json()["pagination"]["total_rows"] == 1
+        assert res.json()["data"][0]["GENE"] == "SP6"

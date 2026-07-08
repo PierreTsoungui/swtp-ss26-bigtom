@@ -48,7 +48,7 @@ FILTER_MAP = {
         "chr": ("CHR", "chr_eq"),           # "1" (data) must match "chr1" (UI)
         "start": ("POS", "gte"),
         "stop": ("POS", "lte"),
-        "gene": ("GENE", "contains"),       # substring search (e.g. "HOX" → HOXA…)
+        "gene": ("GENE", "eq"),
         "feature": ("FEATURE", "ci_eq"),    # genomic region (TSS1500, Body, IGR, …)
         "cgi": ("CGI", "ci_eq"),            # CpG context ("island" data vs "Island" UI)
         "adj_p_value": ("ADJ_P", "lte"),

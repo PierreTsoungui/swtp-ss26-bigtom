@@ -72,21 +72,21 @@ Numeric operators require a value parseable as a number; a non-numeric value is 
 
 Applied to `dmp_results.csv` (and, identically, to the heatmap CpG selection — §4.4).
 
-| UI concept | Query parameter | Dataset column | Operator | Meaning |
-|---|---|---|---|---|
-| Chromosome | `filter_chr` | `CHR` | `chr_eq` | Match a chromosome, tolerant to `chr`-prefix/case. |
-| Start position | `filter_start` | `POS` | `gte` | Position ≥ value. |
-| Stop position | `filter_stop` | `POS` | `lte` | Position ≤ value. |
-| Gene | `filter_gene` | `GENE` | `contains` | Gene-name substring. |
-| Genomic feature | `filter_feature` | `FEATURE` | `ci_eq` | Region type (e.g. `TSS1500`, `Body`, `IGR`). |
-| CpG island context | `filter_cgi` | `CGI` | `ci_eq` | CpG context (e.g. `Island`, `Shore`). |
-| Adjusted p-value | `filter_adj_p_value` | `ADJ_P` | `lte` | Significance threshold (≤). |
-| \|Δβ\| minimum | `filter_delta_beta` | `DELTA_BETA` | `abs_gte` | Minimum effect magnitude \|Δβ\|. |
-| Direction | `filter_delta_direction` | `DELTA_BETA` | `direction` | `hyper` (Δβ > 0) / `hypo` (Δβ < 0). |
-| Group 1 average (min/max) | `filter_group1_avg_min` / `filter_group1_avg_max` | `GROUP1_AVG` | `gte` / `lte` | Mean methylation of group 1 within a range. |
-| Group 2 average (min/max) | `filter_group2_avg_min` / `filter_group2_avg_max` | `GROUP2_AVG` | `gte` / `lte` | Mean methylation of group 2 within a range. |
-| log fold-change (min/max) | `filter_log_fc_min` / `filter_log_fc_max` | `LOG_FC` | `abs_gte` / `abs_lte` | Magnitude of the log fold-change within a range. |
-| DMR id | `filter_dmr_id` | `DMR_ID` | `eq` | Restrict to CpGs of one DMR (exact). |
+| UI concept                | Query parameter                                   | Dataset column | Operator              | Meaning                                            |
+|---------------------------|---------------------------------------------------|----------------|-----------------------|----------------------------------------------------|
+| Chromosome                | `filter_chr`                                      | `CHR`          | `chr_eq`              | Match a chromosome, tolerant to `chr`-prefix/case. |
+| Start position            | `filter_start`                                    | `POS`          | `gte`                 | Position ≥ value.                                  |
+| Stop position             | `filter_stop`                                     | `POS`          | `lte`                 | Position ≤ value.                                  |
+| Gene                      | `filter_gene`                                     | `GENE`         | `eq`                  | Exact gene symbol match (case-sensitive)           |
+| Genomic feature           | `filter_feature`                                  | `FEATURE`      | `ci_eq`               | Region type (e.g. `TSS1500`, `Body`, `IGR`).       |
+| CpG island context        | `filter_cgi`                                      | `CGI`          | `ci_eq`               | CpG context (e.g. `Island`, `Shore`).              |
+| Adjusted p-value          | `filter_adj_p_value`                              | `ADJ_P`        | `lte`                 | Significance threshold (≤).                        |
+| \|Δβ\| minimum            | `filter_delta_beta`                               | `DELTA_BETA`   | `abs_gte`             | Minimum effect magnitude \|Δβ\|.                   |
+| Direction                 | `filter_delta_direction`                          | `DELTA_BETA`   | `direction`           | `hyper` (Δβ > 0) / `hypo` (Δβ < 0).                |
+| Group 1 average (min/max) | `filter_group1_avg_min` / `filter_group1_avg_max` | `GROUP1_AVG`   | `gte` / `lte`         | Mean methylation of group 1 within a range.        |
+| Group 2 average (min/max) | `filter_group2_avg_min` / `filter_group2_avg_max` | `GROUP2_AVG`   | `gte` / `lte`         | Mean methylation of group 2 within a range.        |
+| log fold-change (min/max) | `filter_log_fc_min` / `filter_log_fc_max`         | `LOG_FC`       | `abs_gte` / `abs_lte` | Magnitude of the log fold-change within a range.   |
+| DMR id                    | `filter_dmr_id`                                   | `DMR_ID`       | `eq`                  | Restrict to CpGs of one DMR (exact).               |
 
 ### 4.3 DMR filters
 
