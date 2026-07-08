@@ -80,7 +80,7 @@ async def run_heatmap(job_id: str, payload: HeatmapRequest):
         new_phase=JobPhase.HEATMAP,
         new_status=JobStatusValue.RUNNING,
         progress_percent=0,
-        current_step="Heatmap-Generierung gestartet...",
+        current_step="Heatmap generation started...",
     )
 
     start_job_pipeline(
@@ -97,7 +97,7 @@ async def run_heatmap(job_id: str, payload: HeatmapRequest):
         "heatmap_metadata": {
             "detected_cpgs":   selected_cpgs,
             "plotted_samples": 0,
-            "message":         "Heatmap-Generierung gestartet.",
+            "message": "Heatmap generation started.",
         },
     }
 
