@@ -30,15 +30,15 @@ Backend implementation and R scripts are out of scope except where frontend rout
 
 The frontend separates business features from shared cross-feature building blocks:
 
-| Area | Verified purpose |
-|---|---|
-| `frontend/app/src/features/landing/` | Landing page and static landing content. |
-| `frontend/app/src/features/upload/` | Upload, staging review, column mapping, and filter setup. |
-| `frontend/app/src/features/analysis/` | Filtering progress and filtering statistics. |
-| `frontend/app/src/features/normalization/` | Normalization preview, selection, PCA viewer, and normalization submit. |
-| `frontend/app/src/features/batch/` | Batch parameters, SVD diagnostics, correction, and skip to analysis. |
-| `frontend/app/src/features/results/` | DMP/DMR tables, CSV export, and heatmap generation. |
-| `frontend/app/src/shared/` | Components, hooks, layout, plots, theme, errors, pages, utilities, and shared types. |
+| Area                                       | Verified purpose                                                                     |
+|--------------------------------------------|--------------------------------------------------------------------------------------|
+| `frontend/app/src/features/landing/`       | Landing page and static landing content.                                             |
+| `frontend/app/src/features/upload/`        | Upload, staging review, column mapping, and filter setup.                            |
+| `frontend/app/src/features/analysis/`      | Filtering progress and filtering statistics.                                         |
+| `frontend/app/src/features/normalization/` | Normalization preview, selection, PCA viewer, and normalization submit.              |
+| `frontend/app/src/features/batch/`         | Batch parameters, SVD diagnostics, correction, and skip to analysis.                 |
+| `frontend/app/src/features/results/`       | DMP/DMR tables, CSV export, and heatmap generation.                                  |
+| `frontend/app/src/shared/`                 | Components, hooks, layout, plots, theme, errors, pages, utilities, and shared types. |
 
 Placement conventions verified in code:
 
@@ -54,57 +54,34 @@ Placement conventions verified in code:
 
 ### Routing Overview
 
+The application is callable through `https://localhost:8443/`.
+
 Routes are verified in `frontend/app/src/App.tsx`.
 
-| Route | Page component | Feature or area |
-|---|---|---|
-| `/` | `LandingPage` | `features/landing` |
-| `/upload` | `UploadPage` | `features/upload` |
-| `/analysis/:job_id` | `AnalysisPage` | `features/analysis` |
-| `/normalization/:job_id` | `NormalizationPage` | `features/normalization` |
-| `/batch/:job_id` | `BatchPage` | `features/batch` |
-| `/results/:job_id` | `ResultsPage` | `features/results` |
-| `/privacy` | `PrivacyPolicyPage` | `shared/pages` |
-| `*` | `FallbackPage variant="not-found"` | `shared/components` |
-
-No `/datenschutz` route exists in the current router. The privacy page is implemented at `/privacy`.
+| Route                    | Page component                     | Feature or area          |
+|--------------------------|------------------------------------|--------------------------|
+| `/`                      | `LandingPage`                      | `features/landing`       |
+| `/upload`                | `UploadPage`                       | `features/upload`        |
+| `/analysis/:job_id`      | `AnalysisPage`                     | `features/analysis`      |
+| `/normalization/:job_id` | `NormalizationPage`                | `features/normalization` |
+| `/batch/:job_id`         | `BatchPage`                        | `features/batch`         |
+| `/results/:job_id`       | `ResultsPage`                      | `features/results`       |
+| `/privacy`               | `PrivacyPolicyPage`                | `shared/pages`           |
+| `*`                      | `FallbackPage variant="not-found"` | `shared/components`      |
 
 ### Main Component Tree
 
-```mermaid
-flowchart TD
-  App --> AppLayout
-  AppLayout --> AppHeader
-  AppLayout --> ErrorBoundary
-  AppLayout --> AppFooter
-  AppHeader --> StepIndicator
-  ErrorBoundary --> Routes
-  Routes --> LandingPage
-  Routes --> UploadPage
-  Routes --> AnalysisPage
-  Routes --> NormalizationPage
-  Routes --> BatchPage
-  Routes --> ResultsPage
-  Routes --> PrivacyPolicyPage
-  Routes --> FallbackPage
-  ResultsPage --> TableContainer
-  TableContainer --> AnalysisTable
-  TableContainer --> HeatMap
-  NormalizationPage --> MethodCard
-  NormalizationPage --> PcaViewer
-  BatchPage --> SvdPlot
-  BatchPage --> BatchForm
-```
+<img src="./diagrams/main_component_tree.svg" alt="Component Tree" />
 
 Workflow steps are configured in `frontend/app/src/shared/layout/workflowSteps.ts`:
 
-| Step id | Label | Matching prefixes |
-|---:|---|---|
-| 1 | `Upload` | `/`, `/upload` |
-| 2 | `Filter` | `/analysis` |
-| 3 | `Normalization` | `/normalization` |
-| 4 | `Batch` | `/batch` |
-| 5 | `Results` | `/results` |
+| Step id | Label           | Matching prefixes |
+|--------:|-----------------|-------------------|
+|       1 | `Upload`        | `/`, `/upload`    |
+|       2 | `Filter`        | `/analysis`       |
+|       3 | `Normalization` | `/normalization`  |
+|       4 | `Batch`         | `/batch`          |
+|       5 | `Results`       | `/results`        |
 
 ### State Management
 
@@ -112,7 +89,7 @@ Verified behavior:
 
 - There is no Redux, Zustand, MobX, Context-based global store, or equivalent global frontend store.
 - State is local React state in pages/components and custom hooks.
-- Long-running backend jobs are tracked by polling through `useJobPolling`.
+- Long-running backend jobs are tracked by polling through `useJobPolling` and visualized by `ProgressBar`.
 - Feature hooks own network and workflow state for upload, analysis stats, normalization, batch correction, table data, and heatmap generation.
 
 Polling model:
@@ -128,12 +105,12 @@ Pipeline progress semantics should stay aligned with `docs/architecture/pipeline
 
 Actual error-handling code lives in `frontend/app/src/shared/errors/`.
 
-| File | Verified purpose |
-|---|---|
-| `frontend/app/src/shared/errors/ErrorTypes.ts` | `ProblemDetail`, `ApiProblemDetail`, and `ProblemError`. |
+| File                                               | Verified purpose                                                          |
+|----------------------------------------------------|---------------------------------------------------------------------------|
+| `frontend/app/src/shared/errors/ErrorTypes.ts`     | `ProblemDetail`, `ApiProblemDetail`, and `ProblemError`.                  |
 | `frontend/app/src/shared/errors/ErrorBoundary.tsx` | Class-based render error boundary wrapped by route-aware `ErrorBoundary`. |
-| `frontend/app/src/shared/errors/ErrorMessage.tsx` | Material UI `Snackbar` and `Alert` for user-facing errors. |
-| `frontend/app/src/shared/errors/apiError.ts` | Defensive API error message parsing. |
+| `frontend/app/src/shared/errors/ErrorMessage.tsx`  | Material UI `Snackbar` and `Alert` for user-facing errors.                |
+| `frontend/app/src/shared/errors/apiError.ts`       | Defensive API error message parsing.                                      |
 
 Fallback behavior:
 
@@ -145,26 +122,26 @@ Fallback behavior:
 
 Verified UI state components and patterns:
 
-| State | Implementations |
-|---|---|
-| Loading | `UploadSpinner`, `LoadingScreen`, `Progressbar`, `SkeletonTable`, `SampleSheetPreviewTable` loading text, Material UI disabled states. |
-| Error | `ErrorMessage`, Material UI `Alert`, `FallbackPage variant="error"`, hook-specific inline error panels. |
-| Empty | `AnalysisTable` "No data available.", `SvdPlot` "No SVD diagnostics available.", `PcaPlot` "No PCA data.", `FilteringStats` missing-stats warning. |
-| Skeleton | `frontend/app/src/features/results/components/table/SkeletonTable.tsx`. |
-| Disabled | Shared `Button` disabled styling, Material UI `disabled` props, filter Apply disabled when invalid. |
+| State    | Implementations                                                                                                                                    |
+|----------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| Loading  | `UploadSpinner`, `LoadingScreen`, `Progressbar`, `SkeletonTable`, `SampleSheetPreviewTable` loading text, Material UI disabled states.             |
+| Error    | `ErrorMessage`, Material UI `Alert`, `FallbackPage variant="error"`, hook-specific inline error panels.                                            |
+| Empty    | `AnalysisTable` "No data available.", `SvdPlot` "No SVD diagnostics available.", `PcaPlot` "No PCA data.", `FilteringStats` missing-stats warning. |
+| Skeleton | `frontend/app/src/features/results/components/table/SkeletonTable.tsx`.                                                                            |
+| Disabled | Shared `Button` disabled styling, Material UI `disabled` props, filter Apply disabled when invalid.                                                |
 
 ### Export and Download Behavior
 
 Verified export/download utilities:
 
-| Function or component | Source path | Behavior |
-|---|---|---|
-| `downloadPlot` | `frontend/app/src/shared/plots/downloadPlot.ts` | Fetches a plot URL as a blob, creates an object URL, clicks a temporary anchor, then revokes the object URL. |
-| `exportSvgAsPng` | `frontend/app/src/shared/plots/exportSvg.ts` | Serializes SVG, draws it to canvas, creates PNG blob, and triggers download. |
-| `exportSvgAsPdf` | `frontend/app/src/shared/plots/exportSvgAsPdf.ts` | Converts SVG into a PDF export. |
-| `exportTableCsv` | `frontend/app/src/features/results/hooks/exportTableCsv.ts` | Fetches CSV export as a blob and downloads `<table>_results_<date>.csv`. |
-| `TableExportButton` | `frontend/app/src/features/results/components/table/TableExportButton.tsx` | Styled button that triggers CSV export callback. |
-| `PlotExportButtons` | `frontend/app/src/shared/plots/PlotExportButtons.tsx` | Provides PNG and PDF buttons for static `PlotSource` exports. |
+| Function or component | Source path                                                                | Behavior                                                                                                     |
+|-----------------------|----------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `downloadPlot`        | `frontend/app/src/shared/plots/downloadPlot.ts`                            | Fetches a plot URL as a blob, creates an object URL, clicks a temporary anchor, then revokes the object URL. |
+| `exportSvgAsPng`      | `frontend/app/src/shared/plots/exportSvg.ts`                               | Serializes SVG, draws it to canvas, creates PNG blob, and triggers download.                                 |
+| `exportSvgAsPdf`      | `frontend/app/src/shared/plots/exportSvgAsPdf.ts`                          | Converts SVG into a PDF export.                                                                              |
+| `exportTableCsv`      | `frontend/app/src/features/results/hooks/exportTableCsv.ts`                | Fetches CSV export as a blob and downloads `<table>_results_<date>.csv`.                                     |
+| `TableExportButton`   | `frontend/app/src/features/results/components/table/TableExportButton.tsx` | Styled button that triggers CSV export callback.                                                             |
+| `PlotExportButtons`   | `frontend/app/src/shared/plots/PlotExportButtons.tsx`                      | Provides PNG and PDF buttons for static `PlotSource` exports.                                                |
 
 No `downloadHeatmap` function exists in the current frontend. Heatmap export is implemented by passing a heatmap `PlotSource` from `useHeatMapGeneration` to `PlotView`, which uses `PlotExportButtons` and `downloadPlot`.
 
@@ -172,13 +149,13 @@ No `downloadHeatmap` function exists in the current frontend. Heatmap export is 
 
 ### Theme Files
 
-| File | Verified role |
-|---|---|
-| `frontend/app/src/shared/theme/colors.ts` | Semantic TypeScript color token object. |
-| `frontend/app/src/shared/theme/colors.test.ts` | Exact token value tests. |
-| `frontend/app/tailwind.config.ts` | Imports `colors` and exposes them through `theme.extend.colors`. |
-| `frontend/app/src/App.css` | Tailwind import/config directive plus global base rules. |
-| `frontend/app/src/shared/components/buttonStyles.ts` | Canonical button variants and sizes. |
+| File                                                         | Verified role                                                               |
+|--------------------------------------------------------------|-----------------------------------------------------------------------------|
+| `frontend/app/src/shared/theme/colors.ts`                    | Semantic TypeScript color token object.                                     |
+| `frontend/app/src/shared/theme/colors.test.ts`               | Exact token value tests.                                                    |
+| `frontend/app/tailwind.config.ts`                            | Imports `colors` and exposes them through `theme.extend.colors`.            |
+| `frontend/app/src/App.css`                                   | Tailwind import/config directive plus global base rules.                    |
+| `frontend/app/src/shared/components/buttonStyles.ts`         | Canonical button variants and sizes.                                        |
 | `frontend/app/src/features/normalization/utils/pcaColors.ts` | Plot-specific categorical PCA palette, separate from the application theme. |
 
 ### Semantic Color Tokens
@@ -187,39 +164,39 @@ Source: `frontend/app/src/shared/theme/colors.ts`.
 
 Brand tokens:
 
-| Token | Value |
-|---|---:|
-| `primary.DEFAULT` | `#1A6FA8` |
-| `primary.hover` | `#125280` |
-| `primary.text` | `#FFFFFF` |
+| Token               |     Value |
+|---------------------|----------:|
+| `primary.DEFAULT`   | `#1A6FA8` |
+| `primary.hover`     | `#125280` |
+| `primary.text`      | `#FFFFFF` |
 | `secondary.DEFAULT` | `#3D5A80` |
-| `secondary.hover` | `#2C3F5C` |
-| `secondary.text` | `#FFFFFF` |
-| `tertiary.DEFAULT` | `#5C7B8A` |
-| `tertiary.hover` | `#435C68` |
-| `tertiary.text` | `#FFFFFF` |
+| `secondary.hover`   | `#2C3F5C` |
+| `secondary.text`    | `#FFFFFF` |
+| `tertiary.DEFAULT`  | `#5C7B8A` |
+| `tertiary.hover`    | `#435C68` |
+| `tertiary.text`     | `#FFFFFF` |
 
 State tokens:
 
-| Token group | Default | Hover | Text | Badge background | Badge text |
-|---|---:|---:|---:|---:|---:|
-| `success` | `#1E7D4E` | `#155C38` | `#FFFFFF` | `#DCFCE7` | `#155C38` |
-| `warning` | `#B45309` | `#8A3F07` | `#FFFFFF` | `#FEF3C7` | `#8A3F07` |
-| `danger` | `#B91C1C` | `#8B1313` | `#FFFFFF` | `#FEE2E2` | `#8B1313` |
-| `error` | Alias of `danger` | Alias of `danger` | Alias of `danger` | Alias of `danger` | Alias of `danger` |
-| `info` | `#0E6BAB` | `#094E7E` | `#FFFFFF` | `#DBEAFE` | `#094E7E` |
+| Token group |           Default |             Hover |              Text |  Badge background |        Badge text |
+|-------------|------------------:|------------------:|------------------:|------------------:|------------------:|
+| `success`   |         `#1E7D4E` |         `#155C38` |         `#FFFFFF` |         `#DCFCE7` |         `#155C38` |
+| `warning`   |         `#B45309` |         `#8A3F07` |         `#FFFFFF` |         `#FEF3C7` |         `#8A3F07` |
+| `danger`    |         `#B91C1C` |         `#8B1313` |         `#FFFFFF` |         `#FEE2E2` |         `#8B1313` |
+| `error`     | Alias of `danger` | Alias of `danger` | Alias of `danger` | Alias of `danger` | Alias of `danger` |
+| `info`      |         `#0E6BAB` |         `#094E7E` |         `#FFFFFF` |         `#DBEAFE` |         `#094E7E` |
 
 Neutral tokens:
 
-| Token | Value |
-|---|---:|
-| `neutral.textPrimary` | `#0F172A` |
-| `neutral.textSecondary` | `#475569` |
-| `neutral.textDisabled` | `#94A3B8` |
-| `neutral.background` | `#F8FAFC` |
-| `neutral.surface` | `#F1F5F9` |
-| `neutral.card` | `#FFFFFF` |
-| `neutral.borderDefault` | `#E2E8F0` |
+| Token                    |     Value |
+|--------------------------|----------:|
+| `neutral.textPrimary`    | `#0F172A` |
+| `neutral.textSecondary`  | `#475569` |
+| `neutral.textDisabled`   | `#94A3B8` |
+| `neutral.background`     | `#F8FAFC` |
+| `neutral.surface`        | `#F1F5F9` |
+| `neutral.card`           | `#FFFFFF` |
+| `neutral.borderDefault`  | `#E2E8F0` |
 | `neutral.borderEmphasis` | `#CBD5E1` |
 
 Older names such as `foreground`, `subtle`, and `subtle-foreground` are not present in the current token object and should not be introduced.

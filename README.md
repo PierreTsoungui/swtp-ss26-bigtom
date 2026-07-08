@@ -437,7 +437,6 @@ Frontend routes implemented in `frontend/app/src/App.tsx`:
 - `/normalization/:job_id`
 - `/batch/:job_id`
 - `/results/:job_id`
-- `/datenschutz`
 
 Main API endpoints implemented by FastAPI:
 

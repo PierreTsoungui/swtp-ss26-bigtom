@@ -73,7 +73,7 @@ User interactions:
 - Sort table columns through `AnalysisTable`.
 - Change pages through `TablePagination`.
 - Download CSV through `TableExportButton`.
-- Generate heatmaps when DMP is active.
+- Generate heatmaps when DMP is active through `HeatMap`.
 
 Loading, error, and empty states:
 
@@ -100,8 +100,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/results/components/table/TableContainer.test.tsx`.
 
-Extension guidance: add new table-level actions here only when they need shared table state. Keep raw fetch/download logic in hook modules.
-
 Usage:
 
 ```tsx
@@ -118,12 +116,12 @@ Source path: `frontend/app/src/features/results/components/table/AnalysisTable.t
 
 Props:
 
-| Prop | Exact type | Required | Description |
-|---|---|---:|---|
-| `data` | `TableData \| null` | Yes | Columns, rows, and pagination metadata. |
-| `sorting` | `{ sort_by: string \| null; sort_order: "asc" \| "desc" \| null } \| undefined` | No | Current server-side sort state. |
-| `onSort` | `((columnKey: string) => void) \| undefined` | No | Called when a sortable column header is clicked. |
-| `onPageChange` | `((page: number) => void) \| undefined` | No | Called by pagination controls. Defaults to a no-op. |
+| Prop           | Exact type                                                                      | Required | Description                                         |
+|----------------|---------------------------------------------------------------------------------|---------:|-----------------------------------------------------|
+| `data`         | `TableData \| null`                                                             |      Yes | Columns, rows, and pagination metadata.             |
+| `sorting`      | `{ sort_by: string \| null; sort_order: "asc" \| "desc" \| null } \| undefined` |       No | Current server-side sort state.                     |
+| `onSort`       | `((columnKey: string) => void) \| undefined`                                    |       No | Called when a sortable column header is clicked.    |
+| `onPageChange` | `((page: number) => void) \| undefined`                                         |       No | Called by pagination controls. Defaults to a no-op. |
 
 Child composition:
 
@@ -159,8 +157,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/results/components/table/AnalysisTable.test.tsx`.
 
-Extension guidance: add new table cell formatting in `frontend/app/src/features/results/utils/formatCellValue.ts`, not inline in the table.
-
 Usage:
 
 ```tsx
@@ -180,13 +176,13 @@ Source path: `frontend/app/src/features/results/components/table/TableFilters.ts
 
 Props:
 
-| Prop | Exact type | Required | Description |
-|---|---|---:|---|
-| `table` | `"dmp" \| "dmr"` | Yes | Selects the filter definition set. |
-| `filters` | `T extends DmpFilters \| DmrFilters` | Yes | Current draft filter values. |
-| `onChange` | `<K extends keyof T>(key: K, value: string) => void` | Yes | Updates one field. |
-| `onApply` | `() => void` | Yes | Applies the current draft values. |
-| `onReset` | `() => void` | Yes | Clears filters. |
+| Prop       | Exact type                                           | Required | Description                        |
+|------------|------------------------------------------------------|---------:|------------------------------------|
+| `table`    | `"dmp" \| "dmr"`                                     |      Yes | Selects the filter definition set. |
+| `filters`  | `T extends DmpFilters \| DmrFilters`                 |      Yes | Current draft filter values.       |
+| `onChange` | `<K extends keyof T>(key: K, value: string) => void` |      Yes | Updates one field.                 |
+| `onApply`  | `() => void`                                         |      Yes | Applies the current draft values.  |
+| `onReset`  | `() => void`                                         |      Yes | Clears filters.                    |
 
 Child composition:
 
@@ -221,8 +217,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/results/components/table/TableFilters.test.tsx`.
 
-Extension guidance: add a filter by updating `DmpFilters` or `DmrFilters` in `useTableFilters.ts` and the matching `FILTER_DEFINITIONS` entry in this component. Also update tests.
-
 Usage:
 
 ```tsx
@@ -243,10 +237,10 @@ Source path: `frontend/app/src/features/results/components/heatmap/HeatMap.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Description |
-|---|---|---:|---|
-| `filters` | `Record<string, string>` | Yes | Applied DMP filters forwarded to backend generation. |
-| `rowCount` | `number \| undefined` | No | Current filtered row count for pre-check messaging. |
+| Prop       | Exact type               | Required | Description                                          |
+|------------|--------------------------|---------:|------------------------------------------------------|
+| `filters`  | `Record<string, string>` |      Yes | Applied DMP filters forwarded to backend generation. |
+| `rowCount` | `number \| undefined`    |       No | Current filtered row count for pre-check messaging.  |
 
 Child composition:
 
@@ -295,8 +289,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/results/components/heatmap/HeatMap.test.tsx`.
 
-Extension guidance: keep request/polling state in `useHeatMapGeneration`; keep this component focused on form and display state.
-
 Usage:
 
 ```tsx
@@ -311,9 +303,9 @@ Source path: `frontend/app/src/features/batch/components/SvdPlot.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Description |
-|---|---|---:|---|
-| `rounds` | `BatchRound[]` | Yes | Correction rounds with SVD plot URLs and settings. |
+| Prop     | Exact type     | Required | Description                                        |
+|----------|----------------|---------:|----------------------------------------------------|
+| `rounds` | `BatchRound[]` |      Yes | Correction rounds with SVD plot URLs and settings. |
 
 Child composition: `PlotView`.
 
@@ -342,8 +334,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/batch/components/SvdPlot.test.tsx`.
 
-Extension guidance: keep plot display behavior in `PlotView`; this component should only translate `BatchRound` into `PlotSource`.
-
 Usage:
 
 ```tsx
@@ -358,16 +348,16 @@ Source path: `frontend/app/src/features/normalization/components/PcaPlot.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Default |
-|---|---|---:|---|
-| `data` | `PcaData` | Yes | - |
-| `groupColors` | `Record<string, string>` | Yes | - |
-| `sampleColors` | `Record<string, string>` | Yes | - |
-| `labeledSamples` | `string[] \| undefined` | No | `[]` |
-| `showLegend` | `boolean \| undefined` | No | `true` |
-| `width` | `number \| undefined` | No | `760` |
-| `height` | `number \| undefined` | No | `560` |
-| `fontScale` | `number \| undefined` | No | `1` |
+| Prop             | Exact type               | Required | Default |
+|------------------|--------------------------|---------:|---------|
+| `data`           | `PcaData`                |      Yes | -       |
+| `groupColors`    | `Record<string, string>` |      Yes | -       |
+| `sampleColors`   | `Record<string, string>` |      Yes | -       |
+| `labeledSamples` | `string[] \| undefined`  |       No | `[]`    |
+| `showLegend`     | `boolean \| undefined`   |       No | `true`  |
+| `width`          | `number \| undefined`    |       No | `760`   |
+| `height`         | `number \| undefined`    |       No | `560`   |
+| `fontScale`      | `number \| undefined`    |       No | `1`     |
 
 Child composition: SVG elements, with a forwarded `SVGSVGElement` ref.
 
@@ -402,8 +392,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/normalization/components/PcaPlot.test.tsx`.
 
-Extension guidance: add visual plot behavior here only when it applies to both preview and modal exports.
-
 Usage:
 
 ```tsx
@@ -423,11 +411,11 @@ Source path: `frontend/app/src/features/normalization/components/PcaViewer.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Description |
-|---|---|---:|---|
-| `method` | `string` | Yes | Normalization method label. |
-| `data` | `PcaData` | Yes | PCA points and metadata. |
-| `onClose` | `() => void` | Yes | Closes the modal. |
+| Prop      | Exact type   | Required | Description                 |
+|-----------|--------------|---------:|-----------------------------|
+| `method`  | `string`     |      Yes | Normalization method label. |
+| `data`    | `PcaData`    |      Yes | PCA points and metadata.    |
+| `onClose` | `() => void` |      Yes | Closes the modal.           |
 
 Child composition:
 
@@ -477,8 +465,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/normalization/components/PcaViewer.test.tsx`.
 
-Extension guidance: extend `EXPORTERS` and `EXPORT_ORDER` together when adding a new export format.
-
 Usage:
 
 ```tsx
@@ -495,12 +481,12 @@ Source path: `frontend/app/src/shared/components/Progressbar.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Default |
-|---|---|---:|---|
-| `jobStatus` | `JobStatus` | Yes | - |
-| `showNextButton` | `boolean \| undefined` | No | `false` |
-| `nextDisabled` | `boolean \| undefined` | No | `true` |
-| `onNext` | `(() => void) \| undefined` | No | - |
+| Prop             | Exact type                  | Required | Default |
+|------------------|-----------------------------|---------:|---------|
+| `jobStatus`      | `JobStatus`                 |      Yes | -       |
+| `showNextButton` | `boolean \| undefined`      |       No | `false` |
+| `nextDisabled`   | `boolean \| undefined`      |       No | `true`  |
+| `onNext`         | `(() => void) \| undefined` |       No | -       |
 
 Child composition:
 
@@ -529,8 +515,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/shared/components/Progressbar.test.tsx`.
 
-Extension guidance: keep status interpretation aligned with `JobStatusValue` and `JobPhase`.
-
 Usage:
 
 ```tsx
@@ -545,9 +529,9 @@ Source path: `frontend/app/src/shared/layout/StepIndicator.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Description |
-|---|---|---:|---|
-| `currentStepId` | `number \| undefined` | No | Current workflow step id from `workflowSteps`. |
+| Prop            | Exact type            | Required | Description                                    |
+|-----------------|-----------------------|---------:|------------------------------------------------|
+| `currentStepId` | `number \| undefined` |       No | Current workflow step id from `workflowSteps`. |
 
 Child composition: ordered list built from `frontend/app/src/shared/layout/workflowSteps.ts`.
 
@@ -585,12 +569,12 @@ Source path: `frontend/app/src/features/upload/components/ColumnRoleMapper.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Default |
-|---|---|---:|---|
-| `columns` | `string[]` | Yes | - |
-| `mapping` | `Record<RoleKey, string \| null>` | Yes | - |
-| `onChange` | `(role: RoleKey, value: string \| null) => void` | Yes | - |
-| `disabled` | `boolean \| undefined` | No | `false` |
+| Prop       | Exact type                                       | Required | Default |
+|------------|--------------------------------------------------|---------:|---------|
+| `columns`  | `string[]`                                       |      Yes | -       |
+| `mapping`  | `Record<RoleKey, string \| null>`                |      Yes | -       |
+| `onChange` | `(role: RoleKey, value: string \| null) => void` |      Yes | -       |
+| `disabled` | `boolean \| undefined`                           |       No | `false` |
 
 Child composition: four native `<select>` controls for `sentrix_id`, `sentrix_position`, `sample_group`, and `sample_name`.
 
@@ -618,8 +602,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/upload/components/ColumnRoleMapper.test.tsx`.
 
-Extension guidance: if backend role requirements change, update `RoleKey`, `ROLES`, `useUploadFlow` mapping completion, and tests together.
-
 Usage:
 
 ```tsx
@@ -628,60 +610,6 @@ Usage:
   mapping={columnMapping}
   onChange={onSetRole}
   disabled={disabled}
-/>
-```
-
-#### `FilterPanel`
-
-Purpose: aggregates upload preprocessing and quality-control filter controls.
-
-Source path: `frontend/app/src/features/upload/components/FilterPanel.tsx`
-
-Props:
-
-| Prop | Exact type | Required |
-|---|---|---:|
-| `filterSettings` | `FilterSettings` | Yes |
-| `onFilterSettingsChange` | `(settings: FilterSettings) => void` | Yes |
-
-Child composition:
-
-- Material UI `Accordion`, `AccordionSummary`, `AccordionDetails`, `IconButton`, `Tooltip`, and `Typography`.
-- `HelpButton`.
-- `DetPValueFilter`, `BeadCountFilter`, `NonCpgFilter`, `SnpFilter`, `MultiHitFilter`, `XYChromosomesFilter`, and `SampleQuality`.
-
-Hooks and service dependencies: none.
-
-User interactions:
-
-- Expand/collapse filter panel.
-- Reset to `DEFAULT_FILTER_SETTINGS`.
-- Toggle and tune individual filters.
-
-Loading, error, and empty states:
-
-- No loading or error state.
-- Child filters validate and clamp numeric fields where implemented.
-
-Accessibility and keyboard behavior:
-
-- Uses Material UI accordion and switch controls.
-- Reset icon is wrapped in a tooltip.
-
-Edge cases:
-
-- Reset uses `structuredClone(DEFAULT_FILTER_SETTINGS)` to avoid mutating the shared default object.
-
-Related tests: `frontend/app/src/features/upload/components/FilterPanel.test.tsx` and child filter tests.
-
-Extension guidance: add new filters to the `FilterSettings` type, default settings, this component's update handler, and tests.
-
-Usage:
-
-```tsx
-<FilterPanel
-  filterSettings={flow.filterSettings}
-  onFilterSettingsChange={flow.setFilterSettings}
 />
 ```
 
@@ -738,8 +666,6 @@ Edge cases:
 
 Related tests: `frontend/app/src/features/normalization/NormalizationPage.test.tsx`.
 
-Extension guidance: keep method ordering in `orderMethods` and domain types in `frontend/app/src/features/normalization/types.ts`.
-
 Usage:
 
 ```tsx
@@ -754,12 +680,12 @@ Source path: `frontend/app/src/features/batch/components/BatchForm.tsx`
 
 Props:
 
-| Prop | Exact type | Required | Default |
-|---|---|---:|---|
-| `parameters` | `BatchParametersResponse` | Yes | - |
-| `onSubmit` | `(data: BatchFormData) => void` | Yes | - |
-| `isLoading` | `boolean \| undefined` | No | `false` |
-| `onSkip` | `((selection?: GroupSelection) => void) \| undefined` | No | - |
+| Prop         | Exact type                                            | Required | Default |
+|--------------|-------------------------------------------------------|---------:|---------|
+| `parameters` | `BatchParametersResponse`                             |      Yes | -       |
+| `onSubmit`   | `(data: BatchFormData) => void`                       |      Yes | -       |
+| `isLoading`  | `boolean \| undefined`                                |       No | `false` |
+| `onSkip`     | `((selection?: GroupSelection) => void) \| undefined` |       No | -       |
 
 Child composition:
 
@@ -789,6 +715,7 @@ Loading, error, and empty states:
 - Shows validation error when submitting without a batch variable.
 - Shows case/control warning when both selected groups are the same.
 - Button labels reflect the clicked action while loading.
+- Reloads page after successful batch iteration and SVD plot generation.
 
 Accessibility and keyboard behavior:
 
@@ -801,8 +728,6 @@ Edge cases:
 - Skip is disabled when comparison selection is incomplete.
 
 Related tests: `frontend/app/src/features/batch/components/BatchForm.test.tsx` and `BatchForm.help.test.tsx`.
-
-Extension guidance: add new batch form fields through `BatchFormData` and backend request mapping in `BatchPage`.
 
 Usage:
 
@@ -819,72 +744,72 @@ Usage:
 
 #### Application and Layout
 
-| Component | Source path | Purpose |
-|---|---|---|
-| `App` | `frontend/app/src/App.tsx` | Route table wrapped in `AppLayout` and `ErrorBoundary`. |
+| Component   | Source path                                    | Purpose                                                                  |
+|-------------|------------------------------------------------|--------------------------------------------------------------------------|
+| `App`       | `frontend/app/src/App.tsx`                     | Route table wrapped in `AppLayout` and `ErrorBoundary`.                  |
 | `AppLayout` | `frontend/app/src/shared/layout/AppLayout.tsx` | Application shell, phase label, reset wiring, header/footer composition. |
-| `AppHeader` | `frontend/app/src/shared/layout/AppHeader.tsx` | Brand, landing navigation, step indicator, reset dialog. |
-| `AppFooter` | `frontend/app/src/shared/layout/AppFooter.tsx` | Footer branding, imprint, privacy link. |
+| `AppHeader` | `frontend/app/src/shared/layout/AppHeader.tsx` | Brand, landing navigation, step indicator, reset dialog.                 |
+| `AppFooter` | `frontend/app/src/shared/layout/AppFooter.tsx` | Footer branding, imprint, privacy link.                                  |
 
 #### Shared UI, Errors, Help, and Plots
 
-| Component | Source path | Purpose |
-|---|---|---|
-| `Button` | `frontend/app/src/shared/components/Button.tsx` | Canonical application button. |
-| `BackButton` | `frontend/app/src/shared/components/BackButton.tsx` | Browser-history back action. |
-| `Modal` | `frontend/app/src/shared/components/Modal.tsx` | Accessible dialog primitive with focus trap and scroll lock. |
-| `ConfirmDialog` | `frontend/app/src/shared/components/ConfirmDialog.tsx` | Confirmation modal for consequential actions. |
-| `FallbackPage` | `frontend/app/src/shared/components/FallbackPage.tsx` | Error and not-found fallback page. |
-| `SampleSheetPreviewTable` | `frontend/app/src/shared/components/SampleSheetPreviewTable.tsx` | Read-only sample sheet preview. |
-| `ErrorBoundary` | `frontend/app/src/shared/errors/ErrorBoundary.tsx` | Route-aware render error fallback. |
-| `ErrorMessage` | `frontend/app/src/shared/errors/ErrorMessage.tsx` | Snackbar/alert error display. |
-| `HelpButton` | `frontend/app/src/shared/help/HelpButton.tsx` | Contextual help modal trigger. |
-| `HelpContent` | `frontend/app/src/shared/help/HelpContent.tsx` | Markdown renderer for help topics. |
-| `PlotView` | `frontend/app/src/shared/plots/PlotView.tsx` | Static plot preview, lightbox, and export composition. |
-| `PlotFigure` | `frontend/app/src/shared/plots/PlotFigure.tsx` | Keyboard-accessible plot preview button. |
-| `PlotLightbox` | `frontend/app/src/shared/plots/PlotLightbox.tsx` | Enlarged plot modal. |
-| `PlotExportButtons` | `frontend/app/src/shared/plots/PlotExportButtons.tsx` | PNG/PDF download controls. |
+| Component                 | Source path                                                      | Purpose                                                      |
+|---------------------------|------------------------------------------------------------------|--------------------------------------------------------------|
+| `Button`                  | `frontend/app/src/shared/components/Button.tsx`                  | Canonical application button.                                |
+| `BackButton`              | `frontend/app/src/shared/components/BackButton.tsx`              | Browser-history back action.                                 |
+| `Modal`                   | `frontend/app/src/shared/components/Modal.tsx`                   | Accessible dialog primitive with focus trap and scroll lock. |
+| `ConfirmDialog`           | `frontend/app/src/shared/components/ConfirmDialog.tsx`           | Confirmation modal for consequential actions.                |
+| `FallbackPage`            | `frontend/app/src/shared/components/FallbackPage.tsx`            | Error and not-found fallback page.                           |
+| `SampleSheetPreviewTable` | `frontend/app/src/shared/components/SampleSheetPreviewTable.tsx` | Read-only sample sheet preview.                              |
+| `ErrorBoundary`           | `frontend/app/src/shared/errors/ErrorBoundary.tsx`               | Route-aware render error fallback.                           |
+| `ErrorMessage`            | `frontend/app/src/shared/errors/ErrorMessage.tsx`                | Snackbar/alert error display.                                |
+| `HelpButton`              | `frontend/app/src/shared/help/HelpButton.tsx`                    | Contextual help modal trigger.                               |
+| `HelpContent`             | `frontend/app/src/shared/help/HelpContent.tsx`                   | Markdown renderer for help topics.                           |
+| `PlotView`                | `frontend/app/src/shared/plots/PlotView.tsx`                     | Static plot preview, lightbox, and export composition.       |
+| `PlotFigure`              | `frontend/app/src/shared/plots/PlotFigure.tsx`                   | Keyboard-accessible plot preview button.                     |
+| `PlotLightbox`            | `frontend/app/src/shared/plots/PlotLightbox.tsx`                 | Enlarged plot modal.                                         |
+| `PlotExportButtons`       | `frontend/app/src/shared/plots/PlotExportButtons.tsx`            | PNG/PDF download controls.                                   |
 
 #### Upload Support
 
-| Component | Source path | Purpose |
-|---|---|---|
-| `UploadPage` | `frontend/app/src/features/upload/UploadPage.tsx` | Upload inspect, review, filter, and commit page. |
-| `UploadDropzone` | `frontend/app/src/features/upload/components/UploadDropzone.tsx` | File, ZIP, folder, and drag/drop input. |
-| `FileReviewList` | `frontend/app/src/features/upload/components/FileReviewList.tsx` | Sample-sheet and IDAT-pair review UI. |
-| `UploadSampleSheetPreviewModal` | `frontend/app/src/features/upload/components/UploadSampleSheetPreviewModal.tsx` | Staged sample-sheet preview modal. |
-| `UploadSpinner` | `frontend/app/src/features/upload/components/UploadSpinner.tsx` | Small upload workflow spinner. |
-| Filter child controls | `frontend/app/src/features/upload/components/filters/*.tsx` | Individual filter toggles and numeric fields used by `FilterPanel`. |
+| Component                       | Source path                                                                     | Purpose                                                             |
+|---------------------------------|---------------------------------------------------------------------------------|---------------------------------------------------------------------|
+| `UploadPage`                    | `frontend/app/src/features/upload/UploadPage.tsx`                               | Upload inspect, review, filter, and commit page.                    |
+| `UploadDropzone`                | `frontend/app/src/features/upload/components/UploadDropzone.tsx`                | File, ZIP, folder, and drag/drop input.                             |
+| `FileReviewList`                | `frontend/app/src/features/upload/components/FileReviewList.tsx`                | Sample-sheet and IDAT-pair review UI.                               |
+| `UploadSampleSheetPreviewModal` | `frontend/app/src/features/upload/components/UploadSampleSheetPreviewModal.tsx` | Staged sample-sheet preview modal.                                  |
+| `UploadSpinner`                 | `frontend/app/src/features/upload/components/UploadSpinner.tsx`                 | Small upload workflow spinner.                                      |
+| Filter child controls           | `frontend/app/src/features/upload/components/filters/*.tsx`                     | Individual filter toggles and numeric fields used by `FilterPanel`. |
 
 #### Page and Feature Support
 
-| Component | Source path | Purpose |
-|---|---|---|
-| `AnalysisPage` | `frontend/app/src/features/analysis/AnalysisPage.tsx` | Filtering and preview progress page. |
-| `FilteringStats` | `frontend/app/src/features/analysis/components/FilteringStats.tsx` | Filtering statistics display. |
-| `InfoPanel` | `frontend/app/src/features/analysis/components/InfoPanel.tsx` | Generic analysis status panel. |
-| `MethodCard` | `frontend/app/src/features/normalization/components/MethodCard.tsx` | Selectable normalization method preview card. |
-| `LoadingScreen` | `frontend/app/src/features/normalization/components/LoadingScreen.tsx` | Minimal full-screen loading or error message. |
-| `BatchPage` | `frontend/app/src/features/batch/BatchPage.tsx` | Batch correction page orchestration. |
-| `BatchSampleSheetPreviewModal` | `frontend/app/src/features/batch/components/BatchSampleSheetPreviewModal.tsx` | Job sample-sheet preview modal. |
-| `ResultsPage` | `frontend/app/src/features/results/ResultsPage.tsx` | Results page wrapper around `TableContainer`. |
-| `TableTabs` | `frontend/app/src/features/results/components/table/TableTabs.tsx` | DMP/DMR tab selector. |
-| `TablePagination` | `frontend/app/src/features/results/components/table/TablePagination.tsx` | Sliding-window pagination. |
-| `TableExportButton` | `frontend/app/src/features/results/components/table/TableExportButton.tsx` | CSV export trigger. |
-| `SkeletonTable` | `frontend/app/src/features/results/components/table/SkeletonTable.tsx` | Loading skeleton for result tables. |
+| Component                      | Source path                                                                   | Purpose                                       |
+|--------------------------------|-------------------------------------------------------------------------------|-----------------------------------------------|
+| `AnalysisPage`                 | `frontend/app/src/features/analysis/AnalysisPage.tsx`                         | Filtering and preview progress page.          |
+| `FilteringStats`               | `frontend/app/src/features/analysis/components/FilteringStats.tsx`            | Filtering statistics display.                 |
+| `InfoPanel`                    | `frontend/app/src/features/analysis/components/InfoPanel.tsx`                 | Generic analysis status panel.                |
+| `MethodCard`                   | `frontend/app/src/features/normalization/components/MethodCard.tsx`           | Selectable normalization method preview card. |
+| `LoadingScreen`                | `frontend/app/src/features/normalization/components/LoadingScreen.tsx`        | Minimal full-screen loading or error message. |
+| `BatchPage`                    | `frontend/app/src/features/batch/BatchPage.tsx`                               | Batch correction page orchestration.          |
+| `BatchSampleSheetPreviewModal` | `frontend/app/src/features/batch/components/BatchSampleSheetPreviewModal.tsx` | Job sample-sheet preview modal.               |
+| `ResultsPage`                  | `frontend/app/src/features/results/ResultsPage.tsx`                           | Results page wrapper around `TableContainer`. |
+| `TableTabs`                    | `frontend/app/src/features/results/components/table/TableTabs.tsx`            | DMP/DMR tab selector.                         |
+| `TablePagination`              | `frontend/app/src/features/results/components/table/TablePagination.tsx`      | Sliding-window pagination.                    |
+| `TableExportButton`            | `frontend/app/src/features/results/components/table/TableExportButton.tsx`    | CSV export trigger.                           |
+| `SkeletonTable`                | `frontend/app/src/features/results/components/table/SkeletonTable.tsx`        | Loading skeleton for result tables.           |
 
 #### Landing and Static Pages
 
-| Component | Source path | Purpose |
-|---|---|---|
-| `LandingPage` | `frontend/app/src/features/landing/LandingPage.tsx` | Composes landing sections. |
-| `HeroSection` | `frontend/app/src/features/landing/components/HeroSection.tsx` | Overview and start CTA. |
-| `LandingLogo` | `frontend/app/src/features/landing/components/LandingLogo.tsx` | Displays `logo.svg`. |
-| `WorkflowSection` | `frontend/app/src/features/landing/components/WorkflowSection.tsx` | Workflow cards. |
-| `GettingStartedSection` | `frontend/app/src/features/landing/components/GettingStartedSection.tsx` | Beginner topic cards. |
-| `FaqSection` | `frontend/app/src/features/landing/components/FaqSection.tsx` | FAQ details accordions. |
-| `GlossarySection` | `frontend/app/src/features/landing/components/GlossarySection.tsx` | Glossary cards. |
-| `PrivacyPolicyPage` | `frontend/app/src/shared/pages/PrivacyPolicyPage.tsx` | Static privacy policy page. |
+| Component               | Source path                                                              | Purpose                     |
+|-------------------------|--------------------------------------------------------------------------|-----------------------------|
+| `LandingPage`           | `frontend/app/src/features/landing/LandingPage.tsx`                      | Composes landing sections.  |
+| `HeroSection`           | `frontend/app/src/features/landing/components/HeroSection.tsx`           | Overview and start CTA.     |
+| `LandingLogo`           | `frontend/app/src/features/landing/components/LandingLogo.tsx`           | Displays `logo.svg`.        |
+| `WorkflowSection`       | `frontend/app/src/features/landing/components/WorkflowSection.tsx`       | Workflow cards.             |
+| `GettingStartedSection` | `frontend/app/src/features/landing/components/GettingStartedSection.tsx` | Beginner topic cards.       |
+| `FaqSection`            | `frontend/app/src/features/landing/components/FaqSection.tsx`            | FAQ details accordions.     |
+| `GlossarySection`       | `frontend/app/src/features/landing/components/GlossarySection.tsx`       | Glossary cards.             |
+| `PrivacyPolicyPage`     | `frontend/app/src/shared/pages/PrivacyPolicyPage.tsx`                    | Static privacy policy page. |
 
 ## Error and Edge Cases
 
@@ -896,23 +821,6 @@ Usage:
 - `BatchForm` prevents using the batch variable as a covariate by filtering covariate options.
 - `ColumnRoleMapper` prevents assigning the same column to multiple roles through option filtering.
 - `Progressbar` falls back to a generic error message when `jobStatus.error.detail` is missing.
-
-## Extension Points
-
-Verified conventions:
-
-- Shared reusable UI belongs in `frontend/app/src/shared/components/`.
-- Feature-private UI belongs in `frontend/app/src/features/<feature>/components/`.
-- Route pages should stay in the feature root as `<Feature>Page.tsx`.
-- Complex async behavior should remain in hooks and hook modules.
-- Tests are co-located with components as `.test.tsx`.
-
-Recommendations based on current code:
-
-- For new plot displays, translate feature data into `PlotSource` and use `PlotView`.
-- For new standard actions, use `Button` or `buttonClasses`.
-- For new dialogs, compose `Modal` instead of reimplementing focus and Escape behavior.
-- For new result-table filters, update filter types, filter definitions, validation, and tests together.
 
 ## Cross-links
 

@@ -30,47 +30,47 @@ Read-only fetch hooks commonly use `useAsyncResource`, which provides a consiste
 
 Endpoint dependencies:
 
-| Hook or helper | Backend route dependency | Method |
-|---|---|---|
-| `useJobPolling` | `/api/v1/status/{jobId}` | `GET` |
-| `useJobCancel` | `/api/v1/reset/{jobId}` | `POST` |
-| `useUploadFlow` via `inspectUpload` | `/api/v1/upload/inspect` | `POST` |
-| `useUploadFlow` via `commitUpload` | `/api/v1/upload/commit` | `POST` |
-| `useUploadFlow` via `discardUpload` | `/api/v1/upload/{sessionId}` | `DELETE` |
-| `useFilterStats` | `/api/v1/filter/{jobId}/stats` | `GET` |
-| `useNormalizationPreview` | `/api/v1/preview/normalization/{jobId}` | `GET` |
-| `useNormalizationSubmit` | `/api/v1/normalize/{jobId}` | `POST` |
-| `useBatchParameters` | `/api/v1/batch/{jobId}/batch-options` | `GET` |
-| `useBatchCorrection.fetchHistory` | `/api/v1/batch/{jobId}/history` | `GET` |
-| `useBatchCorrection.runBatch` | `/api/v1/batch/{jobId}` | `POST` |
-| `useBatchCorrection.skipBatch` | `/api/v1/batch/{jobId}/skip` | `POST` |
-| `useTableData` | `/api/v1/table/{jobId}/{table}` | `GET` |
-| `exportTableCsv` helper | `/api/v1/table/{jobId}/{table}/export` | `GET` |
-| `useHeatMapOptions` | `/api/v1/heatmap/{jobId}/options` | `GET` |
-| `useGenerateHeatMap` | `/api/v1/heatmap/{jobId}` | `POST` |
-| `useHeatMapGeneration` | Uses `useGenerateHeatMap` and `useJobPolling`; image URL is `/api/v1/heatmap/{jobId}` | `POST`, `GET` |
+| Hook or helper                      | Backend route dependency                                                              | Method        |
+|-------------------------------------|---------------------------------------------------------------------------------------|---------------|
+| `useJobPolling`                     | `/api/v1/status/{jobId}`                                                              | `GET`         |
+| `useJobCancel`                      | `/api/v1/reset/{jobId}`                                                               | `POST`        |
+| `useUploadFlow` via `inspectUpload` | `/api/v1/upload/inspect`                                                              | `POST`        |
+| `useUploadFlow` via `commitUpload`  | `/api/v1/upload/commit`                                                               | `POST`        |
+| `useUploadFlow` via `discardUpload` | `/api/v1/upload/{sessionId}`                                                          | `DELETE`      |
+| `useFilterStats`                    | `/api/v1/filter/{jobId}/stats`                                                        | `GET`         |
+| `useNormalizationPreview`           | `/api/v1/preview/normalization/{jobId}`                                               | `GET`         |
+| `useNormalizationSubmit`            | `/api/v1/normalize/{jobId}`                                                           | `POST`        |
+| `useBatchParameters`                | `/api/v1/batch/{jobId}/batch-options`                                                 | `GET`         |
+| `useBatchCorrection.fetchHistory`   | `/api/v1/batch/{jobId}/history`                                                       | `GET`         |
+| `useBatchCorrection.runBatch`       | `/api/v1/batch/{jobId}`                                                               | `POST`        |
+| `useBatchCorrection.skipBatch`      | `/api/v1/batch/{jobId}/skip`                                                          | `POST`        |
+| `useTableData`                      | `/api/v1/table/{jobId}/{table}`                                                       | `GET`         |
+| `exportTableCsv` helper             | `/api/v1/table/{jobId}/{table}/export`                                                | `GET`         |
+| `useHeatMapOptions`                 | `/api/v1/heatmap/{jobId}/options`                                                     | `GET`         |
+| `useGenerateHeatMap`                | `/api/v1/heatmap/{jobId}`                                                             | `POST`        |
+| `useHeatMapGeneration`              | Uses `useGenerateHeatMap` and `useJobPolling`; image URL is `/api/v1/heatmap/{jobId}` | `POST`, `GET` |
 
 ## Reference
 
 ### Hook Inventory
 
-| Hook | Source path | Related tests |
-|---|---|---|
-| `useAsyncResource` | `frontend/app/src/shared/hooks/useAsyncResource.ts` | `frontend/app/src/shared/hooks/useAsyncResource.test.ts` |
-| `useJobPolling` | `frontend/app/src/shared/hooks/useJobPolling.ts` | `frontend/app/src/shared/hooks/useJobPolling.test.ts` |
-| `useJobCancel` | `frontend/app/src/shared/hooks/useJobCancel.ts` | `frontend/app/src/shared/hooks/useJobCancel.test.ts` |
-| `useUploadFlow` | `frontend/app/src/features/upload/hooks/useUploadFlow.ts` | `frontend/app/src/features/upload/hooks/useUploadFlow.test.ts` |
-| `useFilterStats` | `frontend/app/src/features/analysis/hooks/useFilterStats.ts` | `frontend/app/src/features/analysis/hooks/useFilterStats.test.ts` |
+| Hook                      | Source path                                                                | Related tests                                                                   |
+|---------------------------|----------------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| `useAsyncResource`        | `frontend/app/src/shared/hooks/useAsyncResource.ts`                        | `frontend/app/src/shared/hooks/useAsyncResource.test.ts`                        |
+| `useJobPolling`           | `frontend/app/src/shared/hooks/useJobPolling.ts`                           | `frontend/app/src/shared/hooks/useJobPolling.test.ts`                           |
+| `useJobCancel`            | `frontend/app/src/shared/hooks/useJobCancel.ts`                            | `frontend/app/src/shared/hooks/useJobCancel.test.ts`                            |
+| `useUploadFlow`           | `frontend/app/src/features/upload/hooks/useUploadFlow.ts`                  | `frontend/app/src/features/upload/hooks/useUploadFlow.test.ts`                  |
+| `useFilterStats`          | `frontend/app/src/features/analysis/hooks/useFilterStats.ts`               | `frontend/app/src/features/analysis/hooks/useFilterStats.test.ts`               |
 | `useNormalizationPreview` | `frontend/app/src/features/normalization/hooks/useNormalizationPreview.ts` | `frontend/app/src/features/normalization/hooks/useNormalizationPreview.test.ts` |
-| `useNormalizationSubmit` | `frontend/app/src/features/normalization/hooks/useNormalizationSubmit.ts` | `frontend/app/src/features/normalization/hooks/useNormalizationSubmit.test.ts` |
-| `useBatchParameters` | `frontend/app/src/features/batch/hooks/useBatchParameters.ts` | `frontend/app/src/features/batch/hooks/useBatchParameters.test.ts` |
-| `useBatchCorrection` | `frontend/app/src/features/batch/hooks/useBatchCorrection.ts` | `frontend/app/src/features/batch/hooks/useBatchCorrection.test.ts` |
-| `useTableData` | `frontend/app/src/features/results/hooks/useTableData.ts` | `frontend/app/src/features/results/hooks/useTableData.test.ts` |
-| `useTableFilters` | `frontend/app/src/features/results/hooks/useTableFilters.ts` | `frontend/app/src/features/results/hooks/useTableFilters.test.ts` |
-| `useTableState` | `frontend/app/src/features/results/hooks/useTableState.ts` | `frontend/app/src/features/results/hooks/useTableState.test.ts` |
-| `useGenerateHeatMap` | `frontend/app/src/features/results/hooks/useGenerateHeatMap.ts` | `frontend/app/src/features/results/hooks/useGenerateHeatMap.test.ts` |
-| `useHeatMapOptions` | `frontend/app/src/features/results/hooks/useHeatMapOptions.ts` | `frontend/app/src/features/results/hooks/useHeatMapOptions.test.ts` |
-| `useHeatMapGeneration` | `frontend/app/src/features/results/hooks/useHeatMapGeneration.ts` | `frontend/app/src/features/results/hooks/useHeatMapGeneration.test.ts` |
+| `useNormalizationSubmit`  | `frontend/app/src/features/normalization/hooks/useNormalizationSubmit.ts`  | `frontend/app/src/features/normalization/hooks/useNormalizationSubmit.test.ts`  |
+| `useBatchParameters`      | `frontend/app/src/features/batch/hooks/useBatchParameters.ts`              | `frontend/app/src/features/batch/hooks/useBatchParameters.test.ts`              |
+| `useBatchCorrection`      | `frontend/app/src/features/batch/hooks/useBatchCorrection.ts`              | `frontend/app/src/features/batch/hooks/useBatchCorrection.test.ts`              |
+| `useTableData`            | `frontend/app/src/features/results/hooks/useTableData.ts`                  | `frontend/app/src/features/results/hooks/useTableData.test.ts`                  |
+| `useTableFilters`         | `frontend/app/src/features/results/hooks/useTableFilters.ts`               | `frontend/app/src/features/results/hooks/useTableFilters.test.ts`               |
+| `useTableState`           | `frontend/app/src/features/results/hooks/useTableState.ts`                 | `frontend/app/src/features/results/hooks/useTableState.test.ts`                 |
+| `useGenerateHeatMap`      | `frontend/app/src/features/results/hooks/useGenerateHeatMap.ts`            | `frontend/app/src/features/results/hooks/useGenerateHeatMap.test.ts`            |
+| `useHeatMapOptions`       | `frontend/app/src/features/results/hooks/useHeatMapOptions.ts`             | `frontend/app/src/features/results/hooks/useHeatMapOptions.test.ts`             |
+| `useHeatMapGeneration`    | `frontend/app/src/features/results/hooks/useHeatMapGeneration.ts`          | `frontend/app/src/features/results/hooks/useHeatMapGeneration.test.ts`          |
 
 ### `useJobPolling`
 
@@ -86,10 +86,10 @@ useJobPolling(jobId: string | null, resetKey?: number): JobStatus | null
 
 Parameters:
 
-| Parameter | Exact type | Required | Description |
-|---|---|---:|---|
-| `jobId` | `string \| null` | Yes | Job id to poll. Passing `null` disables polling. |
-| `resetKey` | `number \| undefined` | No | Changing this value clears the current status and retry counter. |
+| Parameter  | Exact type            | Required | Description                                                      |
+|------------|-----------------------|---------:|------------------------------------------------------------------|
+| `jobId`    | `string \| null`      |      Yes | Job id to poll. Passing `null` disables polling.                 |
+| `resetKey` | `number \| undefined` |       No | Changing this value clears the current status and retry counter. |
 
 Return value: `JobStatus | null`, where `JobStatus` is defined in `frontend/app/src/shared/types/JobTypes.ts`.
 
@@ -99,7 +99,7 @@ Endpoint dependency: `GET /api/v1/status/{jobId}`.
 
 Polling interval: `3000` ms.
 
-Polling stop conditions: `isTerminalState(phase, status)` returns true for `failed`, `normalization` plus `waiting`, `batch` plus `waiting`, `results` plus `waiting`, and `heatmap` plus `completed`.
+Polling stop conditions: `isTerminalState(phase, status)` returns true for `failed`, `normalization` + `waiting`, `batch` + `waiting`, `results` + `waiting`, and `heatmap` + `completed`.
 
 Error handling: non-OK responses and invalid payloads are logged with `logger.warn`. After three consecutive failures, the previous status is converted to `failed` with a synthetic `ProblemDetail` connection error. If no status was ever received, the hook remains `null`.
 
@@ -131,18 +131,18 @@ useJobCancel(jobId: string, onCancelSuccess: () => void): {
 
 Parameters:
 
-| Parameter | Exact type | Required | Description |
-|---|---|---:|---|
-| `jobId` | `string` | Yes | Job id passed into `/api/v1/reset/{jobId}`. |
-| `onCancelSuccess` | `() => void` | Yes | Callback invoked after an OK response. |
+| Parameter         | Exact type   | Required | Description                                 |
+|-------------------|--------------|---------:|---------------------------------------------|
+| `jobId`           | `string`     |      Yes | Job id passed into `/api/v1/reset/{jobId}`. |
+| `onCancelSuccess` | `() => void` |      Yes | Callback invoked after an OK response.      |
 
 Return values:
 
-| Property | Exact type | Description |
-|---|---|---|
-| `cancelJob` | `() => Promise<void>` | Executes the POST request. |
-| `isLoading` | `boolean` | True while the request is in flight. |
-| `error` | `ProblemDetail \| null` | Parsed backend problem details or a local connection error. |
+| Property    | Exact type              | Description                                                 |
+|-------------|-------------------------|-------------------------------------------------------------|
+| `cancelJob` | `() => Promise<void>`   | Executes the POST request.                                  |
+| `isLoading` | `boolean`               | True while the request is in flight.                        |
+| `error`     | `ProblemDetail \| null` | Parsed backend problem details or a local connection error. |
 
 Related state: `isLoading` and `error`.
 
@@ -176,36 +176,36 @@ useUploadFlow(onStarted: (jobId: string) => void)
 
 Parameters:
 
-| Parameter | Exact type | Required | Description |
-|---|---|---:|---|
-| `onStarted` | `(jobId: string) => void` | Yes | Called after commit succeeds with the backend job id. |
+| Parameter   | Exact type                | Required | Description                                           |
+|-------------|---------------------------|---------:|-------------------------------------------------------|
+| `onStarted` | `(jobId: string) => void` |      Yes | Called after commit succeeds with the backend job id. |
 
 Return values include:
 
-| Property | Exact type | Description |
-|---|---|---|
-| `status` | `"idle" \| "inspecting" \| "review" \| "committing"` | Workflow state. |
-| `manifest` | `InspectManifest \| null` | Last inspection result. |
-| `error` | `string \| null` | User-facing workflow error. |
-| `sheets` | `SampleSheetCandidate[]` | Detected sample sheets. |
-| `visiblePairs` | `IdatPair[]` | IDAT pairs not removed by the user. |
-| `completePairs` | `IdatPair[]` | Visible complete Green/Red IDAT pairs. |
-| `selectedSheetId` | `string \| null` | Effective selected sheet id. |
-| `blockingError` | `string \| null` | Hard blocker text. |
-| `selectionHint` | `string \| null` | Next-step hint. |
-| `canCommit` | `boolean` | True when commit prerequisites are met. |
-| `mappingColumns` | `string[]` | Columns from the selected sheet. |
-| `columnMapping` | `RoleSelection` | Current role mapping. |
-| `setRole` | `(role: RoleKey, value: string \| null) => void` | Updates one role. |
-| `filterSettings` | `FilterSettings` | Current filter settings. |
-| `setFilterSettings` | React state setter for `FilterSettings` | Updates filter settings. |
-| `inspect` | `(files: File[]) => void` | Starts inspection. |
-| `addFiles` | `(files: File[]) => void` | Re-inspects existing plus new files. |
-| `removePair` | `(pairId: string) => void` | Removes an IDAT pair from the visible set. |
-| `selectSheet` | React state setter for `string \| null` | Selects a sample sheet. |
-| `commit` | `() => Promise<void>` | Commits and starts analysis. |
-| `reset` | `() => void` | Clears local state and discards staging. |
-| `discardOnUnmount` | `() => void` | Best-effort staging cleanup. |
+| Property            | Exact type                                           | Description                                |
+|---------------------|------------------------------------------------------|--------------------------------------------|
+| `status`            | `"idle" \| "inspecting" \| "review" \| "committing"` | Workflow state.                            |
+| `manifest`          | `InspectManifest \| null`                            | Last inspection result.                    |
+| `error`             | `string \| null`                                     | User-facing workflow error.                |
+| `sheets`            | `SampleSheetCandidate[]`                             | Detected sample sheets.                    |
+| `visiblePairs`      | `IdatPair[]`                                         | IDAT pairs not removed by the user.        |
+| `completePairs`     | `IdatPair[]`                                         | Visible complete Green/Red IDAT pairs.     |
+| `selectedSheetId`   | `string \| null`                                     | Effective selected sheet id.               |
+| `blockingError`     | `string \| null`                                     | Hard blocker text.                         |
+| `selectionHint`     | `string \| null`                                     | Next-step hint.                            |
+| `canCommit`         | `boolean`                                            | True when commit prerequisites are met.    |
+| `mappingColumns`    | `string[]`                                           | Columns from the selected sheet.           |
+| `columnMapping`     | `RoleSelection`                                      | Current role mapping.                      |
+| `setRole`           | `(role: RoleKey, value: string \| null) => void`     | Updates one role.                          |
+| `filterSettings`    | `FilterSettings`                                     | Current filter settings.                   |
+| `setFilterSettings` | React state setter for `FilterSettings`              | Updates filter settings.                   |
+| `inspect`           | `(files: File[]) => void`                            | Starts inspection.                         |
+| `addFiles`          | `(files: File[]) => void`                            | Re-inspects existing plus new files.       |
+| `removePair`        | `(pairId: string) => void`                           | Removes an IDAT pair from the visible set. |
+| `selectSheet`       | React state setter for `string \| null`              | Selects a sample sheet.                    |
+| `commit`            | `() => Promise<void>`                                | Commits and starts analysis.               |
+| `reset`             | `() => void`                                         | Clears local state and discards staging.   |
+| `discardOnUnmount`  | `() => void`                                         | Best-effort staging cleanup.               |
 
 Endpoint dependencies: `POST /api/v1/upload/inspect`, `POST /api/v1/upload/commit`, and best-effort `DELETE /api/v1/upload/{sessionId}` through `uploadApi.ts`.
 
@@ -582,7 +582,7 @@ Endpoint dependencies: `POST /api/v1/heatmap/{jobId}` through `useGenerateHeatMa
 
 Polling interval: inherited from `useJobPolling` (`3000` ms).
 
-Polling stop conditions: stops when status is `completed` plus phase `heatmap`, `waiting` plus phase `results`, or `failed` plus phase `heatmap`.
+Polling stop conditions: stops when status is `completed` + phase `heatmap`, `waiting` + phase `results`, or `failed` + phase `heatmap`.
 
 Error handling: combines POST errors, persistent failed-poll errors, and backend heatmap errors into `displayedError`; `dismissError` only hides the banner.
 
@@ -634,22 +634,6 @@ Related hooks: `useFilterStats`, `useNormalizationPreview`, `useBatchParameters`
 - `useUploadFlow` only commits complete IDAT pairs and requires all four role mappings to point to real columns.
 - `useTableFilters` does not validate values itself; validation is implemented in the `TableFilters` component.
 - `useHeatMapGeneration` can expose a heatmap image URL only after polling observes a successful terminal state.
-
-## Extension Points
-
-Verified conventions:
-
-- Add feature hooks under `frontend/app/src/features/<feature>/hooks/`.
-- Add cross-feature hooks under `frontend/app/src/shared/hooks/`.
-- Keep network calls out of `utils/`; utilities in this repository are pure helpers.
-- Use `useAsyncResource` for read-only fetches that need abort cleanup and loading/error state.
-- Add co-located Vitest coverage for new hooks.
-
-Recommendations based on current practice:
-
-- Preserve nullable-job disabled behavior for route-driven hooks.
-- Return user-facing state and typed actions instead of raw `Response` objects.
-- Prefer backend `ProblemDetail` values when the UI can render structured errors.
 
 ## Cross-links
 
