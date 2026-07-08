@@ -1,19 +1,13 @@
 services:
-
-  # ---------------------------------------------------------------
-  # NEU: Docker Socket Proxy
-  # Einziger Service, der den echten Host-Socket sieht (read-only).
-  # Exponiert nur eine gefilterte Teilmenge der Docker API intern.
-  # ---------------------------------------------------------------
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:latest
     container_name: docker-socket-proxy
     environment:
-      # Nur das Nötigste erlauben:
-      - CONTAINERS=1   # nötig, um Container per Name zu finden (Voraussetzung für EXEC)
-      - EXEC=1         # erlaubt "docker exec"
-      - POST=1         # exec ist technisch ein POST-Request an die API
-      # Alles andere explizit sperren:
+      # Only allow the following endpoints:
+      - CONTAINERS=1   # required to filter containers by label
+      - EXEC=1         # allow "docker exec" to run jobs in the backend container
+      - POST=1         # exec is a POST request, so we need to allow POST requests
+      # Disallow the following endpoints:
       - IMAGES=0
       - NETWORKS=0
       - VOLUMES=0
@@ -77,7 +71,7 @@ services:
       - JOB_RETENTION_HOURS=${JOB_RETENTION_HOURS:-24}
       - JOB_CLEANUP_INTERVAL_SECONDS=${JOB_CLEANUP_INTERVAL_SECONDS:-86400}
       - DMR_CORES=${DMR_CORES:-4}
-      - DOCKER_HOST=tcp://docker-socket-proxy:2375 # Docker-CLI im Backend redet jetzt mit dem Proxy statt dem lokalen Socket
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375 # Docker-CLI inside the backend container will connect to the docker-socket-proxy container instead of the host's Docker socket
     security_opt:
       - no-new-privileges:true
     ports:
@@ -96,7 +90,6 @@ services:
 
   r_worker:
     build: ./r_backend
-    # security_opt: seccomp:unconfined  # TODO: durch eigenes, minimal erweitertes Profil ersetzen
     ulimits:
       nproc:
         soft: 65536
