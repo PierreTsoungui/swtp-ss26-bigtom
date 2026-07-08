@@ -169,11 +169,11 @@ def _safe_target(dest_root: Path, member_name: str) -> Path:
     pure = PurePosixPath(normalized)
 
     if pure.is_absolute() or (len(normalized) > 1 and normalized[1] == ":"):
-        raise ArchiveError("invalid", f"Absoluter Pfad im Archiv abgelehnt: {member_name!r}")
+        raise ArchiveError("invalid", f"Absolute archive path rejected: {member_name!r}")
 
     parts = [p for p in pure.parts if p not in ("", ".")]
     if any(p == ".." for p in parts):
-        raise ArchiveError("invalid", f"Pfad-Traversal im Archiv abgelehnt: {member_name!r}")
+        raise ArchiveError("invalid", f"Archive path traversal rejected: {member_name!r}")
 
     target = dest_root.joinpath(*parts)
     if not target.resolve().is_relative_to(dest_root):

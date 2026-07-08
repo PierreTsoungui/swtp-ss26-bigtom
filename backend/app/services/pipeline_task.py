@@ -59,7 +59,7 @@ def start_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> asynci
         try:
             await pipeline_factory(cancel_event)
         except Exception:
-            logger.exception("Unbehandelte Exception in Pipeline-Task: job_id=%s", job_id)
+            logger.exception("Unhandled exception in pipeline task: job_id=%s", job_id)
         finally:
             job_manager.unregister_cancel_event(job_id)
             job_manager.unregister_job_task(job_id)
@@ -90,7 +90,7 @@ async def run_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> No
     try:
         await pipeline_factory(cancel_event)
     except Exception:
-        logger.exception("Unbehandelte Exception in Pipeline-Task: job_id=%s", job_id)
+        logger.exception("Unhandled exception in pipeline task: job_id=%s", job_id)
     finally:
         job_manager.unregister_cancel_event(job_id)
         job_manager.unregister_job_task(job_id)

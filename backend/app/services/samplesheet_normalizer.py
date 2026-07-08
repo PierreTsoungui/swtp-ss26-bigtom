@@ -101,7 +101,7 @@ def normalize_sample_sheet(
     When omitted, the legacy Illumina alias detection is applied instead — this
     keeps the deprecated single-shot upload and already-canonical sheets working.
 
-    Raises ``ValueError`` (with a human-readable, German message) on any
+    Raises ``ValueError`` with a human-readable error message on any
     structural problem so the upload layer can surface it as a 400.
     """
     raw_headers, rows = read_sample_sheet_table(content, filename)

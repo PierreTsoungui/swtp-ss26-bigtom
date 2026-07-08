@@ -163,9 +163,13 @@ async def _run_subprocess(
     # Completes once BOTH streams hit EOF, which happens when the subprocess
     # closes its pipes on exit. Waiting on this (rather than process.wait())
     # guarantees we have read every byte before resolving the result.
-    readers_task = asyncio.ensure_future(
-        asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+    async def wait_for_readers():
+        return await asyncio.gather(
+        stdout_task,
+        stderr_task,
+        return_exceptions=True,
     )
+    readers_task = asyncio.create_task(wait_for_readers())
     cancel_wait_task = asyncio.create_task(cancel_event.wait())
 
     execution_status: ExecutionStatus = ExecutionStatus.FAILED
