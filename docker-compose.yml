@@ -34,7 +34,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - backend-internal
+      - proxy-net
     read_only: true
     cap_drop:
       - ALL
@@ -67,7 +67,7 @@ services:
       - ./certs/bigtom-local.pem:/etc/nginx/certs/bigtom-local.pem:ro
       - ./certs/bigtom-local-key.pem:/etc/nginx/certs/bigtom-local-key.pem:ro
     networks:
-      - backend-internal
+      - frontend-net
 
   backend:
     build: ./backend
@@ -91,7 +91,8 @@ services:
       - docker-socket-proxy
       - r_worker
     networks:
-      - backend-internal
+      - frontend-net
+      - proxy-net
 
   r_worker:
     build: ./r_backend
@@ -123,8 +124,14 @@ services:
       - ./jobs:/app/jobs
     command: tail -f /dev/null
     networks:
-      - backend-internal
+      - isolated
 
 networks:
-  backend-internal:
+  frontend-net:
     driver: bridge
+  proxy-net:
+    driver: bridge
+    internal: true
+  isolated:
+    driver: bridge
+    internal: true
