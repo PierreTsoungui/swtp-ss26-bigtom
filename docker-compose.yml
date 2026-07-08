@@ -72,11 +72,25 @@ services:
       - JOB_RETENTION_HOURS=${JOB_RETENTION_HOURS:-24}
       - JOB_CLEANUP_INTERVAL_SECONDS=${JOB_CLEANUP_INTERVAL_SECONDS:-86400}
       - DMR_CORES=${DMR_CORES:-4}
-      - DOCKER_HOST=tcp://docker-socket-proxy:2375 # Docker-CLI inside the backend container will connect to the docker-socket-proxy container instead of the host's Docker socket
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - PIPELINE_MEMORY_BUDGET_GB=${PIPELINE_MEMORY_BUDGET_GB:-8}
+      - PIPELINE_CORE_BUDGET=${PIPELINE_CORE_BUDGET:-2}
+      - PIPELINE_STEP_MEMORY_GB=${PIPELINE_STEP_MEMORY_GB:-5}
+      - PIPELINE_DMR_MEMORY_GB=${PIPELINE_DMR_MEMORY_GB:-6}
+      - PIPELINE_DMP_MEMORY_GB=${PIPELINE_DMP_MEMORY_GB:-4}
+      - MAX_SAMPLES_PER_JOB=${MAX_SAMPLES_PER_JOB:-48}
+      - MAX_JOBS_DISK_GB=${MAX_JOBS_DISK_GB:-0}
+      - MAX_TOTAL_UPLOAD_MB=${MAX_TOTAL_UPLOAD_MB:-900}
+      - MAX_SAMPLE_SHEET_MB=${MAX_SAMPLE_SHEET_MB:-10}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080,https://localhost,https://127.0.0.1}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     security_opt:
       - no-new-privileges:true
     ports:
       - "8000:8000"
+    # Backstop so a backend leak can't take the host down. It only orchestrates
+    # (state + docker exec), so it needs little memory.
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
     volumes:
       - ./jobs:/app/jobs
       - ./r_backend:/app/r_backend
@@ -92,6 +106,14 @@ services:
   r_worker:
     build: ./r_backend
     user: "1000:1000"
+    # HARD RESOURCE WALL — all R analyses run here. If the container exceeds these
+    # limits its OWN cgroup OOM-killer stops the offending R process while the
+    # HOST (and other services) stay alive — this is what prevents the whole
+    # machine from crashing under load. Set to the deployment budget and keep
+    # >= PIPELINE_MEMORY_BUDGET_GB / PIPELINE_CORE_BUDGET (the backend's soft
+    # queue), so the queue normally kicks in first and this is only a backstop.
+    mem_limit: ${R_WORKER_MEM_LIMIT:-10g}
+    cpus: ${R_WORKER_CPUS:-2}
     ulimits:
       nproc:
         soft: 65536
@@ -109,8 +131,6 @@ services:
       - R_BIOC_PARALLEL_WORKERS=1
     cap_drop:
       - ALL
-    #cap_add:
-    #  - DAC_OVERRIDE
     security_opt:
       - no-new-privileges:true
     volumes:

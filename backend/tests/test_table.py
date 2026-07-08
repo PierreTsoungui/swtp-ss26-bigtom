@@ -121,10 +121,7 @@ def test_page_2_different_from_page_1(mock_job):
 def test_job_not_found(tmp_path):
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
 
-        res = client.get(
-            "/api/v1/table/nicht-vorhanden-xyz/dmp",
-          
-        )
+        res = client.get("/api/v1/table/does-not-exist-xyz/dmp")
 
         assert res.status_code == 404
 

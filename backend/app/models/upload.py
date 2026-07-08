@@ -8,8 +8,12 @@ from app.models.filter import FilterSettings
 
 
 class UploadResponse(BaseModel):
-    """Acknowledgement returned after a successful upload. ``filter_settings``
-    echoes the effective (validated) filter configuration back to the client."""
+    """Acknowledgement returned after a successful upload.
+
+    ``filter_settings`` echoes the effective (validated) filter configuration
+    back to the client.
+    """
+
     job_id:          str
     status:          str
     filter_settings: dict
@@ -19,6 +23,7 @@ class UploadResponse(BaseModel):
 
 class FileEntry(BaseModel):
     """A single staged file."""
+
     name:       str
     rel_path:   str
     size_bytes: int
@@ -30,6 +35,7 @@ class SuggestedMapping(BaseModel):
     Every field is optional: a role is only filled when a confident alias match
     exists, otherwise the user picks it manually.
     """
+
     sentrix_id:       Optional[str] = None
     sentrix_position: Optional[str] = None
     sample_group:     Optional[str] = None
@@ -43,6 +49,7 @@ class SampleSheetCandidate(BaseModel):
     the options for the four role dropdowns. ``suggested_mapping`` pre-fills those
     dropdowns where a column could be recognized automatically.
     """
+
     id:                str
     name:              str
     rel_path:          str
@@ -56,6 +63,7 @@ class SampleSheetCandidate(BaseModel):
 
 class IdatPair(BaseModel):
     """A Grn/Red IDAT pair (one sample). ``complete`` iff both channels exist."""
+
     pair_id:  str
     grn:      Optional[FileEntry] = None
     red:      Optional[FileEntry] = None
@@ -64,6 +72,7 @@ class IdatPair(BaseModel):
 
 class OtherFile(BaseModel):
     """A real file that was found but not used (unsupported / unrecognized)."""
+
     name:     str
     rel_path: str
     reason:   str
@@ -71,12 +80,14 @@ class OtherFile(BaseModel):
 
 class ManifestError(BaseModel):
     """A non-fatal, UI-blocking condition (e.g. more than one sample sheet)."""
+
     code:    str
     message: str
 
 
 class InspectManifest(BaseModel):
     """Result of inspecting an upload: everything found, classified by role."""
+
     session_id:    str
     source:        str  # "zip" | "files"
     sample_sheets: list[SampleSheetCandidate] = Field(default_factory=list)
@@ -94,6 +105,7 @@ class ColumnMapping(BaseModel):
     column cannot serve two roles. The values are raw column names taken from the
     chosen sheet's ``columns``.
     """
+
     sentrix_id:       str
     sentrix_position: str
     sample_group:     str
@@ -103,7 +115,7 @@ class ColumnMapping(BaseModel):
     def _roles_must_be_distinct(self) -> "ColumnMapping":
         chosen = [self.sentrix_id, self.sentrix_position, self.sample_group, self.sample_name]
         if len(set(chosen)) != len(chosen):
-            raise ValueError("Jede Spalte darf nur einer Rolle zugeordnet werden.")
+            raise ValueError("Each column may be assigned to only one role.")
         return self
 
     def as_role_dict(self) -> dict[str, str]:
@@ -118,6 +130,7 @@ class ColumnMapping(BaseModel):
 
 class CommitRequest(BaseModel):
     """The user's confirmed selection, sent to start the pipeline."""
+
     session_id:               str
     selected_sample_sheet_id: str
     selected_pair_ids:        list[str] = Field(default_factory=list)
@@ -127,6 +140,7 @@ class CommitRequest(BaseModel):
 
 class SheetPreview(BaseModel):
     """A small tabular preview of a candidate sample sheet."""
+
     sheet_id:   str
     columns:    list[str]
     rows:       list[list[str]]

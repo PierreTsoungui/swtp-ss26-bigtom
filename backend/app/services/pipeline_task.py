@@ -1,18 +1,16 @@
 # app/services/pipeline_task.py
-"""
-Zentraler Einstiegspunkt für alle R-Pipeline-Background-Tasks.
+"""Central entry point for all R-pipeline background tasks.
 
-Siehe r_executor_spec.md, Abschnitt 6 ("Cancellation Protocol"):
-Registrierung und Freigabe des cancel_event sowie der Task-Referenz selbst
-laufen ausschließlich hier. Services (upload.py, normalize.py,
-batch_service.py, heatmap_service.py) rufen niemals direkt
-job_manager.register_cancel_event() / unregister_cancel_event() auf —
-sie übergeben stattdessen ihre Pipeline-Coroutine an start_job_pipeline()
-und bekommen dafür ein bereits erzeugtes cancel_event injiziert.
+See r_executor_spec.md, section 6 ("Cancellation Protocol"): registering and
+releasing the cancel_event and the task reference itself happens exclusively
+here. Services (upload.py, normalize.py, batch_service.py, heatmap_service.py)
+never call job_manager.register_cancel_event() / unregister_cancel_event()
+directly — instead they pass their pipeline coroutine to start_job_pipeline()
+and get an already-created cancel_event injected.
 
-Das hält das Lifecycle-Management an einer Stelle: ein Bugfix hier wirkt
-automatisch auf jede Pipeline, ohne dass jeder Service sein eigenes
-try/finally für Registrierung pflegen muss.
+This keeps lifecycle management in one place: a bug fix here applies to every
+pipeline automatically, without each service maintaining its own try/finally
+for registration.
 """
 import asyncio
 import logging
@@ -22,23 +20,21 @@ from app.services import job_manager
 
 logger = logging.getLogger(__name__)
 
-# Eine Pipeline-Coroutine-Factory erhält das cancel_event und liefert die
-# auszuführende Coroutine zurück. So kann jeder Service sein eigenes
-# Signature beibehalten, ohne dass pipeline_task irgendetwas über
-# Job-Phasen oder R-Skripte wissen muss.
+# A pipeline coroutine factory receives the cancel_event and returns the
+# coroutine to run. This lets each service keep its own signature without
+# pipeline_task having to know anything about job phases or R scripts.
 PipelineFactory = Callable[[asyncio.Event], Awaitable[None]]
 
 
 def start_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> asyncio.Task:
-    """
-    Startet eine Pipeline-Coroutine als verwalteten Background-Task.
+    """Start a pipeline coroutine as a managed background task.
 
-    - Erzeugt genau ein cancel_event für diese Pipeline-Ausführung.
-    - Registriert Event und Task zentral im job_manager.
-    - Garantiert Freigabe beider Registrierungen nach Abschluss
-      (Erfolg, Fehler, Cancellation oder eine unerwartete Exception).
+    - Creates exactly one cancel_event for this pipeline run.
+    - Registers the event and the task centrally in job_manager.
+    - Guarantees the release of both registrations on completion (success,
+      failure, cancellation or an unexpected exception).
 
-    Verwendung in einem Service:
+    Usage in a service::
 
         def my_pipeline(cancel_event: asyncio.Event):
             async def _run():
@@ -50,12 +46,11 @@ def start_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> asynci
             lambda: pipeline_task.start_job_pipeline(job_id, my_pipeline)
         )
 
-    Hinweis: FastAPI BackgroundTasks erwartet eine awaitable Funktion, kein
-    Task-Objekt. Services rufen daher in der Praxis direkt
-    `await run_job_pipeline(job_id, my_pipeline)` auf (siehe unten) statt
-    `start_job_pipeline` — letzteres existiert für Aufrufer, die bewusst
-    eine fire-and-forget-Task außerhalb von BackgroundTasks erzeugen wollen
-    (z.B. zukünftige WebSocket- oder Queue-Trigger).
+    Note: FastAPI BackgroundTasks expects an awaitable function, not a task
+    object. In practice services therefore call ``await run_job_pipeline(job_id,
+    my_pipeline)`` directly (see below) instead of ``start_job_pipeline`` — the
+    latter exists for callers that deliberately create a fire-and-forget task
+    outside BackgroundTasks (e.g. future WebSocket or queue triggers).
     """
     cancel_event = asyncio.Event()
     job_manager.register_cancel_event(job_id, cancel_event)
@@ -64,7 +59,7 @@ def start_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> asynci
         try:
             await pipeline_factory(cancel_event)
         except Exception:
-            logger.exception("Unbehandelte Exception in Pipeline-Task: job_id=%s", job_id)
+            logger.exception("Unhandled exception in pipeline task: job_id=%s", job_id)
         finally:
             job_manager.unregister_cancel_event(job_id)
             job_manager.unregister_job_task(job_id)
@@ -75,15 +70,15 @@ def start_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> asynci
 
 
 async def run_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> None:
-    """
-    Awaitable Variante für den Einsatz mit FastAPI BackgroundTasks
-    (background_tasks.add_task ruft seine Zielfunktion selbst auf und
-    awaitet sie — ein zusätzliches asyncio.create_task ist hier unnötig
-    und würde die Lebenszeit-Steuerung von FastAPI duplizieren).
+    """Run a pipeline as an awaitable, for use with FastAPI BackgroundTasks.
 
-    Übernimmt exakt dieselbe Registrierungs-/Freigabe-Garantie wie
-    start_job_pipeline(), aber ohne eigene Task-Erzeugung — die Task
-    existiert bereits implizit durch BackgroundTasks.
+    ``background_tasks.add_task`` calls and awaits its target itself, so an extra
+    ``asyncio.create_task`` is unnecessary here and would duplicate FastAPI's
+    lifetime management.
+
+    Provides exactly the same registration/cleanup guarantee as
+    ``start_job_pipeline`` but without creating its own task — the task already
+    exists implicitly through BackgroundTasks.
     """
     cancel_event = asyncio.Event()
     job_manager.register_cancel_event(job_id, cancel_event)
@@ -95,7 +90,7 @@ async def run_job_pipeline(job_id: str, pipeline_factory: PipelineFactory) -> No
     try:
         await pipeline_factory(cancel_event)
     except Exception:
-        logger.exception("Unbehandelte Exception in Pipeline-Task: job_id=%s", job_id)
+        logger.exception("Unhandled exception in pipeline task: job_id=%s", job_id)
     finally:
         job_manager.unregister_cancel_event(job_id)
         job_manager.unregister_job_task(job_id)

@@ -3,7 +3,6 @@
 import pytest
 import time
 import tempfile
-from pathlib import Path
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta
 
@@ -44,8 +43,8 @@ class TestNormalization:
                 new_status=JobStatusValue(status),
                 progress_percent=progress
             )
-        except Exception as e:
-            # If transition fails, directly set the state
+        except Exception:
+            # If the transition is not allowed, set the state directly for the test.
             job_manager.jobs[job_id].phase = phase
             job_manager.jobs[job_id].status = status
             job_manager.jobs[job_id].progress_percent = progress
@@ -81,8 +80,7 @@ class TestNormalization:
     @pytest.mark.parametrize("method", ["noob", "quantile", "swan", "funnorm"])
     def test_valid_methods_accepted(self, method):
         """Test that all 4 valid methods are accepted."""
-        # Job muss in "normalization_preview" Phase sein
-        # und den korrekten Status haben
+        # The job must be in the "normalization_preview" phase with the right status.
         job_id = self.create_job_direct(
             phase=JobPhase.NORMALIZATION_PREVIEW.value,
             status=JobStatusValue.WAITING.value,
@@ -95,11 +93,9 @@ class TestNormalization:
                 json={"method": method}
             )
             
-            # Wenn der Übergang nicht erlaubt ist, erwarte 409
-            # Der Test sollte den tatsächlichen Zustand des Systems testen
+            # A disallowed transition is expected to return 409.
             if response.status_code == 409:
-                # Das ist das erwartete Verhalten, wenn der Übergang nicht erlaubt ist
-                print(f"⚠️ Transition not allowed for {method} (as expected)")
+                print(f"Transition not allowed for {method} (as expected)")
                 assert response.status_code == 409
             else:
                 assert response.status_code == 202
@@ -295,7 +291,8 @@ class TestNormalization:
                 json={"method": "noob"}
             )
             
-            # Wenn der Job bereits läuft, sollte 409 zurückkommen
+            # A job that is already running is rejected (409), or the payload is
+            # rejected first (400).
             assert response.status_code in [400, 409]
             
         finally:

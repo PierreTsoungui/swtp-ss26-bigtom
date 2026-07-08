@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.main import app
 from app.core import config
-from app.services import staging_manager, upload_commit_service, file_handler
+from app.services import staging_manager, file_handler
 
 client = TestClient(app)
 

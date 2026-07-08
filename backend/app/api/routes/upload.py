@@ -1,4 +1,5 @@
 # app/api/routes/upload.py
+"""Routes for uploading data (legacy single-shot and folder/ZIP inspect/commit)."""
 import json
 import uuid
 from typing import List
@@ -180,19 +181,19 @@ def _parse_filter_settings(raw: str, request: Request) -> FilterSettings:
             status_code=ErrorTypes.INVALID_FILTER_JSON.status,
             detail=problem_detail(
                 ErrorTypes.INVALID_FILTER_JSON,
-                f"Fehler beim Parsen von filter_settings: {exc}",
+                f"Failed to parse filter_settings: {exc}",
                 request.url.path,
             ),
-        )
+        ) from exc
     except KeyError:
         raise HTTPException(
             status_code=400,
             detail=problem_detail(
                 ErrorTypes.INVALID_FILTER_JSON,
-                'filter_settings fehlt im Request-Body. Erwartet: {"filter_settings": {...}}',
+                'filter_settings is missing from the request body. Expected: {"filter_settings": {...}}',
                 request.url.path,
             ),
-        )
+        ) from None
 
     try:
         return FilterSettings.model_validate(parsed)
@@ -200,4 +201,4 @@ def _parse_filter_settings(raw: str, request: Request) -> FilterSettings:
         raise HTTPException(
             status_code=400,
             detail=problem_detail(ErrorTypes.INVALID_FILTER_PARAM, str(exc), request.url.path),
-        )
+        ) from exc

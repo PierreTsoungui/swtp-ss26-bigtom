@@ -36,6 +36,7 @@ CANCEL_GRACE_PERIOD_SECONDS = 5.0
 @dataclass(frozen=True)
 class ResetOutcome:
     """Result of a reset attempt, translated to HTTP by the route layer."""
+
     found: bool
     was_running: bool
     already_in_progress: bool = False
@@ -60,8 +61,9 @@ async def reset_job(job_id: str) -> ResetOutcome:
 
     Idempotent and concurrency-safe.
 
-    @raises OSError: if the job directory cannot be fully removed (the caller must
-        then NOT report success — the route maps this to an HTTP 500).
+    Raises:
+        OSError: If the job directory cannot be fully removed (the caller must
+            then NOT report success — the route maps this to an HTTP 500).
     """
     # Exactly one reset may run per job. A second concurrent request returns
     # immediately rather than racing on the same teardown.

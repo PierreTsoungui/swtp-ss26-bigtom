@@ -3,7 +3,6 @@
 These pin the defences that matter: zip-slip, zip-bomb (ratio/size/count),
 symlink and junk filtering, and the extension whitelist.
 """
-import io
 import sys
 import zipfile
 from pathlib import Path

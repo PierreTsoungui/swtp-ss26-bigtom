@@ -1,3 +1,4 @@
+"""R execution subsystem: the runner, command definitions and result types."""
 from app.services.r_executor.executor import run_r_script
 from app.services.r_executor.result import ExecutionResult, ExecutionStatus
 from app.services.r_executor.commands.base import RCommand

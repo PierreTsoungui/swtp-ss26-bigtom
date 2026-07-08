@@ -1,13 +1,13 @@
 # app/api/routes/normalization_preview.py
+"""Routes for the normalization preview (per-method density/PCA plots)."""
 import json
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from app.services.job_manager import get_job, JobPhase, JobStatusValue
+from app.services.job_paths import JOBS_DIR, validate_job_id
 
 router = APIRouter()
-
-JOBS_DIR = Path("jobs").resolve()
 
 # Density plots are served as static files; PCA data is inlined as JSON in the
 # preview response (the frontend renders it), so only density figures are
@@ -23,20 +23,27 @@ def _load_pca_json(job_dir: Path, filename: str) -> dict:
         with open(job_dir / filename, "r", encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
-        return {"error": f"PCA-Daten konnten nicht gelesen werden: {exc}", "points": []}
+        return {"error": f"PCA data could not be read: {exc}", "points": []}
 
 
 @router.get("/preview/normalization/{job_id}")
 async def get_preview(job_id: str):
+    """Return the per-method normalization preview (density URLs + inline PCA data).
+
+    Raises:
+        HTTPException: 404 if the job is unknown or the preview is missing, 409
+            if the preview is not ready yet.
+    """
+    validate_job_id(job_id)  # traversal guard before the id reaches the FS
     job = get_job(job_id)
 
     if not job:
         raise HTTPException(
             status_code=404,
-            detail={"error": "JOB_NOT_FOUND", "message": "Kein Job gefunden"},
+            detail={"error": "JOB_NOT_FOUND", "message": "No job found"},
         )
 
-    # Preview liegt erst ab normalization_preview/completed vor
+    # The preview is available from normalization_preview/completed onwards
     preview_ready = (
         job.phase == JobPhase.NORMALIZATION_PREVIEW.value
         and job.status == JobStatusValue.COMPLETED.value
@@ -51,18 +58,18 @@ async def get_preview(job_id: str):
             status_code=409,
             detail={
                 "error": "PREVIEW_NOT_READY",
-                "message": "Normalisierungs-Preview noch nicht verfügbar",
+                "message": "Normalization preview not available yet",
                 "current_phase": job.phase,
                 "current_status": job.status,
             },
         )
 
-    # preview_plots.json vom Dateisystem lesen
+    # Read preview_plots.json from the filesystem
     plots_path = JOBS_DIR / job_id / "preview_plots.json"
     if not plots_path.exists():
         raise HTTPException(
             status_code=404,
-            detail={"error": "PREVIEW_NOT_READY", "message": "preview_plots.json nicht gefunden"},
+            detail={"error": "PREVIEW_NOT_READY", "message": "preview_plots.json not found"},
         )
 
     with open(plots_path, "r", encoding="utf-8") as f:
@@ -90,10 +97,17 @@ async def get_preview(job_id: str):
 
 @router.get("/preview/normalization/{job_id}/{plot_name}")
 async def get_plot_image(job_id: str, plot_name: str):
+    """Return a single density preview plot (PNG/PDF) for a job.
+
+    Raises:
+        HTTPException: 404 if the job or plot is missing, 400 for an invalid or
+            traversal-unsafe plot name.
+    """
+    validate_job_id(job_id)  # traversal guard before the id reaches the FS
     job = get_job(job_id)
 
     if not job:
-        raise HTTPException(status_code=404, detail="Job nicht gefunden")
+        raise HTTPException(status_code=404, detail="Job not found")
 
     suffix = Path(plot_name).suffix.lower()
     if (
@@ -102,13 +116,13 @@ async def get_plot_image(job_id: str, plot_name: str):
         or any(sep in plot_name for sep in ("/", "\\"))
         or ".." in plot_name
     ):
-        raise HTTPException(status_code=400, detail="Ungültiger Plot-Name")
+        raise HTTPException(status_code=400, detail="Invalid plot name")
 
     job_dir = (JOBS_DIR / job_id).resolve()
     path = (job_dir / plot_name).resolve()
     if job_dir not in path.parents:
-        raise HTTPException(status_code=400, detail="Ungültiger Plot-Name")
+        raise HTTPException(status_code=400, detail="Invalid plot name")
     if not path.exists():
-        raise HTTPException(status_code=404, detail="Plot nicht gefunden")
+        raise HTTPException(status_code=404, detail="Plot not found")
 
     return FileResponse(path, media_type=_MEDIA_BY_SUFFIX[suffix])

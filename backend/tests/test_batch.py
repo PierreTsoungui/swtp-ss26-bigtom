@@ -3,13 +3,11 @@ import pytest
 from fastapi.testclient import TestClient
 from pathlib import Path
 import sys
-import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.main import app
 from app.services import batch_service, job_manager
-from app.core.error_types import ErrorTypes
 from datetime import datetime, timedelta
 
 client = TestClient(app, raise_server_exceptions=False)
