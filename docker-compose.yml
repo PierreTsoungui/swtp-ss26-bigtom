@@ -65,6 +65,7 @@ services:
 
   backend:
     build: ./backend
+    user: "1000:1000"
     environment:
       - PYTHONUNBUFFERED=1
       - JOB_BASE_DIR=${JOB_BASE_DIR:-/app/jobs}
@@ -90,6 +91,7 @@ services:
 
   r_worker:
     build: ./r_backend
+    user: "1000:1000"
     ulimits:
       nproc:
         soft: 65536
@@ -107,8 +109,8 @@ services:
       - R_BIOC_PARALLEL_WORKERS=1
     cap_drop:
       - ALL
-    cap_add:
-      - DAC_OVERRIDE
+    #cap_add:
+    #  - DAC_OVERRIDE
     security_opt:
       - no-new-privileges:true
     volumes:
