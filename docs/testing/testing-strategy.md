@@ -321,7 +321,137 @@ The project is still under active development. Do not assume every R integration
 
 Success condition: `testthat` prints passing tests and exits with code `0`.
 
-## 9. Local Test Execution Without Docker
+## 9. End-to-End Tests with Playwright
+
+The `e2e/` directory contains a Playwright test suite that runs against the **complete running stack** (nginx + backend + R worker). It proves the full request path end-to-end: from the browser and HTTP API contract, through the R pipeline, to populated result tables.
+
+### 9.1 Suite overview
+
+| File | Tags | What it covers |
+|---|---|---|
+| `tests/api/health.spec.ts` | fast | Frontend SPA loads; backend reachable via nginx /api proxy |
+| `tests/api/errors.spec.ts` | fast | RFC 9457 error contract for 404/400 cases |
+| `tests/api/batch-validation.spec.ts` | fast | Batch-correction input validation (synthetic job dir, no pipeline) |
+| `tests/ui/smoke.spec.ts` | fast | SPA renders, navigation, file inputs, privacy page, 404 fallback |
+| `tests/api/reset.spec.ts` | @slow | Real upload → immediate reset; proves job cancellation |
+| `tests/api/pipeline.spec.ts` | @slow | Full pipeline: upload → filtering → normalization → SVD → analysis → tables |
+
+Fast tests complete in under 15 seconds. `@slow` tests drive the R pipeline and take 10–20 minutes with a real IDAT dataset.
+
+### 9.2 Prerequisites
+
+1. **Stack must be running** before any test command is issued:
+
+   ```bash
+   docker compose up -d   # from the repo root
+   ```
+
+2. **Dataset for `@slow` tests** (optional — fast tests need none):
+
+   By default the suite auto-discovers a complete IDAT set (`*.idat` files + a `SampleSheet*.csv`) under the host `jobs/` directory. To point at a specific folder:
+
+   ```bash
+   export E2E_DATASET_DIR=/absolute/path/to/idat_dataset
+   ```
+
+   If no dataset is found the upload-based tests **skip** gracefully instead of failing.
+
+### 9.3 Local execution (Node.js 18+ on the host)
+
+Install once:
+
+```bash
+cd e2e
+npm ci
+npx playwright install chromium
+```
+
+Run the fast suite (seconds, no R pipeline):
+
+```bash
+npm run test:fast
+```
+
+Run everything including the full R pipeline proof (10–20 min):
+
+```bash
+npm test
+```
+
+Run only the pipeline test:
+
+```bash
+npm run test:pipeline
+```
+
+Open the HTML report from the last run:
+
+```bash
+npm run report
+```
+
+Override the target base URL (default `https://localhost:8443`):
+
+```bash
+E2E_BASE_URL=https://localhost npm run test:fast
+```
+
+### 9.4 Docker execution (no local Node.js required)
+
+Use the official Playwright Docker image that matches the pinned version (`v1.61.0`). The image bundles Node.js and all browser binaries.
+
+**Linux** — attach to the host network so `localhost:8443` resolves to the running stack:
+
+```bash
+docker run --rm \
+  --network host \
+  -v "$PWD/e2e:/e2e" \
+  -w /e2e \
+  mcr.microsoft.com/playwright:v1.61.0-noble \
+  sh -c "npm ci && npx playwright install chromium && npm run test:fast"
+```
+
+Full pipeline (`@slow`, requires `E2E_DATASET_DIR`):
+
+```bash
+docker run --rm \
+  --network host \
+  -e E2E_DATASET_DIR=/absolute/path/to/dataset \
+  -v "$PWD/e2e:/e2e" \
+  -v /absolute/path/to/dataset:/dataset:ro \
+  -w /e2e \
+  mcr.microsoft.com/playwright:v1.61.0-noble \
+  sh -c "npm ci && npx playwright install chromium && npm test"
+```
+
+**macOS / Windows (Docker Desktop)** — Docker Desktop provides `host.docker.internal` to reach the host machine:
+
+```powershell
+docker run --rm `
+  -e E2E_BASE_URL=https://host.docker.internal:8443 `
+  -v "${PWD}/e2e:/e2e" `
+  -w /e2e `
+  mcr.microsoft.com/playwright:v1.61.0-noble `
+  sh -c "npm ci && npx playwright install chromium && npm run test:fast"
+```
+
+> **Note:** The stack uses a self-signed development certificate (`certs/bigtom-local.pem`). The Playwright config sets `ignoreHTTPSErrors: true` globally, so certificate errors are suppressed automatically — no extra flags are needed.
+
+### 9.5 Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `E2E_BASE_URL` | `https://localhost:8443` | Base URL of the running stack (nginx). Override for production or CI. |
+| `E2E_DATASET_DIR` | auto-discovered from `jobs/` | Absolute path to a folder containing IDAT files and a sample sheet. Required for `@slow` tests. |
+
+### 9.6 Success criteria
+
+- **Fast suite green** (`npm run test:fast`) — API contract, error handling, batch-variable validation, and the frontend shell all work correctly.
+- **Full suite green** (`npm test`) — additionally, a real dataset flows through filtering, normalization, SVD, downstream DMR/DMP analysis, and produces populated result tables.
+
+Success condition: Playwright exits with code `0` and all tests show ✓ in the list reporter.
+
+## 10. Local Test Execution Without Docker
 
 ### Backend
 
@@ -368,7 +498,7 @@ npm run build
 npm run dev
 ```
 
-The Vite dev server is started by `npm run dev`. The Docker frontend serves the built app through nginx on `http://localhost:3000`.
+The Vite dev server is started by `npm run dev`. The Docker frontend serves the compiled app through nginx: HTTP on `http://localhost:8080` (redirects to HTTPS) and HTTPS on `https://localhost:8443`.
 
 ### R Component
 
@@ -382,7 +512,7 @@ Rscript -e "testthat::test_dir('tests')"
 Rscript -e "testthat::test_file('tests/test_batch_svd.R')"
 ```
 
-## 10. API Tests with cURL
+## 11. API Tests with cURL
 
 Start the Docker environment first:
 
@@ -578,7 +708,7 @@ curl -i "http://localhost:8000/api/v1/heatmap/$JOB_ID"
 
 Expected status: `200 OK` if `heatmap.png` exists.
 
-## 11. Manual R Script Execution
+## 12. Manual R Script Execution
 
 List containers:
 
@@ -673,7 +803,7 @@ $LASTEXITCODE
 
 For low-level debugging, note a current implementation limitation: `backend/app/services/r_executor.py` hard-codes the R worker container name. If the project directory name changes or Compose generates a different name, R execution from the backend can fail even when the `r_worker` service is running. Confirm the actual container with `docker compose ps`.
 
-## 12. Manual End-to-End Test
+## 13. Manual End-to-End Test
 
 1. Start services.
 
@@ -686,18 +816,18 @@ Expected result: `frontend`, `backend`, and `r_worker` are running.
 2. Open the frontend.
 
 ```text
-http://localhost:3000
+https://localhost:8443
 ```
 
-Expected result: the React app loads through nginx.
+Expected result: the React SPA loads through nginx (self-signed certificate; accept the browser warning in a development environment).
 
 3. Open the upload page.
 
 ```text
-http://localhost:3000/upload
+https://localhost:8443/upload
 ```
 
-Expected result: the upload view allows IDAT and Sample Sheet selection.
+Expected result: the upload view shows the file dropzone and picker buttons.
 
 4. Upload valid IDAT Green/Red pairs and a valid Sample Sheet.
 
@@ -778,7 +908,7 @@ docker compose logs --tail=100 r_worker
 
 Expected result: backend logs show route/R executor activity; R logs show script progress or package/data errors.
 
-## 13. Negative and Failure Tests
+## 14. Negative and Failure Tests
 
 | Case | Reproduction | Expected behavior |
 |---|---|---|
@@ -798,7 +928,7 @@ Expected result: backend logs show route/R executor activity; R logs show script
 | Unknown table filter | Request a ready table with an unsupported `filter_*` key, for example `?filter_banana=123` | `400` after the table data file is loaded |
 | Invalid plot name | `/api/v1/preview/normalization/{job_id}/bad.png` | `400` |
 
-## 14. Logging and Debugging
+## 15. Logging and Debugging
 
 All logs:
 
@@ -859,7 +989,7 @@ Common failure categories:
 
 - Missing environment variables: check `.env.example` and `docker-compose.yml`.
 - Unavailable service: run `docker compose ps` and inspect service logs.
-- Port conflict: host ports `3000` and `8000` are defined in `docker-compose.yml`.
+- Port conflict: the stack uses host ports `8080` (nginx HTTP), `8443` (nginx HTTPS), and `8000` (backend). In production deployments ports `80` and `443` are used instead. Free any conflicting processes before starting the stack.
 - Missing Python dependency: rebuild backend or run `pip install -r backend/requirements.txt`.
 - Missing R/Bioconductor package: rebuild `r_worker`; the R build can take a long time.
 - Permission issue: check bind mounts for `./jobs`, `./r_backend`, and Docker socket access. If backend tests fail with `PermissionError: /app/jobs/<uuid>`, you ran pytest with `--user root`; remove that flag (see Section 6).
@@ -869,7 +999,7 @@ Common failure categories:
 - Stuck or failed job: poll `/api/v1/status/{job_id}` and inspect backend plus R worker logs.
 - Frontend API configuration problem: Docker nginx proxies `/api/` to `http://backend:8000`; some frontend batch code also calls `http://localhost:8000/api/v1` directly.
 
-## 15. Expected Test Results
+## 16. Expected Test Results
 
 | Component | Command | Success condition / notes |
 |---|---|---|
@@ -880,12 +1010,15 @@ Common failure categories:
 | Frontend lint | `npm run lint` from `frontend/app` | Exit code `0` when ESLint passes |
 | Frontend build | `npm run build` from `frontend/app` | Creates `dist/` and exits with code `0` |
 | R tests | `docker compose exec r_worker Rscript -e "setwd('/app/r_backend'); testthat::test_dir('tests')"` | Exit code `0` when R dependencies and required test data are present |
-| API root | `curl -i http://localhost:8000/` | `200 OK` with `message` and `version`; requires a running backend |
-| Upload | `POST /api/v1/upload` | `201 Created` with `job_id`; requires a running backend and valid test data |
+| E2E fast suite | `npm run test:fast` from `e2e/` (stack must be up) | Exit code `0`, 15 tests pass; covers API contract, error handling, batch validation, and frontend smoke |
+| E2E fast suite (Docker) | `docker run --rm --network host -v "$PWD/e2e:/e2e" -w /e2e mcr.microsoft.com/playwright:v1.61.0-noble sh -c "npm ci && npx playwright install chromium && npm run test:fast"` | Same as above; no local Node.js required |
+| E2E full suite | `npm test` from `e2e/` with `E2E_DATASET_DIR` set | Exit code `0` after full pipeline proof; requires a real IDAT dataset and 10–20 min |
+| API root | `curl -ik https://localhost:8443/` | `200 OK` HTML; requires a running frontend container |
+| Backend health | `curl -i http://localhost:8000/health` | `200 OK` with `{"status": "ok"}` |
 
 This table defines success conditions. It does not claim that every test command currently passes in the repository; record exact current results in the Merge Request or ticket.
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 Docker daemon is unavailable:
 
@@ -956,8 +1089,9 @@ Then restart:
 docker compose up -d
 ```
 
-## 17. Test Completion Checklist
+## 18. Test Completion Checklist
 
+- [ ] `docker compose config --services` lists `backend`, `frontend`, and `r_worker`.
 - [ ] `docker compose config --services` lists `backend`, `frontend`, and `r_worker`.
 - [ ] Docker services start with `docker compose up -d --build`.
 - [ ] Backend tests were run with Pytest and failures were documented or fixed.
@@ -965,6 +1099,8 @@ docker compose up -d
 - [ ] Frontend lint was run from `frontend/app` with `npm run lint`.
 - [ ] Frontend build was run from `frontend/app` with `npm run build`.
 - [ ] R tests were run in `r_worker`, or missing R dependencies/test data were documented.
+- [ ] E2E fast suite passes: `npm run test:fast` from `e2e/` exits with code `0` (15 tests green).
+- [ ] E2E full suite was run with a real IDAT dataset, or the skip reason was documented.
 - [ ] API root, OpenAPI, upload, status, stats, normalization, batch, table, reset, and heatmap endpoints were checked as applicable.
 - [ ] Manual end-to-end workflow was tested with valid IDAT pairs and a valid Sample Sheet.
 - [ ] Negative upload and invalid job-ID cases were tested.

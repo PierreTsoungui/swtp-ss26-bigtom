@@ -34,7 +34,7 @@ Out of scope: the exact HTTP shapes (see [api-contract.md](./architecture/api-co
 
 **DNA methylation** is an epigenetic mark: a methyl group attached to a cytosine base, most often at a **CpG site** (a cytosine immediately followed by a guanine on the same strand). It modulates gene activity *without* changing the DNA sequence, and its pattern differs between tissues, developmental stages, and disease states — which is what makes it worth measuring.
 
-The platform quantifies methylation at hundreds of thousands of predefined CpG positions using **Illumina BeadChip arrays**. Each array probe interrogates one site and yields a fluorescence signal in two colour channels (**Red** and **Green**). The two channels together are what the scanner writes out as the raw **IDAT** files — two files per sample.
+The platform quantifies methylation at hundreds of thousands of predefined CpG positions using **Illumina BeadChip arrays**. Each array probe interrogates one site. Depending on the probe chemistry, the signal is read in a single colour channel (Infinium Type I) or across both (Infinium Type II); the scanner always records both **Red** and **Green** channels for the array as a whole. The two channels together are what the scanner writes out as the raw **IDAT** files — two files per sample.
 
 ### 3.2 From raw signal to a comparable number
 
@@ -63,7 +63,7 @@ The **Sample Sheet** assigns each sample to a group. That grouping (canonically 
 | **Sentrix_ID** | The chip/slide barcode; identifies the physical BeadChip. |
 | **Sentrix_Position** | The position of a sample on the chip (e.g. `R01C01`). |
 | **BeadChip / array** | The physical Illumina microarray carrying the probes. Supported types below. |
-| **450K** | Illumina Infinium HumanMethylation450 array (~450,000 CpGs). |
+| **450K** | Illumina Infinium HumanMethylation450 array (~485,000 CpGs). |
 | **EPIC v1** | Illumina Infinium MethylationEPIC v1.0 array (~850,000 CpGs). Also referred to as *EPIC* / *850K*. |
 | **EPIC v2** | Illumina Infinium MethylationEPIC v2.0 array (~935,000 CpGs); the newest generation. Requires v2-specific probe annotation. |
 | **Probe** | A single oligonucleotide feature on the array measuring methylation at one CpG (or, for some, a non-CpG) site. Identified by a `cg…` / `ch…` id. |
