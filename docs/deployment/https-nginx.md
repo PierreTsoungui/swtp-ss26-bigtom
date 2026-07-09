@@ -1,106 +1,106 @@
 # HTTPS, Reverse Proxy & Rate Limiting
 
-Dieses Dokument beschreibt die HTTPS-/TLS-Konfiguration, den Nginx-Reverse-Proxy und das Rate-Limiting-Konzept der Anwendung. Es richtet sich sowohl an das Entwicklungsteam als auch an die **THM IT-Abteilung**, die das produktive Deployment im THM-Netzwerk übernimmt.
+This document describes the HTTPS/TLS configuration, the Nginx reverse proxy, and the rate-limiting concept of the application. It is intended both for the development team and for the **THM IT department**, which will handle the production deployment within the THM network.
 
-> **Wichtiger Hinweis zum Scope:** Dieses Projekt wird **nicht** von uns selbst produktiv deployt. Dieses Dokument bereitet das Deployment vor und beschreibt die notwendigen Schritte, die von der THM IT-Abteilung ausgeführt werden müssen, insbesondere die Ausstellung eines offiziell signierten TLS-Zertifikats.
+> **Important note on scope:** This project is **not** deployed to production by us. This document prepares the deployment and describes the necessary steps that must be carried out by the THM IT department, in particular the issuance of an officially signed TLS certificate.
 
 ---
 
-## 1. Überblick über die Architektur
+## 1. Architecture Overview
 
-TLS terminiert zentral im `frontend`-Container (Nginx). Nginx übernimmt drei Aufgaben:
+TLS terminates centrally in the `frontend` container (Nginx). Nginx handles three tasks:
 
-1. **HTTPS-Terminierung** – Verschlüsselung zwischen Client (Browser) und Server.
-2. **Reverse Proxy** – Weiterleitung von `/api/*`-Anfragen an das `backend` (FastAPI/Uvicorn), das intern ausschließlich über HTTP erreichbar ist.
-3. **Rate Limiting** – Schutz des Backends vor Überlastung durch IP-basierte Anfragebegrenzung, direkt auf Reverse-Proxy-Ebene, bevor eine Anfrage das Backend überhaupt erreicht.
+1. **HTTPS termination** – encryption between the client (browser) and the server.
+2. **Reverse proxy** – forwarding of `/api/*` requests to the `backend` (FastAPI/Uvicorn), which is only reachable internally via HTTP.
+3. **Rate limiting** – protecting the backend from overload through IP-based request throttling, directly at the reverse-proxy level, before a request even reaches the backend.
 
 ```
-Browser (HTTPS) → Nginx (TLS-Terminierung, Rate Limiting) → Backend (HTTP, intern)
+Browser (HTTPS) → Nginx (TLS termination, rate limiting) → Backend (HTTP, internal)
 ```
 
-Das Backend selbst spricht zu keinem Zeitpunkt TLS – es ist ausschließlich über das interne Docker-Netzwerk erreichbar und verlässt sich auf Nginx als einzigen, extern erreichbaren Einstiegspunkt.
+The backend itself never speaks TLS at any point — it is only reachable via the internal Docker network and relies on Nginx as the sole, externally reachable entry point.
 
 ---
 
-## 2. Aktueller Stand: Lokales Entwicklungs-Setup (mkcert)
+## 2. Current State: Local Development Setup (mkcert)
 
-Für die lokale Entwicklung wird aktuell ein selbstsigniertes Zertifikat über [`mkcert`](https://github.com/FiloSottile/mkcert) erzeugt (siehe `HTTPS.md` im Repository für die detaillierte Anleitung). Dabei installiert `mkcert` eine lokal generierte Root-CA im Zertifikatsspeicher des jeweiligen Entwicklerrechners, wodurch der Browser dem Zertifikat vertraut, ohne eine Warnung anzuzeigen.
+For local development, a self-signed certificate is currently generated via [`mkcert`](https://github.com/FiloSottile/mkcert) (see `HTTPS.md` in the repository for the detailed instructions). In this process, `mkcert` installs a locally generated root CA into the certificate store of the respective developer machine, which causes the browser to trust the certificate without showing a warning.
 
-Die erzeugten Dateien (`bigtom-local.pem`, `bigtom-local-key.pem`) werden bewusst **nicht** versioniert (`.gitignore`) und müssen von jeder Entwicklerin/jedem Entwickler lokal selbst erzeugt werden. Ohne diese Dateien schlägt der Start des `frontend`-Containers mit einem Nginx-Zertifikatsfehler fehl.
+The generated files (`bigtom-local.pem`, `bigtom-local-key.pem`) are deliberately **not** version-controlled (`.gitignore`) and must be generated locally by each developer. Without these files, the `frontend` container fails to start with an Nginx certificate error.
 
-### Warum dieses Setup nicht für die Produktion geeignet ist
+### Why This Setup Is Not Suitable for Production
 
-Der zugrunde liegende Mechanismus von `mkcert` – eine lokal generierte Root-CA, die nur auf dem jeweiligen Entwicklerrechner als vertrauenswürdig hinterlegt ist – funktioniert ausschließlich, weil diese CA manuell in den Zertifikatsspeicher **eines einzelnen Rechners** installiert wurde. Sobald die Anwendung auf einem zentralen Server im THM-Netzwerk gehostet wird, auf den mehrere, IT-technisch nicht versierte Nutzer:innen (z. B. Biolog:innen im Labor) zugreifen sollen, funktioniert dieses Modell nicht mehr:
+The underlying mechanism of `mkcert` — a locally generated root CA that is only trusted on the respective developer machine — works only because this CA was manually installed into the certificate store of **a single machine**. As soon as the application is hosted on a central server within the THM network, accessed by multiple users who are not IT-savvy (e.g., biologists in the lab), this model no longer works:
 
-1. Der Browser eines externen Rechners kennt die `mkcert`-Root-CA nicht.
-2. Der Browser zeigt die Sicherheitswarnung `ERR_CERT_AUTHORITY_INVALID`.
-3. Die einzige Abhilfe wäre, die geheime `mkcert`-Root-CA manuell auf jedem Rechner zu installieren, der die Anwendung nutzen soll – dies ist in der Praxis nicht skalierbar und zudem sicherheitstechnisch bedenklich, da die Root-CA jedes Entwicklerrechners dann systemweites Vertrauen für beliebige, von diesem Rechner signierte Zertifikate genießen würde.
+1. The browser of an external machine does not know the `mkcert` root CA.
+2. The browser displays the security warning `ERR_CERT_AUTHORITY_INVALID`.
+3. The only workaround would be to manually install the secret `mkcert` root CA on every machine that is supposed to use the application — this is not scalable in practice and is also a security concern, since the root CA of every developer machine would then carry system-wide trust for any certificate signed by that machine.
 
-Für das produktive Deployment im THM-Netzwerk wird daher ein **von der Hochschule offiziell signiertes Zertifikat** benötigt, das auf THM-verwalteten Rechnern standardmäßig vertraut wird.
+For the production deployment within the THM network, an **officially signed certificate issued by the university** is therefore required, which is trusted by default on THM-managed machines.
 
 ---
 
-## 3. Produktions-Deployment: Anleitung für die THM IT-Abteilung
+## 3. Production Deployment: Instructions for the THM IT Department
 
-Die folgenden Schritte beschreiben den Prozess zur Ausstellung und Einbindung eines offiziellen TLS-Zertifikats für das produktive Deployment. Diese Schritte werden **von der THM IT-Abteilung** durchgeführt bzw. koordiniert, nicht vom Entwicklungsteam.
+The following steps describe the process for issuing and integrating an official TLS certificate for the production deployment. These steps are carried out or coordinated **by the THM IT department**, not by the development team.
 
-### Schritt 1 — Domain beantragen
+### Step 1 — Request a Domain
 
-Eine feste, interne Domain im THM-Netz beantragen, unter der die Anwendung erreichbar sein wird, z. B.:
+Request a fixed, internal domain within the THM network under which the application will be reachable, e.g.:
 
 ```
 bigtom.biologie.thm.de
 ```
 
-### Schritt 2 — Schlüsselpaar und CSR erzeugen
+### Step 2 — Generate Key Pair and CSR
 
-Direkt **auf dem Zielserver** ein neues Schlüsselpaar generieren. Der private Schlüssel verbleibt ausschließlich auf dem Server und wird zu keinem Zeitpunkt weitergegeben oder in Versionskontrolle aufgenommen. Aus dem öffentlichen Schlüssel und dem Domainnamen wird ein Certificate Signing Request (CSR) erstellt:
+Generate a new key pair directly **on the target server**. The private key remains exclusively on the server and is never shared or committed to version control at any point. A Certificate Signing Request (CSR) is created from the public key and the domain name:
 
 ```bash
 openssl req -new -newkey rsa:2048 -nodes -keyout bigtom.key -out bigtom.csr
 ```
 
-Bei der Eingabeaufforderung für den *Common Name* (CN) muss die beantragte Domain angegeben werden (z. B. `bigtom.biologie.thm.de`).
+When prompted for the *Common Name* (CN), the requested domain must be entered (e.g., `bigtom.biologie.thm.de`).
 
-### Schritt 3 — CSR bei der THM-IT einreichen
+### Step 3 — Submit the CSR to the THM IT Department
 
-Der **CSR** (nicht der private Schlüssel!) wird beim Hochschulrechenzentrum eingereicht. Die THM-IT signiert den Antrag entweder:
+The **CSR** (not the private key!) is submitted to the university computing center. The THM IT department signs the request either:
 
-- über die hochschulinterne Root-CA, oder
-- über die DFN-PKI-/GÉANT-Trusted-Certificate-Anbindung.
+- via the university's internal root CA, or
+- via the DFN-PKI/GÉANT trusted-certificate integration.
 
-Beide Varianten haben den Vorteil, dass ihr Root-Zertifikat auf THM-verwalteten Rechnern bereits als vertrauenswürdig hinterlegt ist – Nutzer:innen sehen dadurch keine Browserwarnung mehr.
+Both options have the advantage that their root certificate is already deposited as trusted on THM-managed machines — users therefore no longer see a browser warning.
 
-### Schritt 4 — Zertifikat einbinden
+### Step 4 — Integrate the Certificate
 
-Das von der IT signierte Zertifikat (ggf. inklusive Chain-/Intermediate-Zertifikaten) wird zusammen mit dem in Schritt 2 lokal erzeugten privaten Schlüssel in die Produktions-Nginx-Konfiguration eingebunden. Es ersetzt dort die lokalen `bigtom-local.pem`/`bigtom-local-key.pem`-Dateien aus dem `mkcert`-Entwicklungssetup:
+The certificate signed by the IT department (including chain/intermediate certificates, if applicable) is integrated into the production Nginx configuration together with the private key generated locally in Step 2. It replaces the local `bigtom-local.pem`/`bigtom-local-key.pem` files from the `mkcert` development setup:
 
 ```nginx
-ssl_certificate     /etc/nginx/certs/bigtom.pem;       # offiziell signiertes Zertifikat (+ Chain)
-ssl_certificate_key /etc/nginx/certs/bigtom.key;        # privater Schlüssel, ausschließlich auf dem Server
+ssl_certificate     /etc/nginx/certs/bigtom.pem;       # officially signed certificate (+ chain)
+ssl_certificate_key /etc/nginx/certs/bigtom.key;        # private key, exclusively on the server
 ```
 
-An der übrigen Nginx-Konfiguration (Reverse Proxy, Rate Limiting, siehe Abschnitt 4 und 5) ändert sich durch den Zertifikatswechsel nichts – ausschließlich `ssl_certificate` und `ssl_certificate_key` müssen auf die produktiven Dateipfade zeigen.
+Nothing else changes in the remaining Nginx configuration (reverse proxy, rate limiting, see Sections 4 and 5) as a result of the certificate change — only `ssl_certificate` and `ssl_certificate_key` need to point to the production file paths.
 
-### Validierungs-Checkliste nach dem Deployment
+### Post-Deployment Validation Checklist
 
-Nach der Einbindung des produktiven Zertifikats sollte Folgendes geprüft werden (analog zu den Tests, die im Rahmen des lokalen Setups durchgeführt wurden):
+After integrating the production certificate, the following should be verified (analogous to the tests performed as part of the local setup):
 
-| Prüfung                                 | Befehl                                                             | Erwartetes Ergebnis                                                                                      |
-|-----------------------------------------|--------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| Nginx-Konfiguration syntaktisch korrekt | `nginx -t` (im Container: `docker compose exec frontend nginx -t`) | `syntax is ok` / `test is successful`                                                                    |
-| HTTP → HTTPS Redirect                   | `curl -I http://<domain>`                                          | `301 Moved Permanently`, `Location: https://<domain>/`                                                   |
-| HTTPS-Antwort ohne Zertifikatswarnung   | `curl -I https://<domain>`                                         | `200 OK`, **kein** `--insecure`/`--ssl-no-revoke`-Flag nötig (im Unterschied zum lokalen `mkcert`-Setup) |
-| Backend-Proxying über `/api/`           | `curl -i https://<domain>/api/v1/status/not-a-real-job`            | `404 Not Found` mit korrektem JSON-Payload vom Backend                                                   |
-| Zertifikatskette vollständig            | `openssl s_client -connect <domain>:443 -showcerts`                | Zertifikatskette bis zur vertrauenswürdigen Root reicht ohne Lücken                                      |
+| Check                                    | Command                                                             | Expected Result                                                                                           |
+|-------------------------------------------|----------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| Nginx configuration syntactically correct | `nginx -t` (inside the container: `docker compose exec frontend nginx -t`) | `syntax is ok` / `test is successful`                                                                      |
+| HTTP → HTTPS redirect                     | `curl -I http://<domain>`                                            | `301 Moved Permanently`, `Location: https://<domain>/`                                                     |
+| HTTPS response without certificate warning | `curl -I https://<domain>`                                          | `200 OK`, **no** `--insecure`/`--ssl-no-revoke` flag needed (unlike the local `mkcert` setup)              |
+| Backend proxying via `/api/`              | `curl -i https://<domain>/api/v1/status/not-a-real-job`              | `404 Not Found` with correct JSON payload from the backend                                                 |
+| Certificate chain complete                | `openssl s_client -connect <domain>:443 -showcerts`                  | Certificate chain reaches the trusted root without gaps                                                    |
 
 ---
 
 ## 4. Nginx Reverse Proxy
 
-### 4.1 Grundkonfiguration
+### 4.1 Basic Configuration
 
-Nginx läuft im `frontend`-Container als nicht-privilegierter Prozess (nginxinc/nginx-unprivileged) und lauscht intern auf den Ports 8080 (HTTP) und 8443 (HTTPS). Da die Beschränkung für Ports unter 1024 (Root-Rechte erforderlich) nur für den Prozess innerhalb des Containers gilt, kann das Port-Mapping im Docker-Host frei gewählt werden. Der Docker-Daemon leitet die Anfragen auf Host-Ebene weiter.
+Nginx runs inside the `frontend` container as an unprivileged process (nginxinc/nginx-unprivileged) and listens internally on ports 8080 (HTTP) and 8443 (HTTPS). Since the restriction on ports below 1024 (requiring root privileges) only applies to the process inside the container, the port mapping on the Docker host can be freely chosen. The Docker daemon forwards requests at the host level.
 
 ```yaml
 frontend:
@@ -112,11 +112,10 @@ frontend:
     - "443:8443"
 ```
 
+Through this mapping (80:8080 / 443:8443), the Nginx process inside the container remains fully unprivileged and continues to listen on the high ports. Binding to the standard web ports 80 and 443 occurs exclusively on the host system, performed by the Docker daemon.
 
-Durch dieses Mapping (80:8080 / 443:8443) bleibt der Nginx-Prozess im Container vollständig unprivilegiert und lauscht weiter auf den hohen Ports. Die Bindung an die Standard-Webports 80 und 443 erfolgt ausschließlich auf dem Host-System durch den Docker-Daemon.
+Basic Nginx configuration (excerpt from `nginx.conf`):
 
-
- Grundlegende Nginx-Konfiguration (Auszug aus `nginx.conf`):
 ```nginx
 server {
     listen 8080;
@@ -145,19 +144,19 @@ server {
         proxy_read_timeout 500s;
         proxy_connect_timeout 300s;
     }
-    # ... weitere, spezifische /api/v1/*-Routen, siehe Abschnitt 5
+    # ... additional, route-specific /api/v1/* locations, see Section 5
 }
 ```
 
-**Anmerkung `server_name localhost`:** Für das produktive Deployment muss `server_name` auf die tatsächliche THM-Domain (z. B. `bigtom.biologie.thm.de`) angepasst werden.
+**Note on `server_name localhost`:** For the production deployment, `server_name` must be changed to the actual THM domain (e.g., `bigtom.biologie.thm.de`).
 
-### 4.2 Statisches Frontend
+### 4.2 Static Frontend
 
-Der `location /`-Block liefert die gebaute Single-Page-Application aus (`/usr/share/nginx/html`, siehe Multi-Stage-Build im Frontend-Dockerfile). `try_files $uri $uri/ /index.html` stellt sicher, dass Client-seitiges Routing (z. B. React Router) auch bei direktem Aufruf einer Unterseite (z. B. `/analysis/<job_id>`) funktioniert, indem unbekannte Pfade auf `index.html` zurückfallen.
+The `location /` block serves the built single-page application (`/usr/share/nginx/html`, see the multi-stage build in the frontend Dockerfile). `try_files $uri $uri/ /index.html` ensures that client-side routing (e.g., React Router) also works when a subpage is called directly (e.g., `/analysis/<job_id>`), by falling back to `index.html` for unknown paths.
 
-### 4.3 Proxying zum Backend
+### 4.3 Proxying to the Backend
 
-Alle Anfragen unter `/api/*` werden an das Backend (`http://backend:8000`, interner Docker-Service-Name) weitergeleitet. Gemeinsame Proxy-Header sind in `proxy_params` ausgelagert und werden von den meisten spezifischen Routen per `include` eingebunden:
+All requests under `/api/*` are forwarded to the backend (`http://backend:8000`, internal Docker service name). Shared proxy headers are factored out into `proxy_params` and included by most route-specific locations via `include`:
 
 ```nginx
 proxy_set_header Host $host;
@@ -169,15 +168,15 @@ proxy_read_timeout 500s;
 proxy_connect_timeout 300s;
 ```
 
-**Begründung der Werte:**
+**Rationale for the values:**
 
-- `client_max_body_size 1400M`: Uploads (IDAT-Dateien für die Methylierungsanalyse) können mehrere hundert MB groß sein; das Limit ist bewusst großzügig, aber nicht unbegrenzt gesetzt.
-- `proxy_read_timeout 500s` / `proxy_connect_timeout 300s`: Rechenintensive R-Analyseschritte (DMP/DMR-Berechnung, Batch-Korrektur) können mehrere Minuten dauern; die Standard-Nginx-Timeouts (60s) würden hier zu vorzeitigen Verbindungsabbrüchen führen.
-- `X-Forwarded-Proto` / `X-Forwarded-For`: Ermöglichen dem Backend, die ursprüngliche Client-IP und das ursprüngliche Protokoll (HTTPS) zu erkennen, obwohl die Anfrage technisch von Nginx (intern per HTTP) weitergeleitet wird.
+- `client_max_body_size 1400M`: Uploads (IDAT files for methylation analysis) can be several hundred MB in size; the limit is deliberately generous but not unlimited.
+- `proxy_read_timeout 500s` / `proxy_connect_timeout 300s`: Compute-intensive R analysis steps (DMP/DMR calculation, batch correction) can take several minutes; the default Nginx timeouts (60s) would cause premature connection aborts here.
+- `X-Forwarded-Proto` / `X-Forwarded-For`: Allow the backend to identify the original client IP and the original protocol (HTTPS), even though the request is technically forwarded by Nginx internally over HTTP.
 
-### 4.4 Fehlerbehandlung bei Rate-Limit-Überschreitung
+### 4.4 Error Handling on Rate-Limit Violations
 
-Bei Überschreitung eines Rate-Limits liefert Nginx direkt eine strukturierte `429`-Antwort im [RFC 7807 Problem-Details-Format](https://www.rfc-editor.org/rfc/rfc7807), konsistent mit dem Fehlerformat des Backends:
+When a rate limit is exceeded, Nginx directly returns a structured `429` response in [RFC 7807 Problem Details format](https://www.rfc-editor.org/rfc/rfc7807), consistent with the backend's error format:
 
 ```nginx
 error_page 429 /429.json;
@@ -187,35 +186,35 @@ location = /429.json {
 }
 ```
 
-Dadurch erhält das Frontend bei einer Rate-Limit-Sperre eine Antwort im selben Format wie bei regulären Backend-Fehlern, ohne dass das Backend die Anfrage überhaupt sieht.
+This means the frontend receives a response in the same format when rate-limited as it would for regular backend errors, without the backend ever seeing the request.
 
 ---
 
-## 5. Rate-Limiting-Konzept
+## 5. Rate-Limiting Concept
 
-### 5.1 Ziel
+### 5.1 Goal
 
-Schutz des Servers vor Überlastung und (unbeabsichtigter oder böswilliger) DoS-artiger Last durch Nginx-basiertes Rate Limiting auf Reverse-Proxy-Ebene. Anfragen werden pro Client-IP-Adresse begrenzt. Bei Überschreitung liefert Nginx direkt `429 Too Many Requests` zurück – die Anfrage erreicht das Backend in diesem Fall gar nicht erst.
+Protect the server from overload and (unintentional or malicious) DoS-like load through Nginx-based rate limiting at the reverse-proxy level. Requests are limited per client IP address. When exceeded, Nginx directly returns `429 Too Many Requests` — in this case the request never reaches the backend at all.
 
-### 5.2 Grundannahmen
-    
-- **Nutzeranzahl:** 1–5 gleichzeitige Nutzer:innen (interne THM-Anwendung, kein öffentlicher Massenzugriff).
-- **Status-Polling-Intervall:** 3 Sekunden (Frontend-Standardwert, siehe `useJobPolling.ts`).
-- **Burst:** Ein kurzzeitiger Überschuss an Anfragen (z. B. durch Browser-Reload oder schnelle Klicks) wird nicht sofort gesperrt, sondern über einen definierten Burst-Puffer abgefedert.
+### 5.2 Base Assumptions
 
-### 5.3 Rate-Limit-Kategorien
+- **Number of users:** 1–5 concurrent users (internal THM application, no public mass access).
+- **Status polling interval:** 3 seconds (frontend default, see `useJobPolling.ts`).
+- **Burst:** A brief surplus of requests (e.g., due to a browser reload or rapid clicking) is not immediately blocked, but is absorbed via a defined burst buffer.
 
-Als grobe Orientierung dienen drei Kategorien, von denen die konkreten Zonen abgeleitet und pro Route feinjustiert wurden:
+### 5.3 Rate-Limit Categories
 
-| Kategorie | Requests/min | Burst | Sperrzeit |
-|-----------|--------------|-------|-----------|
-| Streng    | 5–10 / min   | 2–3   | ~60s      |
-| Mittel    | 20–30 / min  | 5–10  | ~30s      |
-| Leicht    | 30–60 / min  | 5–15  | ~10s      |
+Three categories serve as a rough guideline, from which the concrete zones were derived and fine-tuned per route:
 
-Einzelne Routen (Upload, Status-Polling, Tabellen-Export, Batch-Verarbeitung) weichen davon gezielt ab, da ihr tatsächliches Nutzungsverhalten sich nicht sauber in ein grobes Drei-Stufen-Schema pressen lässt (siehe Detailbegründungen unten).
+| Category | Requests/min | Burst | Lockout time |
+|----------|--------------|-------|---------------|
+| Strict   | 5–10 / min   | 2–3   | ~60s          |
+| Medium   | 20–30 / min  | 5–10  | ~30s          |
+| Light    | 30–60 / min  | 5–15  | ~10s          |
 
-### 5.4 Implementierte Rate-Limit-Zonen (Nginx)
+Individual routes (upload, status polling, table export, batch processing) deliberately deviate from this, since their actual usage patterns cannot be cleanly squeezed into a rough three-tier scheme (see detailed rationale below).
+
+### 5.4 Implemented Rate-Limit Zones (Nginx)
 
 ```nginx
 limit_req_zone $binary_remote_addr zone=upload_zone:10m rate=6r/m;
@@ -229,11 +228,11 @@ limit_req_zone $binary_remote_addr zone=export_zone:10m rate=10r/m;
 limit_req_status 429;
 ```
 
-Jede Zone begrenzt Anfragen pro Client-IP (`$binary_remote_addr`) unabhängig von den anderen Zonen; ein `10m`-Shared-Memory-Bereich reicht für mehrere zehntausend gleichzeitig getrackte IP-Adressen, was für den erwarteten Nutzerkreis (1–5 gleichzeitige Nutzer:innen) weit ausreichend dimensioniert ist.
+Each zone limits requests per client IP (`$binary_remote_addr`) independently of the other zones; a `10m` shared-memory area is sufficient to track several tens of thousands of concurrent IP addresses, which is far more than sufficient for the expected user base (1–5 concurrent users).
 
-### 5.5 Routen-Analyse und Zuordnung
+### 5.5 Route Analysis and Mapping
 
-#### Upload & Job-Initialisierung
+#### Upload & Job Initialization
 
 **`POST /api/v1/upload`** → `upload_zone` (6 req/min, `burst=3`, `nodelay`)
 
@@ -245,8 +244,8 @@ location ~ ^/api/v1/upload(/|$) {
 }
 ```
 
-- Datei-Upload ist ressourcenintensiv (Dateien bis zu mehreren hundert MB) und stößt sofort Hintergrundprozesse an (Filterung, R-Skript-Start).
-- Fehlerhafte Uploads und Neuversuche sind realistisch, aber auf max. ~6 Versuche/min pro Nutzer:in begrenzt.
+- File upload is resource-intensive (files up to several hundred MB) and immediately triggers background processes (filtering, R script startup).
+- Failed uploads and retries are realistic, but limited to a maximum of ~6 attempts/min per user.
 
 #### Status & Polling
 
@@ -260,71 +259,71 @@ location ~ ^/api/v1/status/ {
 }
 ```
 
-- Rechnerische Grundlage: Bei einem Polling-Intervall von 3 Sekunden ergibt sich pro Nutzer ein Bedarf von ca. 20 req/min. Bei bis zu 5 gleichzeitigen Nutzern ergäbe sich in Summe ein Bedarf von bis zu 100 req/min – die Zone ist **pro IP**, weshalb sich der gewählte Wert von 25 req/min am Bedarf eines einzelnen Nutzers orientiert mit kleinem Puffer.
+- Calculation basis: with a polling interval of 3 seconds, each user requires roughly 20 req/min. With up to 5 concurrent users, this would result in a combined demand of up to 100 req/min — however, the zone is applied **per IP**, so the chosen value of 25 req/min is based on a single user's demand with a small buffer.
 
-#### Filter-Statistiken
+#### Filter Statistics
 
 **`GET /api/v1/filter/{job_id}/stats`** → `light_zone` (30 req/min, `burst=5`)
 
-- Wird einmalig nach der Filterung abgerufen, entsprechend geringe erwartete Frequenz.
+- Retrieved once after filtering, corresponding to a low expected frequency.
 
-#### Normalisierungs-Preview
+#### Normalization Preview
 
 **`GET /api/v1/preview/normalization/{job_id}`** → `medium_zone` (20 req/min, `burst=5`)
 **`GET /api/v1/preview/normalization/{job_id}/{plot_name}`** → `medium_zone` (20 req/min, `burst=10`)
 
-- Mehrere Plot-Bilder (JSON für PCA Plots und PNG für Density Plots) werden parallel geladen – ein Request pro Plot. Der Burst muss daher mindestens die Anzahl gleichzeitig ladender Plots (aktuell 5) abdecken.
+- Multiple plot images (JSON for PCA plots and PNG for density plots) are loaded in parallel — one request per plot. The burst must therefore cover at least the number of concurrently loading plots (currently 5).
 
-#### Normalisierung
+#### Normalization
 
 **`POST /api/v1/normalize/{job_id}`** → `strict_zone` (5 req/min, `burst=2`, `nodelay`)
 
-- Startet einen rechenintensiven R-Prozess; sollte pro Analyse nur wenige Male ausgeführt werden.
+- Starts a compute-intensive R process; should only be executed a few times per analysis.
 
-#### Batch-Korrektur
+#### Batch Correction
 
-| Route                                            | Zone                                      | Begründung                                                              |
-|--------------------------------------------------|-------------------------------------------|-------------------------------------------------------------------------|
-| `GET /api/v1/batch/{job_id}/batch-options`       | `light_zone` (30/min, burst=5)            | Einmaliger Aufruf beim Laden der Batch-Seite                            |
-| `GET /api/v1/batch/{job_id}/history`             | `light_zone` (30/min, burst=5)            | Wird nach jeder Batch-Iteration neu geladen, geringe Frequenz           |
-| `GET /api/v1/batch/{job_id}/svd-plot/{round_id}` | `light_zone` (30/min, burst=10)           | PNG-/Plot-Abruf, je nach Anzahl Runden mehrere Requests                 |
-| `POST /api/v1/batch/{job_id}`                    | `batch_zone` (10/min, burst=3, `nodelay`) | Startet R-Prozess, biologisch sinnvoll max. 3–5 Iterationen pro Analyse |
-| `POST /api/v1/batch/{job_id}/skip`               | `strict_zone` (5/min, burst=2, `nodelay`) | Sollte selten und bewusst ausgeführt werden                             |
+| Route                                             | Zone                                      | Rationale                                                                 |
+|-----------------------------------------------------|--------------------------------------------|-----------------------------------------------------------------------------|
+| `GET /api/v1/batch/{job_id}/batch-options`          | `light_zone` (30/min, burst=5)             | One-time call when loading the batch page                                   |
+| `GET /api/v1/batch/{job_id}/history`                | `light_zone` (30/min, burst=5)             | Reloaded after each batch iteration, low frequency                          |
+| `GET /api/v1/batch/{job_id}/svd-plot/{round_id}`    | `light_zone` (30/min, burst=10)            | PNG/plot retrieval, several requests depending on number of rounds          |
+| `POST /api/v1/batch/{job_id}`                       | `batch_zone` (10/min, burst=3, `nodelay`)  | Starts an R process, biologically reasonable max. 3–5 iterations per analysis |
+| `POST /api/v1/batch/{job_id}/skip`                  | `strict_zone` (5/min, burst=2, `nodelay`)  | Should be executed rarely and deliberately                                  |
 
-#### Tabelle
+#### Table
 
-| Route                                       | Zone                            | Begründung                                                                                                                           |
-|---------------------------------------------|---------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
-| `GET /api/v1/table/{job_id}/{table}`        | `table_zone` (30/min, burst=15) | Wird bei Filterung, Sortierung und Pagination aufgerufen; Nutzer:innen können schnell hintereinander klicken, daher hoher Burst-Wert |
-| `GET /api/v1/table/{job_id}/{table}/export` | `export_zone` (10/min, burst=3) | CSV-Export kann einen großen DataFrame serialisieren; sollte nicht in schneller Folge wiederholt ausgeführt werden                   |
+| Route                                          | Zone                              | Rationale                                                                                                              |
+|--------------------------------------------------|------------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| `GET /api/v1/table/{job_id}/{table}`             | `table_zone` (30/min, burst=15)    | Called on filtering, sorting, and pagination; users may click rapidly in succession, hence the higher burst value        |
+| `GET /api/v1/table/{job_id}/{table}/export`      | `export_zone` (10/min, burst=3)    | CSV export can serialize a large DataFrame; should not be repeated in rapid succession                                   |
 
 #### Heatmap
 
-| Route                                  | Zone                                       | Begründung                                                                                                                                       |
-|----------------------------------------|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| `GET /api/v1/heatmap/{job_id}/options` | `light_zone` (30/min, burst=5)             | Einmaliger Aufruf beim Öffnen des Heatmap-Bereichs                                                                                               |
-| `POST /api/v1/heatmap/{job_id}`        | `strict_zone` (10/min, burst=3, `nodelay`) | Startet R-Skript, kann bei großen Datensätzen lange dauern; UI deaktiviert Buttons bereits während laufender Analyse als zusätzliche Absicherung |
-| `GET /api/v1/heatmap/{job_id}`         | `medium_zone` (20/min, burst=5)            | Bildabruf nach Generierung; Cache-Buster verhindert Browser-Caching, wodurch jeder Abruf ein echter Request an das Backend ist                   |
+| Route                                     | Zone                                        | Rationale                                                                                                                                       |
+|----------------------------------------------|-----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| `GET /api/v1/heatmap/{job_id}/options`       | `light_zone` (30/min, burst=5)                | One-time call when opening the heatmap section                                                                                                  |
+| `POST /api/v1/heatmap/{job_id}`              | `strict_zone` (10/min, burst=3, `nodelay`)    | Starts an R script, can take a long time on large datasets; UI already disables buttons during a running analysis as an additional safeguard    |
+| `GET /api/v1/heatmap/{job_id}`               | `medium_zone` (20/min, burst=5)               | Image retrieval after generation; a cache-buster prevents browser caching, meaning every fetch is a genuine request to the backend               |
 
 #### Reset & Session
 
 **`POST /api/v1/reset/{job_id}`** → `strict_zone` (5 req/min, `burst=2`, `nodelay`)
 
-- Beendet laufende R-Prozesse; muss sauber ablaufen, doppelte/schnell wiederholte Klicks müssen verhindert werden.
+- Terminates running R processes; must run cleanly, duplicate/rapidly repeated clicks must be prevented.
 
-### 5.6 Zonen-Übersicht
+### 5.6 Zone Overview
 
-| Zone | Rate | Typische Routen |
-|---|---|---|
-| `strict_zone` | 5 req/min | Normalisierung, Reset, Heatmap-Start, Batch-Skip |
-| `medium_zone` | 20 req/min | Normalisierungs-Preview, Heatmap-Abruf |
-| `light_zone` | 30 req/min | Filter-Stats, Batch-Optionen/-Historie/-SVD-Plot, Heatmap-Optionen |
-| `upload_zone` | 6 req/min | Datei-Upload |
-| `status_zone` | 25 req/min | Job-Status-Polling |
-| `batch_zone` | 10 req/min | Batch-Korrektur-Ausführung |
-| `table_zone` | 30 req/min | Tabellenabruf (Filter/Sortierung/Pagination) |
-| `export_zone` | 10 req/min | CSV-Export |
+| Zone           | Rate        | Typical routes                                                     |
+|----------------|-------------|----------------------------------------------------------------------|
+| `strict_zone`  | 5 req/min   | Normalization, reset, heatmap start, batch skip                     |
+| `medium_zone`  | 20 req/min  | Normalization preview, heatmap retrieval                            |
+| `light_zone`   | 30 req/min  | Filter stats, batch options/history/SVD plot, heatmap options       |
+| `upload_zone`  | 6 req/min   | File upload                                                          |
+| `status_zone`  | 25 req/min  | Job status polling                                                   |
+| `batch_zone`   | 10 req/min  | Batch correction execution                                           |
+| `table_zone`   | 30 req/min  | Table retrieval (filter/sort/pagination)                            |
+| `export_zone`  | 10 req/min  | CSV export                                                            |
 
-### 5.7 Ausblick
+### 5.7 Outlook
 
-Die aktuellen Werte basieren auf manuell gemessenen Analysezeiten mit einem Referenzdatensatz (`data.zip`) und Standardparametern. Bei deutlich abweichenden Datensatzgrößen oder Nutzerzahlen sollten die Zonen-Werte erneut überprüft und ggf. angepasst werden.
+The current values are based on manually measured analysis times using a reference dataset (`data.zip`) and default parameters. If dataset sizes or user numbers deviate significantly, the zone values should be reviewed and adjusted as needed.
