@@ -140,24 +140,32 @@ The service layer holds three conceptual roles. The split is by responsibility, 
 
 **(c) Infrastructure** — the runtime backbone: job state, background-task lifecycle, reset, cleanup, and R execution.
 
-| Module | Role | Group |
+The table below lists every module with its one-line responsibility. For full public-function signatures, file-I/O side effects, exceptions raised, and per-module dependencies, see [services-reference.md](../backend/services-reference.md).
+
+| Module | Responsibility | Group |
 |---|---|---|
-| `job_manager` | Job state machine + in-memory registries (single source of truth for job state). | infra |
-| `job_paths` | Central resolution and validation of a job's directory (`JOBS_DIR / job_id`). | infra |
-| `pipeline_task` | Owns the background-task lifecycle: creates the `cancel_event`, registers/clears the task, guarantees cleanup. | infra |
-| `pipeline_outcome` | Shared translation of an R step's result into cancel/timeout/failure transitions. | infra |
-| `reset_service` | Cancel + delete a job; idempotent and concurrency-safe. | infra |
-| `job_cleanup_service` | TTL-based deletion of expired job/staging directories. | infra |
-| `r_executor/` | Subprocess execution of R commands ([§5.5](#55-r-execution)). | infra |
-| `upload_service` | Legacy single-shot upload: persist with rollback, run the first pipeline phase. | orchestration |
-| `upload_inspect_service` / `upload_commit_service` | Two-phase upload: classify a staged upload, then commit the confirmed selection into a job. | domain |
-| `staging_manager` | Lifecycle of staging sessions (UUID-validated, TTL, path-safe). | domain |
-| `archive_utils` | Safe ZIP extraction (Zip-Slip guard, size/count limits). | domain |
-| `samplesheet_normalizer` / `samplesheet_parser` | Canonicalize any upload to one Illumina `SampleSheet.csv`; parse its `[Data]` section. | domain |
-| `file_handler` | IDAT/sample-sheet validation and persistence, job-dir setup. | domain |
-| `intake_guards` | Reject a job at intake if it would exceed the sample or disk budget. | domain |
-| `batch_service` / `heatmap_service` / `normalize_service` / `normalization_preview_service` | Per-phase pipeline orchestration. | orchestration |
-| `table_handler` / `table_filter` | Load result CSV into pandas; filter, sort, paginate, export. | domain |
+| `job_manager` | In-memory job registry and state machine — the single source of truth for every job's `(phase, status)`, cancel events, and task references. | infra |
+| `job_paths` | Central, path-safe resolution of `JOBS_DIR / job_id`; shared by every service that reads or writes job artifacts. | infra |
+| `pipeline_task` | Owns the background-task lifecycle: creates the `cancel_event`, registers/clears the task, guarantees cleanup in `finally`. | infra |
+| `pipeline_outcome` | Shared translation of a finished R step's result into cancel / timeout / failure state transitions; ensures uniform behaviour across all pipeline steps. | infra |
+| `reset_service` | Cooperatively cancel a running pipeline and permanently delete the job; idempotent and concurrency-safe. | infra |
+| `job_cleanup_service` | TTL-based background sweep that deletes expired job and staging directories by `mtime`. | infra |
+| `r_executor/` | Subprocess execution of R commands via `docker exec` ([§5.5](#55-r-execution)). | infra |
+| `upload_service` | Legacy single-shot upload: persist all files with rollback, then run the filtering → normalization-preview pipeline. | orchestration |
+| `upload_inspect_service` | Inspect phase of the two-phase upload: stage files safely, classify IDATs and sample sheets, return a manifest. No pipeline runs here. | orchestration |
+| `upload_commit_service` | Commit phase of the two-phase upload: validate the column-role mapping and file selection, move files into a job directory, create the job. | orchestration |
+| `normalize_service` | Run `normalize.R` for the chosen method (or copy the filtered data for `raw`), then produce the round-0 SVD plot. | orchestration |
+| `normalization_preview_service` | Run `normalization_preview.R`, scan for produced artifacts, write `preview_plots.json`. | orchestration |
+| `batch_service` | Run batch correction + SVD plot per round; run downstream differential analysis (beta extraction → DMR → DMP). | orchestration |
+| `heatmap_service` | Apply DMP filters to select CpGs, write `heatmap_input.csv`, run `heatmap.R`. | orchestration |
+| `staging_manager` | Lifecycle of temporary upload staging sessions (UUID-keyed, TTL-bounded, path-validated). | domain |
+| `archive_utils` | Safe ZIP extraction: guards against Zip-Slip, symlinks, zip-bomb expansion, and disallowed member types. | domain |
+| `samplesheet_normalizer` | Convert any upload (CSV/XLSX, any delimiter, any column names) into the one canonical `SampleSheet.csv`. | domain |
+| `samplesheet_parser` | Locate and parse the canonical `SampleSheet.csv` inside a job directory. | domain |
+| `file_handler` | Validate and persist uploaded IDAT files and sample sheets; create and remove job directories. | domain |
+| `intake_guards` | Enforce deployment-wide resource budgets at upload time: sample count, total jobs-directory size, and free disk space. | domain |
+| `table_handler` | Load a result CSV into pandas, apply filters, sort, paginate, and export. | domain |
+| `table_filter` | Shared filter engine: maps filter keys to DataFrame column/operator pairs for DMP and DMR tables (and the heatmap CpG selection). | domain |
 
 ### 5.3 Models — `app/models/`
 

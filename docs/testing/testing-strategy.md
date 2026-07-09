@@ -144,43 +144,51 @@ Warning: `docker compose down -v` deletes Docker-managed volumes. This project a
 
 ## 6. Backend Tests with Pytest
 
+The backend container runs as `user: "1000:1000"` (see `docker-compose.yml`). Always run `pytest` without `--user root`, otherwise the job-directory creation inside `/app/jobs` fails with a permission error in rootless Docker. Only `pip install` needs root.
+
+Install test dependencies (run only when `requirements-dev.txt` changes):
+
+```bash
+docker compose exec --user root backend pip install --no-cache-dir -r requirements-dev.txt
+```
+
 Run all backend tests inside Docker:
 
 ```bash
-docker compose exec backend pytest
-```
-
-Verbose output:
-
-```bash
-docker compose exec backend pytest -v
+docker compose exec backend python -m pytest tests/ -v
 ```
 
 Stop on the first failure:
 
 ```bash
-docker compose exec backend pytest -x
+docker compose exec backend python -m pytest tests/ -v -x
 ```
 
 Short tracebacks:
 
 ```bash
-docker compose exec backend pytest --tb=short
+docker compose exec backend python -m pytest tests/ --tb=short
 ```
 
 Run one test file:
 
 ```bash
-docker compose exec backend pytest tests/test_upload.py
+docker compose exec backend python -m pytest tests/test_upload.py -v
 ```
 
 Run one specific test:
 
 ```bash
-docker compose exec backend pytest tests/test_upload.py::TestUpload::test_upload_success
+docker compose exec backend python -m pytest tests/test_upload.py::TestUpload::test_upload_success -v
 ```
 
-Success condition: exit code `0` and a Pytest summary with all selected tests passing. A non-zero exit code means at least one test failed or collection failed. Do not report the backend suite as passing until the command has been run and exits with `0`.
+Expected output: `313 passed, 0 skipped`.
+
+Known tolerable warnings:
+
+- `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated` — comes from the installed FastAPI/Starlette package version, not from project code. No action needed.
+
+Success condition: exit code `0` and a Pytest summary with all selected tests passing or skipped. A non-zero exit code means at least one test failed or collection failed. Do not report the backend suite as passing until the command has been run and exits with `0`.
 
 ## 7. Frontend Tests with Vitest
 
@@ -854,7 +862,7 @@ Common failure categories:
 - Port conflict: host ports `3000` and `8000` are defined in `docker-compose.yml`.
 - Missing Python dependency: rebuild backend or run `pip install -r backend/requirements.txt`.
 - Missing R/Bioconductor package: rebuild `r_worker`; the R build can take a long time.
-- Permission issue: check bind mounts for `./jobs`, `./r_backend`, and Docker socket access.
+- Permission issue: check bind mounts for `./jobs`, `./r_backend`, and Docker socket access. If backend tests fail with `PermissionError: /app/jobs/<uuid>`, you ran pytest with `--user root`; remove that flag (see Section 6).
 - Invalid mounted path: compare host paths with container paths in `docker-compose.yml`.
 - Invalid Sample Sheet: verify extension, CSV delimiter, and `[Data]` section if using Illumina-style files.
 - Incomplete IDAT pair: ensure matching `_Grn.idat` and `_Red.idat` filenames.
@@ -866,7 +874,7 @@ Common failure categories:
 | Component | Command | Success condition / notes |
 |---|---|---|
 | Docker Compose config | `docker compose config --services` | Lists `backend`, `frontend`, and `r_worker`; can be checked without starting containers |
-| Backend | `docker compose exec backend pytest` | Exit code `0` when tests and required test data match the implementation |
+| Backend | `docker compose exec backend python -m pytest tests/ -v` | Exit code `0`, `313 passed, 0 skipped`; run without `--user root` (see Section 6) |
 | Frontend tests | `npm test -- --run` from `frontend/app` | Exit code `0` when the Vitest suite passes |
 | Frontend tests in temporary Node container | `docker run --rm -v "$PWD/frontend/app:/app" -v /app/node_modules -w /app node:20-alpine sh -c "npm ci && npm test -- --run"` | Exit code `0` when dependencies install and Vitest passes; separate from the nginx runtime service |
 | Frontend lint | `npm run lint` from `frontend/app` | Exit code `0` when ESLint passes |

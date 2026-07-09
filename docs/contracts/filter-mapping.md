@@ -105,7 +105,16 @@ Applied to `dmr_results.csv`.
 
 ### 4.4 Heatmap compatibility
 
-The heatmap accepts the **same flat filter map** as the DMP table (the keys of §4.2), supplied in the request body rather than as query parameters (see [api-contract.md](../architecture/api-contract.md) §8). It is applied to the DMP results to select the CpGs to render. Two heatmap-specific rules apply **after** filtering:
+The heatmap accepts the **same filter semantics** as the DMP table (the filter keys and operators of §4.2). There is one structural difference in how filters are transmitted:
+
+| Surface | Transport | Key format |
+|---|---|---|
+| DMP / DMR table | Query parameters | `filter_<key>` (e.g. `filter_chr`, `filter_gene`) |
+| Heatmap | JSON request body (`filters` field) | Bare key, no prefix (e.g. `chr`, `gene`) |
+
+Both surfaces pass the bare key to the shared filter routine internally; the `filter_` prefix is stripped from table query parameters before lookup. The filter semantics and the target columns are identical in both cases.
+
+The heatmap filter is applied to the DMP results (`dmp_results.csv`) to select the CpGs to render. Two heatmap-specific rules apply **after** filtering:
 
 - the selection must be non-empty (an empty selection is a client error);
 - the selection must not exceed the heatmap's CpG cap (currently 500), otherwise the client must tighten the filter.
