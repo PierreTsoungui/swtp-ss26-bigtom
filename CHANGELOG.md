@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.3.0] - 2026-07-09
+
+### Added
+- **Sample Sheet Basename Column**: The canonical internal sample sheet now always includes a `Basename` column (IDAT file path prefix). The column is injected at commit time by the samplesheet normalizer and forwarded to all downstream R scripts, enabling reliable IDAT file discovery regardless of the original upload structure.
+- **PCA Normalization Preview — PDF Export**: The interactive PCA plot in the normalization preview can now be exported as a vector PDF via jsPDF/svg2pdf, complementing the existing PNG export and completing PDF coverage for all plots in the application.
+- **Disk Space Error Detection**: The upload pipeline now checks available disk space before staging files and returns a clear RFC 9457 problem response when the quota is exhausted, instead of crashing silently mid-write.
+- **Browser Tab Identity**: The browser tab now displays the application name "MethylAnalyzer" together with the MUI Analytics icon, making the application distinguishable when multiple tabs are open.
+- **Result Table — Horizontal Scroll Indicator**: A visual overflow indicator appears on the DMR result table when its content extends beyond the visible viewport, ensuring the DMR ID column is discoverable without guessing.
+
+### Changed
+- **Heatmap Color Scheme & Genomic Sorting**: The heatmap color palette was updated to Blue–Black–Yellow (BSY), the established scientific standard for DNA methylation data (hypomethylation → intermediate → hypermethylation). Rows are now sorted by genomic position (chromosome, then start coordinate) rather than by hierarchical clustering order alone.
+- **Privacy Policy Route and Language**: The privacy policy was rewritten in English and moved from `/datenschutz` to `/privacy`; the footer link was updated accordingly.
+- **Reset Button Behavior**: The Reset button is now always enabled for any loaded analysis, not only during an active pipeline run. Clicking it opens a confirmation dialog, preventing accidental deletion of completed results.
+- **Landing Page**: FAQ items now show animated expand/collapse arrows for clearer affordance; the glossary hover effect was removed in favour of a simpler layout; all section copy was reviewed and improved for clarity.
+- **Large Upload Streaming**: `proxy_request_buffering off` is now set on the nginx upload route, enabling uploads larger than the 512 MB default in-memory buffer to be streamed directly to the backend without buffering to disk first.
+
+### Fixed
+- **Gene Filter Exact Match**: The gene-name filter in the result tables now uses strict string equality instead of substring search, preventing false positive matches (e.g., the query `BRCA` previously matched `BRCA1`, `BRCA2`, and any other gene containing the substring).
+- **Batch History Refresh**: The batch history panel on the Batch page now correctly reloads after each correction round is submitted or skipped; previously the panel showed stale data until a manual page reload.
+
+### Refactored
+- **Frontend Architecture**: All feature modules restructured into a clean feature-based layout with unified `@features` / `@shared` path aliases, strict component boundary enforcement, and updated Vitest test coverage across all changed modules.
+- **Backend Code Quality**: Full `black`, `mypy`, and `ruff` pass across the entire backend codebase; all missing type annotations were added and all type errors resolved.
+- **Upload Service Hardening**: The samplesheet normalizer and upload-commit service were hardened to handle the basename column edge case, enforce disk-space checks before persisting files, and produce accurate, user-facing error messages throughout the inspect→commit workflow.
+
+### Testing
+- **End-to-End Suite (Playwright) — All 15 Fast Tests Green**: 12 previously failing tests were fixed across the full fast suite:
+  - **Base URL & TLS**: Corrected to `https://localhost:8443` and added `ignoreHTTPSErrors: true`. The self-signed development certificate was causing the Playwright API request context to reject every connection with a TLS verification error, silently breaking all API tests.
+  - **UI Selectors**: All smoke-test selectors updated to match the current English-only frontend — removed stale German strings (`IDAT-Dateien auswählen`, `Analyse starten`, `Datenschutzerklärung`), corrected the file-input `accept` attribute (`.zip,.idat,.csv,.xls,.xlsx`), and updated the folder input selector to `[webkitdirectory]`. Privacy page route corrected from `/datenschutz` to `/privacy`.
+  - **Batch Validation Tests**: Replaced the obsolete "reject phenotype as batch variable" test (the column restriction was removed in v1.1.0) with three tests that accurately cover the current API contract: missing-column, self-referential covariate, and invalid-covariate-name.
+- **Backend Tests**: Test suite hardened for pipeline state dependencies; integration-only test cases that require real pipeline artifacts are now explicitly skipped with a descriptive reason instead of failing.
+
+### Documentation
+- **E2E Test Runbook** (`e2e/README.md`): Completely rewritten with separate sections for local (Node.js 18+) and Docker-based Playwright execution, environment variable reference table, and a "what green means" section for the fast and full suites.
+- **Testing Strategy — Section 9** (`docs/testing/testing-strategy.md`): New section covering the Playwright suite structure, prerequisites, local and Docker execution (Linux `--network host`, macOS/Windows `host.docker.internal`), and success criteria. All stale `localhost:3000` port references replaced with `https://localhost:8443`; sections renumbered from 9 to 18; expected-results table and completion checklist updated.
+- **New Backend Reference Documentation**: Added `docs/backend/configuration.md` (all environment variables and their defaults), `docs/backend/security.md` (authentication, input validation, rate limiting), `docs/backend/services-reference.md` (service layer catalogue), and `docs/deployment/docker.md` (full Docker Compose deployment guide).
+- **HTTPS / Nginx Deployment Guide** (`docs/deployment/https-nginx.md`): Documents the TLS setup, self-signed certificate generation, port mapping (8080 HTTP redirect, 8443 HTTPS in development; 80/443 in production), and nginx configuration decisions.
+- **Updated API Contracts**: `docs/contracts/samplesheet-spec.md` updated for the mandatory basename column convention; `docs/contracts/filter-mapping.md` updated to document the corrected strict-equality gene filter behavior.
+
 ## [1.2.0] - 2026-07-04
 
 ### Added
