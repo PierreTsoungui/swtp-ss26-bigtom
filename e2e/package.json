@@ -1,0 +1,15 @@
+{
+  "name": "swtp-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "End-to-end tests (Playwright) for the MethylAnalyzer stack.",
+  "scripts": {
+    "test": "playwright test",
+    "test:fast": "playwright test --grep-invert @slow",
+    "test:pipeline": "playwright test api/pipeline",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
