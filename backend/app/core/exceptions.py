@@ -1,5 +1,6 @@
 # app/core/exceptions.py
 """Domain-specific exceptions mapped to RFC 9457 responses by the app handler."""
+
 from app.core.error_types import AppException, ErrorTypes
 
 
@@ -34,7 +35,8 @@ class JobSessionExpiredError(AppException):
         """Build the 410 error for the expired in-memory session of ``job_id``."""
         super().__init__(
             error_type=ErrorTypes.SESSION_EXPIRED,
-            detail=detail or (
+            detail=detail
+            or (
                 f"The session for job '{job_id}' is no longer available on the "
                 "server. It may have expired or the server was restarted. Please "
                 "re-run the analysis to continue."

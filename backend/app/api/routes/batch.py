@@ -1,17 +1,21 @@
 # app/api/routes/batch.py
 """Routes for batch correction, SVD plots and the downstream analysis run."""
+
 from fastapi import APIRouter, Body, Query, Request, status
 from fastapi.responses import FileResponse
 
 from app.core.error_types import BatchException, ErrorTypes
 from app.models.batch import (
-    BatchHistoryResponse, BatchRunResponse,
-    BatchSkipResponse, BatchSettingsPayload,
-    BatchOptionsResponse, SampleSheetPreviewResponse,
     AnalysisStartRequest,
+    BatchHistoryResponse,
+    BatchOptionsResponse,
+    BatchRunResponse,
+    BatchSettingsPayload,
+    BatchSkipResponse,
+    SampleSheetPreviewResponse,
 )
 from app.services import batch_service, job_manager
-from app.services.job_manager import transition_job, JobPhase, JobStatusValue
+from app.services.job_manager import JobPhase, JobStatusValue, transition_job
 from app.services.pipeline_task import start_job_pipeline
 
 router = APIRouter()
@@ -20,7 +24,7 @@ router = APIRouter()
 @router.get("/{job_id}/history", response_model=BatchHistoryResponse)
 def get_batch_history(job_id: str):
     """Return the batch-correction history (rounds and current state) for a job."""
-    job_dir      = batch_service.get_job_dir_or_404(job_id)
+    job_dir = batch_service.get_job_dir_or_404(job_id)
     history_data = batch_service.load_history(job_dir, job_id)
     return history_data
 
@@ -33,7 +37,7 @@ def get_svd_plot(job_id: str, round_id: int, format: str = Query("png", pattern=
     ``format=pdf`` is the vector figure for publication, sent as a download.
     """
     job_dir = batch_service.get_job_dir_or_404(job_id)
-    is_pdf  = format == "pdf"
+    is_pdf = format == "pdf"
     plot_file = job_dir / f"svd_plot_{round_id}.{'pdf' if is_pdf else 'png'}"
 
     if not plot_file.exists():
@@ -66,7 +70,7 @@ async def run_batch_correction(
     request: Request,
 ):
     """Validate the batch settings and start a batch-correction run in the background."""
-    job_dir  = batch_service.get_job_dir_or_404(job_id)
+    job_dir = batch_service.get_job_dir_or_404(job_id)
     settings = payload.batch_correction
 
     # Permissive by design: any column that groups the samples may be the batch
@@ -109,7 +113,7 @@ async def run_batch_correction(
         )
 
     history_data = batch_service.load_history(job_dir, job_id)
-    next_round   = batch_service.next_correction_round(history_data)
+    next_round = batch_service.next_correction_round(history_data)
 
     try:
         transition_job(
@@ -137,7 +141,9 @@ async def run_batch_correction(
     return {"job_id": job_id, "status": JobStatusValue.RUNNING.value, "round": next_round}
 
 
-@router.post("/{job_id}/skip", status_code=status.HTTP_202_ACCEPTED, response_model=BatchSkipResponse)
+@router.post(
+    "/{job_id}/skip", status_code=status.HTTP_202_ACCEPTED, response_model=BatchSkipResponse
+)
 async def skip_batch_correction(
     job_id: str,
     payload: AnalysisStartRequest | None = Body(default=None),
@@ -151,8 +157,8 @@ async def skip_batch_correction(
     """
     job_dir = batch_service.get_job_dir_or_404(job_id)
 
-    group_column  = (payload.group_column or "") if payload else ""
-    case_group    = (payload.case_group or "") if payload else ""
+    group_column = (payload.group_column or "") if payload else ""
+    case_group = (payload.case_group or "") if payload else ""
     control_group = (payload.control_group or "") if payload else ""
     if group_column:
         batch_service.validate_group_selection(job_dir, group_column, case_group, control_group)

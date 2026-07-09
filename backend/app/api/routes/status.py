@@ -1,9 +1,11 @@
 # app/api/routes/status.py
 """Route for polling a job's current status."""
+
 from fastapi import APIRouter, HTTPException, Request
-from app.services.job_manager import get_job
-from app.models.job import StatusResponse
+
 from app.core.error_types import ErrorTypes, problem_detail
+from app.models.job import StatusResponse
+from app.services.job_manager import get_job
 
 router = APIRouter()
 

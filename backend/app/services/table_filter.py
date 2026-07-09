@@ -1,7 +1,9 @@
 """Shared filtering for the DMP/DMR tables (and the heatmap CpG selection)."""
+
+from typing import Any
+
 import pandas as pd
 from fastapi import HTTPException
-from typing import Any
 
 from app.core.error_types import ErrorTypes, problem_detail
 
@@ -30,7 +32,7 @@ def to_float(value: Any):
                 instance="/api/table",
             ),
         ) from None
-    
+
 
 # FILTER DEFINITIONS
 #
@@ -45,14 +47,14 @@ def to_float(value: Any):
 
 FILTER_MAP = {
     "dmp": {
-        "chr": ("CHR", "chr_eq"),           # "1" (data) must match "chr1" (UI)
+        "chr": ("CHR", "chr_eq"),  # "1" (data) must match "chr1" (UI)
         "start": ("POS", "gte"),
         "stop": ("POS", "lte"),
         "gene": ("GENE", "eq"),
         "feature": ("FEATURE", "ci_eq"),    # genomic region (TSS1500, Body, IGR, …)
         "cgi": ("CGI", "ci_eq"),            # CpG context ("island" data vs "Island" UI)
         "adj_p_value": ("ADJ_P", "lte"),
-        "delta_beta": ("DELTA_BETA", "abs_gte"),       # magnitude |Δβ| ≥ x
+        "delta_beta": ("DELTA_BETA", "abs_gte"),  # magnitude |Δβ| ≥ x
         "delta_direction": ("DELTA_BETA", "direction"),  # hyper (Δβ>0) / hypo (Δβ<0)
         "group2_avg_min": ("GROUP2_AVG", "gte"),
         "group2_avg_max": ("GROUP2_AVG", "lte"),
@@ -60,11 +62,11 @@ FILTER_MAP = {
         "group1_avg_max": ("GROUP1_AVG", "lte"),
         "log_fc_min": ("LOG_FC", "abs_gte"),
         "log_fc_max": ("LOG_FC", "abs_lte"),
-        "dmr_id": ("DMR_ID", "eq"),         # exact: "DMR_421" must NOT match "DMR_4211"
+        "dmr_id": ("DMR_ID", "eq"),  # exact: "DMR_421" must NOT match "DMR_4211"
     },
     "dmr": {
-        "chr": ("CHR", "chr_eq"),           # same prefix/case tolerance as DMP
-        "dmrid": ("ID", "eq"),              # exact DMR-ID match
+        "chr": ("CHR", "chr_eq"),  # same prefix/case tolerance as DMP
+        "dmrid": ("ID", "eq"),  # exact DMR-ID match
         "start": ("START", "gte"),
         "stop": ("STOP", "lte"),
         "p_value": ("P_VALUE", "lte"),
@@ -74,7 +76,7 @@ FILTER_MAP = {
         "width_max": ("WIDTH", "lte"),
         "n_dmps_min": ("N_DMPS", "gte"),
         "n_dmps_max": ("N_DMPS", "lte"),
-    }
+    },
 }
 
 
@@ -92,6 +94,7 @@ def _normalize_chr(value: Any) -> str:
 
 # APPLY FILTERS
 
+
 def apply_filters(df: pd.DataFrame, table: str, filters: dict) -> pd.DataFrame:
     """Apply the table's filter map to a DataFrame and return the matching rows.
 
@@ -108,14 +111,14 @@ def apply_filters(df: pd.DataFrame, table: str, filters: dict) -> pd.DataFrame:
     for key, value in filters.items():
 
         if key not in mapping:
-          raise HTTPException(
-            status_code=400,
-            detail=problem_detail(
-               error_type=ErrorTypes.INVALID_PARAMETER,
-               detail=f"Unknown filter: {key}",
-               instance="/api/table",
+            raise HTTPException(
+                status_code=400,
+                detail=problem_detail(
+                    error_type=ErrorTypes.INVALID_PARAMETER,
+                    detail=f"Unknown filter: {key}",
+                    instance="/api/table",
+                ),
             )
-          )
 
         column, op = mapping[key]
 
@@ -159,4 +162,3 @@ def apply_filters(df: pd.DataFrame, table: str, filters: dict) -> pd.DataFrame:
                 mask &= df[column] < 0
 
     return df[mask]
-

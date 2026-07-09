@@ -1,10 +1,13 @@
 # app/api/routes/normalization_preview.py
 """Routes for the normalization preview (per-method density/PCA plots)."""
+
 import json
 from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from app.services.job_manager import get_job, JobPhase, JobStatusValue
+
+from app.services.job_manager import JobPhase, JobStatusValue, get_job
 from app.services.job_paths import JOBS_DIR, validate_job_id
 
 router = APIRouter()
@@ -20,7 +23,7 @@ _MEDIA_BY_SUFFIX = {".png": "image/png", ".pdf": "application/pdf"}
 def _load_pca_json(job_dir: Path, filename: str) -> dict:
     """Read a pca_<method>.json file, returning an error payload on failure."""
     try:
-        with open(job_dir / filename, "r", encoding="utf-8") as f:
+        with open(job_dir / filename, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         return {"error": f"PCA data could not be read: {exc}", "points": []}
@@ -72,7 +75,7 @@ async def get_preview(job_id: str):
             detail={"error": "PREVIEW_NOT_READY", "message": "preview_plots.json not found"},
         )
 
-    with open(plots_path, "r", encoding="utf-8") as f:
+    with open(plots_path, encoding="utf-8") as f:
         preview_plots = json.load(f)
 
     job_dir = JOBS_DIR / job_id
@@ -83,14 +86,17 @@ async def get_preview(job_id: str):
     for method, artifacts in preview_plots.items():
         density_file = artifacts.get("density")
         pca_file = artifacts.get("pca")
-        methods.append({
-            "method": method.lower(),
-            "density_url": (
-                f"/api/v1/preview/normalization/{job_id}/{density_file}"
-                if density_file else None
-            ),
-            "pca": _load_pca_json(job_dir, pca_file) if pca_file else None,
-        })
+        methods.append(
+            {
+                "method": method.lower(),
+                "density_url": (
+                    f"/api/v1/preview/normalization/{job_id}/{density_file}"
+                    if density_file
+                    else None
+                ),
+                "pca": _load_pca_json(job_dir, pca_file) if pca_file else None,
+            }
+        )
 
     return {"job_id": job_id, "methods": methods}
 

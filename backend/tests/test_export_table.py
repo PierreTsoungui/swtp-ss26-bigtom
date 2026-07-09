@@ -1,9 +1,12 @@
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+
 from app.main import app
 
 client = TestClient(app)
+
 
 # --------------------------------------------------
 # FIXTURE FÜR TESTDATEN (KORRIGIERT FÜR IHRE FILTER)
@@ -43,11 +46,10 @@ def mock_job(tmp_path):
 # BASIS
 # --------------------------------------------------
 
+
 def test_export_returns_csv(mock_job):
     job_id, _ = mock_job
-    response = client.get(
-        f"/api/v1/table/{job_id}/dmp/export"
-    )
+    response = client.get(f"/api/v1/table/{job_id}/dmp/export")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
@@ -55,9 +57,7 @@ def test_export_returns_csv(mock_job):
 
 def test_export_has_attachment_header(mock_job):
     job_id, _ = mock_job
-    response = client.get(
-        f"/api/v1/table/{job_id}/dmp/export"
-    )
+    response = client.get(f"/api/v1/table/{job_id}/dmp/export")
 
     assert "content-disposition" in response.headers
     assert "attachment" in response.headers["content-disposition"]
@@ -65,9 +65,7 @@ def test_export_has_attachment_header(mock_job):
 
 def test_export_contains_column_names(mock_job):
     job_id, _ = mock_job
-    response = client.get(
-        f"/api/v1/table/{job_id}/dmp/export"
-    )
+    response = client.get(f"/api/v1/table/{job_id}/dmp/export")
 
     first_line = response.text.splitlines()[0]
     assert "cpg_id" in first_line
@@ -77,20 +75,17 @@ def test_export_contains_column_names(mock_job):
 # DMP / DMR
 # --------------------------------------------------
 
+
 def test_export_dmp(mock_job):
     job_id, _ = mock_job
-    response = client.get(
-        f"/api/v1/table/{job_id}/dmp/export"
-    )
+    response = client.get(f"/api/v1/table/{job_id}/dmp/export")
 
     assert response.status_code == 200
 
 
 def test_export_dmr(mock_job):
     job_id, _ = mock_job
-    response = client.get(
-        f"/api/v1/table/{job_id}/dmr/export"
-    )
+    response = client.get(f"/api/v1/table/{job_id}/dmr/export")
 
     assert response.status_code == 200
 
@@ -99,13 +94,10 @@ def test_export_dmr(mock_job):
 # SORTIERUNG
 # --------------------------------------------------
 
+
 def test_export_sorting_desc(mock_job):
     job_id, _ = mock_job
-    response = client.get(
-        f"/api/v1/table/{job_id}/dmp/export"
-        "?sort_by=score"
-        "&sort_order=desc"
-    )
+    response = client.get(f"/api/v1/table/{job_id}/dmp/export" "?sort_by=score" "&sort_order=desc")
 
     assert response.status_code == 200
 
@@ -122,9 +114,7 @@ def test_export_sorting_desc(mock_job):
 def test_export_invalid_sort_column(mock_job):
     job_id, _ = mock_job
     response = client.get(
-        f"/api/v1/table/{job_id}/dmp/export"
-        "?sort_by=does_not_exist"
-        "&sort_order=asc"
+        f"/api/v1/table/{job_id}/dmp/export" "?sort_by=does_not_exist" "&sort_order=asc"
     )
 
     assert response.status_code == 400
@@ -132,11 +122,7 @@ def test_export_invalid_sort_column(mock_job):
 
 def test_export_invalid_sort_order(mock_job):
     job_id, _ = mock_job
-    response = client.get(
-        f"/api/v1/table/{job_id}/dmp/export"
-        "?sort_by=score"
-        "&sort_order=wrong"
-    )
+    response = client.get(f"/api/v1/table/{job_id}/dmp/export" "?sort_by=score" "&sort_order=wrong")
 
     assert response.status_code == 400
 
@@ -145,13 +131,11 @@ def test_export_invalid_sort_order(mock_job):
 # FILTER (KORRIGIERT NACH IHREMAP)
 # --------------------------------------------------
 
+
 def test_export_filter_chr(mock_job):
     job_id, tmp_path = mock_job
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        response = client.get(
-            f"/api/v1/table/{job_id}/dmp/export"
-            "?filter_chr=chr1"
-        )
+        response = client.get(f"/api/v1/table/{job_id}/dmp/export" "?filter_chr=chr1")
 
     assert response.status_code == 200
 
@@ -165,10 +149,7 @@ def test_export_filter_pvalue(mock_job):
     job_id, tmp_path = mock_job
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
         # DMP filters on 'filter_adj_p_value' (not 'filter_p_value').
-        response = client.get(
-            f"/api/v1/table/{job_id}/dmp/export"
-            "?filter_adj_p_value=0.05"
-        )
+        response = client.get(f"/api/v1/table/{job_id}/dmp/export" "?filter_adj_p_value=0.05")
 
     assert response.status_code == 200
     assert len(response.text) > 0
@@ -178,17 +159,14 @@ def test_export_filter_pvalue(mock_job):
 # NO PAGINATION
 # --------------------------------------------------
 
+
 def test_export_contains_more_rows_than_page(mock_job):
     job_id, tmp_path = mock_job
-    
-    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        export_response = client.get(
-            f"/api/v1/table/{job_id}/dmp/export"
-        )
 
-        table_response = client.get(
-            f"/api/v1/table/{job_id}/dmp?page=1"
-        )
+    with patch("app.services.table_handler.JOBS_DIR", tmp_path):
+        export_response = client.get(f"/api/v1/table/{job_id}/dmp/export")
+
+        table_response = client.get(f"/api/v1/table/{job_id}/dmp?page=1")
 
     assert export_response.status_code == 200
     assert table_response.status_code == 200
@@ -203,24 +181,21 @@ def test_export_contains_more_rows_than_page(mock_job):
 # ERROR CASES
 # --------------------------------------------------
 
+
 def test_export_unknown_job(tmp_path):
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        response = client.get(
-            "/api/v1/table/not_existing/dmp/export"
-        )
+        response = client.get("/api/v1/table/not_existing/dmp/export")
 
     assert response.status_code == 404
 
 
 def test_export_unknown_table(mock_job):
     job_id, tmp_path = mock_job
-    
+
     # Request an unknown table name; the job exists, so the table validation
     # (not the missing-job check) rejects it with a 400.
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        response = client.get(
-            f"/api/v1/table/{job_id}/abc/export"
-        )
+        response = client.get(f"/api/v1/table/{job_id}/abc/export")
 
     assert response.status_code == 400
 
@@ -229,12 +204,11 @@ def test_export_unknown_table(mock_job):
 # FILENAME
 # --------------------------------------------------
 
+
 def test_export_filename(mock_job):
     job_id, tmp_path = mock_job
     with patch("app.services.table_handler.JOBS_DIR", tmp_path):
-        response = client.get(
-            f"/api/v1/table/{job_id}/dmp/export"
-        )
+        response = client.get(f"/api/v1/table/{job_id}/dmp/export")
 
     header = response.headers["content-disposition"]
     assert ".csv" in header

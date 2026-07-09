@@ -1,10 +1,13 @@
 """Load, filter, sort, paginate and export the DMP/DMR result tables."""
+
+from io import StringIO
+
 import pandas as pd
 from fastapi import HTTPException
-from io import StringIO
-from app.services.table_filter import apply_filters
-from app.services.job_paths import JOBS_DIR, validate_job_id
+
 from app.core.error_types import ErrorTypes, problem_detail
+from app.services.job_paths import JOBS_DIR, validate_job_id
+from app.services.table_filter import apply_filters
 
 PAGE_SIZE = 75
 
@@ -28,14 +31,12 @@ def load_dataframe(job_id: str, table: str) -> pd.DataFrame:
 
     if not job_dir.exists():
         raise HTTPException(
-            status_code=404,
-            detail={"error": "JOB_NOT_FOUND", "message": f"Job {job_id} not found"}
+            status_code=404, detail={"error": "JOB_NOT_FOUND", "message": f"Job {job_id} not found"}
         )
 
     if table not in ("dmp", "dmr"):
         raise HTTPException(
-            status_code=400,
-            detail={"error": "INVALID_TABLE", "message": f"Invalid table: {table}"}
+            status_code=400, detail={"error": "INVALID_TABLE", "message": f"Invalid table: {table}"}
         )
 
     csv_path = job_dir / ("dmr_results.csv" if table == "dmr" else "dmp_results.csv")
@@ -43,7 +44,7 @@ def load_dataframe(job_id: str, table: str) -> pd.DataFrame:
     if not csv_path.exists():
         raise HTTPException(
             status_code=409,
-            detail={"error": "DATA_NOT_READY", "message": "Analysis not finished yet"}
+            detail={"error": "DATA_NOT_READY", "message": "Analysis not finished yet"},
         )
 
     return pd.read_csv(csv_path)
@@ -74,7 +75,7 @@ def build_dataframe(
                     error_type=ErrorTypes.INVALID_SORT_COLUMN,
                     detail=f"Invalid sort column: {sort_by}",
                     instance="/api/table",
-                )
+                ),
             )
         if sort_order not in ("asc", "desc", None):
             raise HTTPException(
@@ -83,7 +84,7 @@ def build_dataframe(
                     error_type=ErrorTypes.INVALID_SORT_ORDER,
                     detail=f"Invalid sort_order: {sort_order}",
                     instance="/api/table",
-                )
+                ),
             )
         df = df.sort_values(by=sort_by, ascending=(sort_order != "desc"))
 
@@ -103,13 +104,15 @@ def _build_columns(df: pd.DataFrame) -> list:
             col_type = "float"
         else:
             col_type = "string"
-        columns.append({
-            "key": col,
-            "label": col,
-            "type": col_type,
-            "sortable": True,
-            "filterable": True,
-        })
+        columns.append(
+            {
+                "key": col,
+                "label": col,
+                "type": col_type,
+                "sortable": True,
+                "filterable": True,
+            }
+        )
     return columns
 
 
@@ -128,8 +131,7 @@ def get_table_data(
     """
     if page < 1:
         raise HTTPException(
-            status_code=400,
-            detail={"error": "INVALID_PAGE", "message": "Page muss >= 1 sein"}
+            status_code=400, detail={"error": "INVALID_PAGE", "message": "Page muss >= 1 sein"}
         )
 
     df = build_dataframe(job_id, table, sort_by, sort_order, filters)
@@ -137,7 +139,7 @@ def get_table_data(
     total_rows = len(df)
     total_pages = max(1, -(-total_rows // PAGE_SIZE))
     start = (page - 1) * PAGE_SIZE
-    page_df = df.iloc[start:start + PAGE_SIZE]
+    page_df = df.iloc[start : start + PAGE_SIZE]
 
     return {
         "table": table,
@@ -165,4 +167,3 @@ def export_table_csv(
     output = StringIO()
     df.to_csv(output, index=False)
     return output.getvalue()
-

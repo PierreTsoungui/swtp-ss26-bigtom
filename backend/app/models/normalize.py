@@ -1,5 +1,6 @@
 # app/models/normalize.py
 """Request/response models for the normalization step."""
+
 from pydantic import BaseModel
 
 

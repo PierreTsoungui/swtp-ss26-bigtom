@@ -1,10 +1,12 @@
 # app/models/filter.py
 """Request models for the filtering step.
 
-These mirror the filter options the frontend offers. Every numeric field clamps
-out-of-range or non-numeric input back to a safe default via a validator, so a
-malformed request can never push an invalid cutoff into the R filter script.
+Every numeric field validates its value against a documented, spec-aligned range
+(see Lastenheft FLT-06). A value outside the range raises a ValidationError that
+the route layer maps to HTTP 400. There are no silent defaults for out-of-range
+input — an invalid parameter always produces an error, never a quiet substitution.
 """
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -12,38 +14,38 @@ class FilterDetP(BaseModel):
     """Detection p-value filter."""
 
     enabled: bool = False
-    cutoff:  float = Field(default=0.01)
+    cutoff: float = Field(default=0.01)
 
     @field_validator("cutoff", mode="before")
     @classmethod
     def validate_cutoff(cls, v):
-        """Clamp the cutoff to [0.01, 0.05]; fall back to the default otherwise."""
+        """Reject cutoff values outside [0.01, 0.05]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.05:
-                return v
-        except (TypeError, ValueError):
-            pass
-        return 0.01
+        except (TypeError, ValueError) as err:
+            raise ValueError("cutoff must be a number") from err
+        if not (0.01 <= v <= 0.05):
+            raise ValueError(f"cutoff must be between 0.01 and 0.05, got {v}")
+        return v
 
 
 class FilterBeadCount(BaseModel):
     """Bead-count filter."""
 
-    enabled:     bool = False
+    enabled: bool = False
     bead_cutoff: float = Field(default=0.05)
 
     @field_validator("bead_cutoff", mode="before")
     @classmethod
     def validate_bead_cutoff(cls, v):
-        """Clamp the bead cutoff to [0.01, 0.1]; fall back to the default otherwise."""
+        """Reject bead_cutoff values outside [0.0, 1.0]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.1:
-                return v
-        except (TypeError, ValueError):
-            pass
-        return 0.05
+        except (TypeError, ValueError) as err:
+            raise ValueError("bead_cutoff must be a number") from err
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"bead_cutoff must be between 0.0 and 1.0, got {v}")
+        return v
 
 
 class FilterNonCpg(BaseModel):
@@ -55,20 +57,20 @@ class FilterNonCpg(BaseModel):
 class FilterSnp(BaseModel):
     """SNP-overlap filter."""
 
-    enabled:    bool = False
+    enabled: bool = False
     maf_cutoff: float = Field(default=0.05)
 
     @field_validator("maf_cutoff", mode="before")
     @classmethod
     def validate_maf_cutoff(cls, v):
-        """Clamp the MAF cutoff to [0.01, 0.1]; fall back to the default otherwise."""
+        """Reject maf_cutoff values outside [0.0, 0.5]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.1:
-                return v
-        except (TypeError, ValueError):
-            pass
-        return 0.05
+        except (TypeError, ValueError) as err:
+            raise ValueError("maf_cutoff must be a number") from err
+        if not (0.0 <= v <= 0.5):
+            raise ValueError(f"maf_cutoff must be between 0.0 and 0.5, got {v}")
+        return v
 
 
 class FilterMultiHit(BaseModel):
@@ -86,35 +88,35 @@ class FilterXyChromosomes(BaseModel):
 class FilterSampleQuality(BaseModel):
     """Sample-level quality control (detection p-value, failure rate, PCA outliers)."""
 
-    enabled:                      bool = False
-    detection_p_cutoff:           float = Field(default=0.01)
-    sample_failure_rate:          float = Field(default=0.10)
-    remove_failed_samples:        bool = Field(default=True)
+    enabled: bool = False
+    detection_p_cutoff: float = Field(default=0.01)
+    sample_failure_rate: float = Field(default=0.10)
+    remove_failed_samples: bool = Field(default=True)
     enable_pca_outlier_detection: bool = Field(default=True)
 
     @field_validator("detection_p_cutoff", mode="before")
     @classmethod
     def validate_detection_p_cutoff(cls, v):
-        """Clamp the detection p-value cutoff to [0.01, 0.05]; else use the default."""
+        """Reject detection_p_cutoff values outside [0.01, 0.05]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.05:
-                return v
-        except (TypeError, ValueError):
-            pass
-        return 0.01
+        except (TypeError, ValueError) as err:
+            raise ValueError("detection_p_cutoff must be a number") from err
+        if not (0.01 <= v <= 0.05):
+            raise ValueError(f"detection_p_cutoff must be between 0.01 and 0.05, got {v}")
+        return v
 
     @field_validator("sample_failure_rate", mode="before")
     @classmethod
     def validate_sample_failure_rate(cls, v):
-        """Clamp the sample failure rate to [0.05, 0.2]; else use the default."""
+        """Reject sample_failure_rate values outside [0.05, 0.2]."""
         try:
             v = float(v)
-            if 0.05 <= v <= 0.2:
-                return v
-        except (TypeError, ValueError):
-            pass
-        return 0.10
+        except (TypeError, ValueError) as err:
+            raise ValueError("sample_failure_rate must be a number") from err
+        if not (0.05 <= v <= 0.2):
+            raise ValueError(f"sample_failure_rate must be between 0.05 and 0.2, got {v}")
+        return v
 
 
 class FilterSettings(BaseModel):
@@ -124,10 +126,10 @@ class FilterSettings(BaseModel):
     request is always valid.
     """
 
-    det_p:          FilterDetP          = Field(default_factory=FilterDetP)
-    bead_count:     FilterBeadCount     = Field(default_factory=FilterBeadCount)
-    non_cpg:        FilterNonCpg        = Field(default_factory=FilterNonCpg)
-    snp:            FilterSnp           = Field(default_factory=FilterSnp)
-    multi_hit:      FilterMultiHit      = Field(default_factory=FilterMultiHit)
+    det_p: FilterDetP = Field(default_factory=FilterDetP)
+    bead_count: FilterBeadCount = Field(default_factory=FilterBeadCount)
+    non_cpg: FilterNonCpg = Field(default_factory=FilterNonCpg)
+    snp: FilterSnp = Field(default_factory=FilterSnp)
+    multi_hit: FilterMultiHit = Field(default_factory=FilterMultiHit)
     xy_chromosomes: FilterXyChromosomes = Field(default_factory=FilterXyChromosomes)
     sample_quality: FilterSampleQuality = Field(default_factory=FilterSampleQuality)

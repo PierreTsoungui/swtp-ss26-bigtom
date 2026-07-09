@@ -9,6 +9,7 @@ headers, pad the rows" logic here keeps the delimiter/padding error class in
 exactly one place, so every consumer (batch grouping, heatmap annotations, table
 preview) parses the sheet identically.
 """
+
 import csv
 import glob
 from pathlib import Path
@@ -36,8 +37,7 @@ def find_sample_sheet_name(job_dir: str | Path) -> str:
     raise AppException(
         ErrorTypes.SAMPLE_SHEET_NOT_FOUND,
         detail=(
-            f"No SampleSheet file found in {job_dir}. "
-            f"Expected '{CANONICAL_SAMPLE_SHEET}'."
+            f"No SampleSheet file found in {job_dir}. " f"Expected '{CANONICAL_SAMPLE_SHEET}'."
         ),
     )
 
@@ -57,11 +57,11 @@ def read_data_section(job_dir: Path) -> tuple[list[str], list[list[str]]]:
     sheet_path = Path(job_dir) / find_sample_sheet_name(job_dir)
 
     try:
-        with open(sheet_path, "r", encoding="utf-8", errors="ignore") as f:
+        with open(sheet_path, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
 
         data_index = next((i for i, line in enumerate(lines) if "[Data]" in line), -1)
-        data_lines = lines[data_index + 1:] if data_index != -1 else lines
+        data_lines = lines[data_index + 1 :] if data_index != -1 else lines
         data_lines = [line.strip() for line in data_lines if line.strip()]
         if not data_lines:
             return [], []
@@ -72,8 +72,7 @@ def read_data_section(job_dir: Path) -> tuple[list[str], list[list[str]]]:
         num_cols = len(headers)
 
         data_rows = [
-            [(row[i].strip() if i < len(row) else "") for i in range(num_cols)]
-            for row in rows[1:]
+            [(row[i].strip() if i < len(row) else "") for i in range(num_cols)] for row in rows[1:]
         ]
         return headers, data_rows
     except AppException:
@@ -85,9 +84,7 @@ def read_data_section(job_dir: Path) -> tuple[list[str], list[list[str]]]:
         ) from exc
 
 
-def columns_by_index(
-    headers: list[str], data_rows: list[list[str]]
-) -> dict[int, list[str]]:
+def columns_by_index(headers: list[str], data_rows: list[list[str]]) -> dict[int, list[str]]:
     """Column-oriented view of the data rows: ``{col_index: [non-empty values]}``.
 
     A thin transform over :func:`read_data_section` for callers that analyze the

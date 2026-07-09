@@ -1,4 +1,5 @@
 """Abstract base for R commands: shared paths, timeout and the argv contract."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -20,9 +21,9 @@ class RCommand(ABC):
     command implements.
     """
 
-    script:       str
-    job_id:       str
-    job_dir:      str
+    script: str
+    job_id: str
+    job_dir: str
     sample_sheet: str
 
     # Per-command wall-clock budget enforced by the executor. Compute-heavy

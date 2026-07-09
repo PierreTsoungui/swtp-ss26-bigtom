@@ -69,6 +69,23 @@ test_that(".strip_idat_suffix removes IDAT decorations and the directory", {
   )
 })
 
+test_that("sample_sheet_match_id prefers Basename over the Sentrix array id", {
+  # Basename present: it is the identity minfi assigns to the loaded samples.
+  s <- data.frame(
+    Sentrix_ID = c("206", "207"), Sentrix_Position = c("R01C01", "R02C01"),
+    Basename = c("/jobs/x/Abcde-1234", "Abcde-1235"),  # abs + relative both handled
+    stringsAsFactors = FALSE
+  )
+  expect_equal(sample_sheet_match_id(s), c("Abcde-1234", "Abcde-1235"))
+
+  # No Basename: falls back to the Sentrix array id.
+  s2 <- data.frame(
+    Sentrix_ID = c("206", "207"), Sentrix_Position = c("R01C01", "R02C01"),
+    stringsAsFactors = FALSE
+  )
+  expect_equal(sample_sheet_match_id(s2), c("206_R01C01", "207_R02C01"))
+})
+
 # ── align_samples_to_matrix() ─────────────────────────────────────────────────
 
 #' Build a beta matrix + a matching Sentrix sample sheet.
@@ -121,6 +138,28 @@ test_that("intersect mode aborts below min_common shared samples", {
     align_samples_to_matrix(x$beta, sheet_one, mode = "intersect", min_common = 2L),
     "matching|mismatch|minimum"
   )
+})
+
+test_that("Basename drives alignment when the Sentrix columns do not match the data", {
+  # The reported bug: files are named <Basename>_{Grn,Red}.idat, so minfi names
+  # the loaded samples basename(Basename). The Sentrix columns carry unrelated
+  # values, so keying by Array_ID would fail; keying by Basename must succeed and
+  # carry the correct groups through in the matrix's column order.
+  beta <- matrix(runif(4 * 3), nrow = 4,
+    dimnames = list(paste0("cg", 1:4), c("Abcde-1238", "Abcde-1234", "Abcde-1235")))
+  sheet <- data.frame(
+    Sample_Name = c("1", "2", "3"),
+    Sentrix_ID = c("6005486014", "6005486014", "6005486021"),
+    Sentrix_Position = c("R01C01", "R02C02", "R03C02"),
+    Sample_Group = c("A", "A", "B"),
+    Basename = c("Abcde-1234", "Abcde-1235", "Abcde-1238"),
+    stringsAsFactors = FALSE
+  )
+  res <- align_samples_to_matrix(beta, sheet, mode = "strict")
+  expect_equal(res$id_col, "Basename")
+  expect_equal(res$method, "id")
+  # Groups follow the beta column order (Abcde-1238=B, Abcde-1234=A, Abcde-1235=A).
+  expect_equal(res$samples$Sample_Group, c("B", "A", "A"))
 })
 
 test_that("strip_idat lets IDAT-decorated matrix columns match bare sheet ids", {

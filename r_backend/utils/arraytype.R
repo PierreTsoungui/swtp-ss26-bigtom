@@ -256,6 +256,62 @@ detect_array_type <- function(rgset) {
   NA_character_
 }
 
+#' Number of probes (\code{nSNPsRead}) recorded in an IDAT file header.
+#'
+#' Reads only the IDAT header and its field directory — never the intensity
+#' payload — so it is cheap enough to call on every sample before loading. minfi
+#' can combine two IDAT files only when this count is identical (it is the array's
+#' bead-address count, e.g. 622399 for 450K, ~1052641 for EPIC v1, ~1105209 for
+#' EPIC v2); files from different platforms therefore differ here. Used to reject
+#' a mixed-platform upload with a clear message instead of minfi's opaque error.
+#'
+#' @param path Path to a \code{.idat} file.
+#' @return The probe count as an integer, or \code{NA_integer_} if the file is not
+#'   a readable version-3 IDAT.
+idat_probe_count <- function(path) {
+  if (length(path) != 1L || is.na(path) || !file.exists(path)) {
+    return(NA_integer_)
+  }
+  con <- tryCatch(file(path, "rb"), error = function(e) NULL)
+  if (is.null(con)) {
+    return(NA_integer_)
+  }
+  on.exit(close(con))
+
+  magic <- tryCatch(readChar(con, 4L, useBytes = TRUE), error = function(e) "")
+  if (length(magic) != 1L || !identical(magic, "IDAT")) {
+    return(NA_integer_)
+  }
+
+  # int64 version, read as two little-endian 32-bit words (value is unused here).
+  readBin(con, "integer", n = 2L, size = 4L, endian = "little")
+
+  # nFields is a 4-byte little-endian count of directory entries.
+  n_fields <- readBin(con, "integer", n = 1L, size = 4L, endian = "little")
+  if (length(n_fields) != 1L || is.na(n_fields) || n_fields <= 0L) {
+    return(NA_integer_)
+  }
+
+  # Field directory: each entry is a uint16 code followed by an int64 file offset.
+  # IDAT files are far below 2 GiB, so the offset's low 32-bit word suffices.
+  NSNPS_READ_CODE <- 1000L
+  target_offset <- NA_real_
+  for (i in seq_len(n_fields)) {
+    code <- readBin(con, "integer", n = 1L, size = 2L, signed = FALSE, endian = "little")
+    lohi <- readBin(con, "integer", n = 2L, size = 4L, endian = "little")
+    if (length(code) == 1L && !is.na(code) && code == NSNPS_READ_CODE) {
+      target_offset <- lohi[1L]
+    }
+  }
+  if (is.na(target_offset)) {
+    return(NA_integer_)
+  }
+
+  seek(con, where = target_offset, origin = "start")
+  n <- readBin(con, "integer", n = 1L, size = 4L, endian = "little")
+  if (length(n) != 1L || is.na(n)) NA_integer_ else as.integer(n)
+}
+
 #' Persist the detected array type to \code{array_type.txt} in a job directory.
 #'
 #' A no-op (returns \code{FALSE}) when the type is missing/undetermined, so the

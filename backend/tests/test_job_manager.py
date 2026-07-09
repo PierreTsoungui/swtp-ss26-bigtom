@@ -4,6 +4,7 @@ The state machine is core application logic, so every allowed transition is
 exercised, every rejection path is asserted, and the reset semantics (which must
 never let a job be revived by a trailing signal) are verified explicitly.
 """
+
 import asyncio
 
 import pytest
@@ -43,6 +44,7 @@ def _force_state(job_id: str, phase: JobPhase, status: JobStatusValue):
 
 # ── Creation ──────────────────────────────────────────────────────────────────
 
+
 def test_create_job_starts_in_uploaded_waiting():
     job = job_manager.create_job("job-1")
     assert job.phase == JobPhase.UPLOADED.value
@@ -67,9 +69,7 @@ def test_every_allowed_transition_is_accepted(from_state, to_state):
     to_phase, to_status = to_state
     _force_state("job-1", from_phase, from_status)
 
-    result = job_manager.transition_job(
-        "job-1", new_phase=to_phase, new_status=to_status
-    )
+    result = job_manager.transition_job("job-1", new_phase=to_phase, new_status=to_status)
 
     assert result is not None
     assert result.phase == to_phase.value
@@ -90,6 +90,7 @@ def test_transition_updates_progress_and_step():
 
 
 # ── Invalid transitions ───────────────────────────────────────────────────────
+
 
 def test_invalid_transition_raises():
     job_manager.create_job("job-1")  # UPLOADED / WAITING
@@ -122,6 +123,7 @@ def test_transition_on_missing_job_raises_session_expired():
 
 # ── FAILED error handling ─────────────────────────────────────────────────────
 
+
 def test_failed_transition_stores_error_body():
     _force_state("job-1", JobPhase.FILTERING, JobStatusValue.RUNNING)
     job_manager.transition_job(
@@ -146,6 +148,7 @@ def test_non_failed_transition_clears_previous_error():
 
 # ── set_progress ──────────────────────────────────────────────────────────────
 
+
 def test_set_progress_updates_and_marks_running():
     job_manager.create_job("job-1")
     result = job_manager.set_progress("job-1", percent=42, message="working")
@@ -159,6 +162,7 @@ def test_set_progress_on_missing_job_returns_none():
 
 
 # ── Reset semantics ───────────────────────────────────────────────────────────
+
 
 def test_begin_reset_serializes_concurrent_resets():
     assert job_manager.begin_reset("job-1") is True
@@ -221,6 +225,7 @@ def test_reset_prevents_a_running_job_from_being_revived():
 
 # ── Cancel-event registry ─────────────────────────────────────────────────────
 
+
 def test_cancel_event_register_lookup_and_trigger():
     event = asyncio.Event()
     job_manager.register_cancel_event("job-1", event)
@@ -240,6 +245,7 @@ def test_trigger_cancel_on_unknown_job_returns_false():
 
 
 # ── delete_job ────────────────────────────────────────────────────────────────
+
 
 def test_delete_job_reports_whether_it_existed():
     job_manager.create_job("job-1")

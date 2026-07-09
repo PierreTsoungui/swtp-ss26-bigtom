@@ -1,13 +1,14 @@
 # app/api/routes/normalize.py
 """Route for starting the normalization step for a job."""
+
 import logging
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from app.core.error_types import ErrorTypes, problem_detail
 from app.models.normalize import NormalizeRequest, NormalizeResponse
 from app.services import normalize_service, pipeline_task
-from app.services.job_manager import get_job, transition_job, JobPhase, JobStatusValue
+from app.services.job_manager import JobPhase, JobStatusValue, get_job, transition_job
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

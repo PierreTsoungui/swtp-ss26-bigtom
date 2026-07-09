@@ -34,8 +34,8 @@ convention = "pep257"
 known-first-party = ["app"]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests need no docstrings; keep everything else (unused imports, bugs) enforced.
-"tests/*" = ["D"]
+# Tests need no docstrings and commonly use sys.path.insert before app imports.
+"tests/*" = ["D", "E402"]
 
 # ── Type checking ─────────────────────────────────────────────────────────────
 [tool.mypy]
@@ -53,6 +53,9 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Write the pytest cache to /tmp so UID 1000 can always write it, even if a
+# previous root run left /app/.pytest_cache owned by root.
+cache_dir = "/tmp/pytest_cache_bigtom"
 markers = [
     "integration: exercises the real R worker / external services (needs them running)",
 ]

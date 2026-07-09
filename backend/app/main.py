@@ -1,9 +1,24 @@
 # app/main.py
 """Initializes the FastAPI application and its background services."""
+
 import asyncio
+import logging
 from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.routes import (
+    batch,
+    heatmap,
+    normalization_preview,
+    normalize,
+    reset,
+    stats,
+    status,
+    upload,
+)
+from app.api.routes.table import router as table_router
 from app.core.config import (
     CORS_ALLOWED_ORIGINS,
     STAGING_BASE_DIR,
@@ -11,25 +26,13 @@ from app.core.config import (
     STAGING_RETENTION_HOURS,
 )
 from app.core.error_types import AppException, app_exception_handler
+from app.core.logging_config import setup_logging
 from app.services.job_cleanup_service import run_job_cleanup_loop
-from app.api.routes import (
-    upload,
-    status,
-    stats,
-    normalization_preview,
-    normalize,
-    reset,
-    batch,
-    heatmap,
-)
-from app.api.routes.table import router as table_router
 
-import logging
-from app.core.logging_config import setup_logging 
+setup_logging()
 
-setup_logging() 
+logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)  
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,6 +58,7 @@ async def lifespan(app: FastAPI):
             with suppress(asyncio.CancelledError):
                 await task
 
+
 app = FastAPI(title="Methylation Analysis API", version="1.0", lifespan=lifespan)
 # Starlette types the handler against the base Exception; our handler narrows to
 # AppException, which is the intended, documented FastAPI pattern.
@@ -70,24 +74,28 @@ app.add_middleware(
     allow_headers=["Content-Type", "Accept", "Authorization", "Origin"],
 )
 
+
 # ── Security Headers ────────────────────────────────────────────────────────
 @app.middleware("http")
 async def add_security_headers(request, call_next):
+    """Attach security headers to every response."""
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     return response
 
+
 # ── Routes ────────────────────────────────────────────────────────────────────
-app.include_router(upload.router,                prefix="/api/v1",         tags=["Upload"])
-app.include_router(status.router,                prefix="/api/v1",         tags=["Status"])
-app.include_router(stats.router,                 prefix="/api/v1",         tags=["Filter"])
-app.include_router(normalization_preview.router, prefix="/api/v1",         tags=["Normalization Preview"])
-app.include_router(normalize.router,             prefix="/api/v1",         tags=["Normalize"])
-app.include_router(reset.router,                 prefix="/api/v1",         tags=["Reset"])
-app.include_router(table_router,                 prefix="/api/v1")
-app.include_router(batch.router,                 prefix="/api/v1/batch",   tags=["Batch Correction"])
-app.include_router(heatmap.router,               prefix="/api/v1/heatmap", tags=["Heatmap"])
+app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
+app.include_router(status.router, prefix="/api/v1", tags=["Status"])
+app.include_router(stats.router, prefix="/api/v1", tags=["Filter"])
+app.include_router(normalization_preview.router, prefix="/api/v1", tags=["Normalization Preview"])
+app.include_router(normalize.router, prefix="/api/v1", tags=["Normalize"])
+app.include_router(reset.router, prefix="/api/v1", tags=["Reset"])
+app.include_router(table_router, prefix="/api/v1")
+app.include_router(batch.router, prefix="/api/v1/batch", tags=["Batch Correction"])
+app.include_router(heatmap.router, prefix="/api/v1/heatmap", tags=["Heatmap"])
+
 
 @app.get("/")
 async def root():

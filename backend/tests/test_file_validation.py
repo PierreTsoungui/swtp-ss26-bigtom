@@ -3,6 +3,7 @@
 These cover the rejection paths of ``validate_idat_files`` and the low-level
 ``looks_like_idat`` heuristic, which decide what reaches the R pipeline.
 """
+
 from io import BytesIO
 
 from fastapi import UploadFile
@@ -23,6 +24,7 @@ def _idat(name: str) -> UploadFile:
 
 
 # ── looks_like_idat heuristic ─────────────────────────────────────────────────
+
 
 def test_looks_like_idat_accepts_binary_content():
     ok, reason = looks_like_idat(_upload("s.idat", VALID_IDAT))
@@ -57,6 +59,7 @@ def test_looks_like_idat_does_not_consume_the_file_pointer():
 
 # ── validate_idat_files ───────────────────────────────────────────────────────
 
+
 def test_empty_upload_is_rejected():
     ok, info = validate_idat_files([])
     assert ok is False
@@ -82,7 +85,9 @@ def test_tiny_file_is_rejected_as_invalid_content():
 
 
 def test_pdf_disguised_as_idat_is_rejected():
-    ok, info = validate_idat_files([_upload("a_Grn.idat", b"%PDF" + b"\x00" * 200), _idat("a_Red.idat")])
+    ok, info = validate_idat_files(
+        [_upload("a_Grn.idat", b"%PDF" + b"\x00" * 200), _idat("a_Red.idat")]
+    )
     assert ok is False
     assert info["error"] == "INVALID_IDAT_CONTENT"
 

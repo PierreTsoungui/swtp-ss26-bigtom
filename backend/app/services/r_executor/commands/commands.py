@@ -4,6 +4,7 @@ Each dataclass builds the ``docker exec ... Rscript ...`` argv for one R script
 and, where needed, post-processes the result. They are the only place that knows
 the argument order of a given R script.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,11 @@ class FilteringCommand(RCommand):
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for init_filter.R."""
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             f"{self.docker_job_dir}/{self.sample_sheet}",
             self.docker_job_dir,
             *self.extra_args,
@@ -39,7 +43,7 @@ class FilteringCommand(RCommand):
         stats_path = Path(self.job_dir) / "filter_stats.json"
         if result.is_success and stats_path.exists():
             try:
-                with open(stats_path, "r") as f:
+                with open(stats_path) as f:
                     result.extra["filter_stats"] = json.load(f)
                 logger.info("filter_stats.json loaded: job_id=%s", self.job_id)
             except Exception:
@@ -56,8 +60,11 @@ class NormalizationCommand(RCommand):
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for normalize.R."""
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             self.docker_job_dir,
             *self.extra_args,
         ]
@@ -77,8 +84,11 @@ class NormalizationPreviewCommand(RCommand):
         """Build the ``docker exec`` argv for normalization_preview.R."""
         docker_sample_sheet = f"{self.docker_job_dir}/{Path(self.sample_sheet).name}"
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             f"{self.docker_job_dir}/filtered_data.rds",
             self.docker_job_dir,
             docker_sample_sheet,
@@ -93,9 +103,9 @@ class HeatmapCommand(RCommand):
     receives its grouping/rendering parameters through the environment.
     """
 
-    result_rds_name:   str = ""
+    result_rds_name: str = ""
     sample_sheet_name: str = ""
-    extra_env:         dict[str, str] = field(default_factory=dict)
+    extra_env: dict[str, str] = field(default_factory=dict)
 
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for heatmap.R, injecting ``extra_env``."""
@@ -103,10 +113,12 @@ class HeatmapCommand(RCommand):
         for key, val in self.extra_env.items():
             env_flags += ["-e", f"{key}={val}"]
         return [
-            "docker", "exec",
+            "docker",
+            "exec",
             *env_flags,
             self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "Rscript",
+            self.script_path,
             f"{self.docker_job_dir}/{self.result_rds_name}",
             f"{self.docker_job_dir}/{self.sample_sheet_name}",
             self.docker_job_dir,
@@ -117,15 +129,18 @@ class HeatmapCommand(RCommand):
 class BatchInitCommand(RCommand):
     """Run batch_svd.R to produce the round-0 baseline SVD plot."""
 
-    beta_file:         str = ""
+    beta_file: str = ""
     sample_sheet_file: str = ""
-    plot_name:         str = ""
+    plot_name: str = ""
 
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for the baseline batch_svd.R run."""
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             f"{self.docker_job_dir}/{self.beta_file}",
             f"{self.docker_job_dir}/{self.sample_sheet_file}",
             self.docker_job_dir,
@@ -137,15 +152,18 @@ class BatchInitCommand(RCommand):
 class SvdPlotCommand(RCommand):
     """Run batch_svd.R to produce a post-correction SVD plot for a given round."""
 
-    beta_file:         str = ""
+    beta_file: str = ""
     sample_sheet_file: str = ""
-    plot_name:         str = ""
+    plot_name: str = ""
 
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for a post-correction batch_svd.R run."""
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             f"{self.docker_job_dir}/{self.beta_file}",
             f"{self.docker_job_dir}/{self.sample_sheet_file}",
             self.docker_job_dir,
@@ -162,8 +180,11 @@ class BatchCorrectionCommand(RCommand):
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for batch_correct.R."""
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             self.docker_job_dir,
             *self.extra_args,
         ]
@@ -181,8 +202,8 @@ class DmrAnalysisCommand(RCommand):
     and can exceed it depending on the sample count (see r_executor_spec.md §5.3).
     """
 
-    extra_args:      list[str] = field(default_factory=list)
-    timeout_seconds: int       = 1200
+    extra_args: list[str] = field(default_factory=list)
+    timeout_seconds: int = 1200
 
     # Heaviest step: bootstrap over all CpGs. Peak ~11 GiB in the benchmark, and
     # it uses DMR_CORES bootstrap workers → weight both dimensions accordingly.
@@ -192,8 +213,11 @@ class DmrAnalysisCommand(RCommand):
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for dmr.R."""
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             f"{self.docker_job_dir}/{self.sample_sheet}",
             self.docker_job_dir,
             *self.extra_args,
@@ -209,8 +233,8 @@ class DmpAnalysisCommand(RCommand):
     above the default for large cohorts — 900s instead of 600s.
     """
 
-    extra_args:      list[str] = field(default_factory=list)
-    timeout_seconds: int       = 900
+    extra_args: list[str] = field(default_factory=list)
+    timeout_seconds: int = 900
 
     # Moderate: per-CpG statistics, no region search. ~4 GiB in the benchmark.
     mem_gb = config.PIPELINE_DMP_MEMORY_GB
@@ -219,8 +243,11 @@ class DmpAnalysisCommand(RCommand):
     def build_cmd(self) -> list[str]:
         """Build the ``docker exec`` argv for dmp.R."""
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", self.script_path,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            self.script_path,
             f"{self.docker_job_dir}/{self.sample_sheet}",
             self.docker_job_dir,
             *self.extra_args,
@@ -264,6 +291,10 @@ class BetaExtractionCommand(RCommand):
             f"saveRDS(beta, '{self.docker_job_dir}/beta.rds')"
         )
         return [
-            "docker", "exec", self.R_WORKER_CONTAINER,
-            "Rscript", "-e", r_inline,
+            "docker",
+            "exec",
+            self.R_WORKER_CONTAINER,
+            "Rscript",
+            "-e",
+            r_inline,
         ]

@@ -49,7 +49,7 @@ Jurkat,Cellline,206891110002,R02C01
 - Each subsequent line is one sample.
 - Column order is not significant; consumers address columns by name.
 
-### 3.3 Canonical roles
+### 3.3 Canonical roles and the Basename guarantee
 
 The contract fixes four **canonical roles** — the columns every consumer reads by name:
 
@@ -60,7 +60,13 @@ The contract fixes four **canonical roles** — the columns every consumer reads
 | Sample identity | `Sample_Name` | Human-readable identifier for a sample. |
 | Biological group | `Sample_Group` | The biological grouping used as the default source for comparison, batch, and covariate selection. |
 
-`Sentrix_ID` and `Sentrix_Position` together form the **array id** (`<Sentrix_ID>_<Sentrix_Position>`, e.g. `206891110001_R01C01`), which must match the uploaded IDAT filenames — this linkage is what ties a sample-sheet row to its raw data.
+In addition to the four role columns, the canonical sheet always carries a fifth guaranteed column:
+
+| Column | Meaning |
+|---|---|
+| `Basename` | IDAT file-name prefix used to locate the raw data. Always present in the canonical output — either taken verbatim from the user's sheet or synthesized from `<Sentrix_ID>_<Sentrix_Position>`. See §3.6. |
+
+`Sentrix_ID` and `Sentrix_Position` together form the **array id** (`<Sentrix_ID>_<Sentrix_Position>`, e.g. `206891110001_R01C01`). The `Basename` column is the single, authoritative linkage key used by all R consumers to locate a sample's IDAT pair and to name per-sample data columns throughout the pipeline.
 
 ### 3.4 Runtime column roles (batch, covariate, comparison group)
 
@@ -80,24 +86,43 @@ Two paths produce the canonical column names:
 - **Explicit user mapping (primary).** During the two-phase upload the user maps the four canonical roles to the raw columns of the chosen sheet via dropdowns. The user is authoritative: exactly those columns are renamed to the canonical role names, and all other columns are passed through unchanged. Pre-filled suggestions are offered where a confident alias match exists, but the user confirms them.
 - **Alias auto-detection (fallback).** When no explicit mapping is provided (the deprecated single-shot upload, or an already-canonical sheet), known Illumina aliases (§4.2) are mapped automatically.
 
+### 3.6 IDAT linkage and `Basename` synthesis
+
+A sample-sheet row is tied to its IDAT pair through a **file prefix**; the files are `<prefix>_Grn.idat` and `<prefix>_Red.idat`. Two input conventions are recognised:
+
+| Input convention | Prefix origin | When it applies |
+|---|---|---|
+| Array id (default) | `<Sentrix_ID>_<Sentrix_Position>` | The user's sheet has no `Basename` column. |
+| Explicit `Basename` | the row's `Basename` value, verbatim | The sheet carries a column named `Basename` (matched case/spacing-insensitively). |
+
+Regardless of which input convention is in use, the canonicalizer **always writes a `Basename` column** into the output sheet (§4.1). The value is:
+
+- **the user-supplied value**, when the input carries a `Basename` column — taken verbatim, so the downstream R consumer matches it literally; and
+- **the synthesized array id** (`<Sentrix_ID>_<Sentrix_Position>`), when the input carries no such column.
+
+When an explicit `Basename` column is present it is authoritative for locating and de-duplicating the IDAT files; the `Sentrix_ID`/`Sentrix_Position` columns remain present as metadata.
+
+The `Basename` value propagates through the entire pipeline: minfi names each loaded sample by `basename(Basename)`, so per-sample data columns and group assignments always key on that identity. This is why a `Basename` sheet whose chip columns do not match the IDAT filenames still groups and annotates correctly.
+
 ---
 
 ## 4. Reference
 
 ### 4.1 Canonical columns
 
-| Canonical name | Role | Required | Notes |
+| Canonical name | Role | In canonical output | Notes |
 |---|---|---|---|
-| `Sentrix_ID` | Chip barcode | Yes | Part of the array id; links to IDAT files. |
-| `Sentrix_Position` | Chip position | Yes | Part of the array id. |
-| `Sample_Name` | Sample identity | Yes | Human-readable identifier. |
-| `Sample_Group` | Biological group | Yes | Default source of comparison/batch/covariate selection. |
-| `Sample_Well` | Plate well | Optional | Passed through if present. |
-| `Sample_Plate` | Plate id | Optional | Passed through if present. |
-| `Pool_ID` | Pool id | Optional | Passed through if present. |
-| *(any other column)* | User metadata | Optional | Preserved verbatim; may serve as a runtime role column (§3.4). |
+| `Sentrix_ID` | Chip barcode | Always (required) | Part of the array id; links to IDAT files via the synthesized `Basename` when no explicit `Basename` column is supplied. |
+| `Sentrix_Position` | Chip position | Always (required) | Part of the array id. |
+| `Sample_Name` | Sample identity | Always (required) | Human-readable identifier. |
+| `Sample_Group` | Biological group | Always (required) | Default source of comparison/batch/covariate selection. |
+| `Basename` | IDAT file-name prefix | **Always (guaranteed)** | Always present in the canonical output. Value is the user-supplied prefix when the input carries a `Basename` column, or the synthesized `<Sentrix_ID>_<Sentrix_Position>` otherwise. See §3.6. |
+| `Sample_Well` | Plate well | When present in input | Passed through verbatim if the input carries this column. |
+| `Sample_Plate` | Plate id | When present in input | Passed through verbatim if the input carries this column. |
+| `Pool_ID` | Pool id | When present in input | Passed through verbatim if the input carries this column. |
+| *(any other column)* | User metadata | When present in input | Preserved verbatim; may serve as a runtime role column (§3.4). |
 
-The four required columns are enforced at commit through the user mapping. Additional columns are never dropped — they remain available as candidate batch/covariate/comparison/annotation columns.
+The four required columns are enforced at commit through the user mapping. Additional columns are never dropped — they remain available as candidate batch/covariate/comparison/annotation columns. The `Basename` column is always written last by the canonicalizer, guaranteeing its presence regardless of the input.
 
 ### 4.2 Recognized aliases (fallback detection)
 
@@ -130,6 +155,8 @@ Canonicalization tolerates all of the following and still produces the canonical
 ### 4.4 Canonical output
 
 The single output of canonicalization is the canonical `SampleSheet.csv` (§3.2), stored in the job directory. Its location and lifecycle are defined in [job-directory-layout.md](./job-directory-layout.md). Its columns are the metadata source that [filter-mapping.md](./filter-mapping.md) and the batch/heatmap options draw upon.
+
+The canonical sheet is **restricted to the uploaded samples**: rows whose IDAT linkage key (§3.6) does not correspond to an uploaded IDAT pair are dropped. This lets a user upload a subset of a large cohort sheet — the sheet may describe more samples than were uploaded — while keeping the job directory self-consistent (every remaining row has its IDAT files on disk). At least one row must match; a full mismatch is rejected (§5).
 
 ---
 

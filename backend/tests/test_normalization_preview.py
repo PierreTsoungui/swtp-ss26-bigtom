@@ -4,6 +4,7 @@ Fully isolated from the working directory: the route's jobs base is redirected
 into ``tmp_path``, so nothing is read from or written to the real ./jobs
 directory and the tests do not depend on the process CWD.
 """
+
 import json
 from pathlib import Path
 
@@ -66,6 +67,7 @@ def _mark_preview_ready(job_id: str) -> None:
 
 # ── GET /preview/normalization/{job_id} ───────────────────────────────────────
 
+
 def test_preview_returns_all_methods_when_ready(job_id, job_dir):
     methods = {
         m: {"density": f"density_{m}.png", "pca": f"pca_{m}.json"}
@@ -118,6 +120,7 @@ def test_post_preview_is_not_allowed(job_id):
 
 # ── GET /preview/normalization/{job_id}/{plot_name} ───────────────────────────
 
+
 def test_plot_image_served_when_present(job_id, job_dir):
     (job_dir / "density_raw.png").write_bytes(b"\x89PNG fake")
     response = client.get(f"/api/v1/preview/normalization/{job_id}/density_raw.png")
@@ -138,7 +141,5 @@ def test_plot_image_missing_file_returns_404(job_id, job_dir):
 
 
 def test_plot_image_unknown_job_returns_404():
-    response = client.get(
-        "/api/v1/preview/normalization/does-not-exist/density_raw.png"
-    )
+    response = client.get("/api/v1/preview/normalization/does-not-exist/density_raw.png")
     assert response.status_code == 404

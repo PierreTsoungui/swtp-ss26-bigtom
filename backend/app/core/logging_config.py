@@ -1,4 +1,5 @@
 """Application-wide logging configuration."""
+
 import logging
 import os
 import sys

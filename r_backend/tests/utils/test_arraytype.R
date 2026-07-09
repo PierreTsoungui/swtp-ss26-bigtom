@@ -97,6 +97,43 @@ test_that("the annotation registries cover every canonical array type", {
   expect_setequal(names(CHAMP_PROBE_FEATURES), ARRAY_TYPES)
 })
 
+# ── idat_probe_count() (mixed-array-type detection) ───────────────────────────
+
+# Write a minimal but structurally valid version-3 IDAT header carrying a single
+# field: nSNPsRead (code 1000). The intensity payload is omitted — idat_probe_count
+# reads only the header/field directory, never the payload. Layout: "IDAT" (4) +
+# int64 version (8) + int32 nFields (4) + [uint16 code + int64 offset] (10), so the
+# nSNPsRead value sits at byte offset 26.
+write_fake_idat <- function(path, n_probes) {
+  con <- file(path, "wb")
+  on.exit(close(con))
+  writeChar("IDAT", con, nchars = 4L, eos = NULL)
+  writeBin(as.integer(c(3L, 0L)), con, size = 4L, endian = "little")  # int64 version = 3
+  writeBin(1L, con, size = 4L, endian = "little")                     # nFields = 1
+  writeBin(1000L, con, size = 2L, endian = "little")                  # field code (nSNPsRead)
+  writeBin(as.integer(c(26L, 0L)), con, size = 4L, endian = "little") # int64 offset = 26
+  writeBin(as.integer(n_probes), con, size = 4L, endian = "little")   # payload at offset 26
+}
+
+test_that("idat_probe_count reads nSNPsRead from a valid IDAT header", {
+  d <- tempfile("idat_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  p <- file.path(d, "s1_Grn.idat")
+  write_fake_idat(p, 622399L) # 450K address count
+  expect_equal(idat_probe_count(p), 622399L)
+})
+
+test_that("idat_probe_count returns NA for a non-IDAT or missing file", {
+  d <- tempfile("idat_")
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  bad <- file.path(d, "not.idat")
+  writeBin(as.raw(c(1, 2, 3, 4, 5, 6, 7, 8)), bad)
+  expect_true(is.na(idat_probe_count(bad)))
+  expect_true(is.na(idat_probe_count(file.path(d, "absent.idat"))))
+})
+
 # ── probe.features loading / reconstruction (heavy: needs ChAMPdata / minfi) ───
 
 test_that("load_probe_features loads the ChAMPdata annotation for 450K / EPIC v1", {

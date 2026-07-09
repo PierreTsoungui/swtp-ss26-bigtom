@@ -1,5 +1,6 @@
 # app/services/job_cleanup_service.py
 """Automatically remove expired job directories from the server."""
+
 import asyncio
 import logging
 import shutil
@@ -26,7 +27,7 @@ def cleanup_expired_jobs(
         logger.info("Job cleanup skipped: directory does not exist: %s", jobs_dir)
         return 0
 
-    cutoff        = (time.time() if now is None else now) - retention_hours * 3600
+    cutoff = (time.time() if now is None else now) - retention_hours * 3600
     deleted_count = 0
 
     try:
@@ -63,7 +64,9 @@ async def run_job_cleanup_loop(
     """Run the job cleanup continuously at the configured interval."""
     logger.info(
         "Job cleanup started: directory=%s, retention_hours=%s, interval_seconds=%s",
-        jobs_dir, retention_hours, interval_seconds,
+        jobs_dir,
+        retention_hours,
+        interval_seconds,
     )
     while True:
         try:

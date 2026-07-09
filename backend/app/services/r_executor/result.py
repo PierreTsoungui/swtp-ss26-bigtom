@@ -1,27 +1,28 @@
 """Outcome types for a finished R execution."""
-from enum import Enum
+
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any
 
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     """Terminal state of an R execution."""
 
     COMPLETED = "completed"
-    FAILED    = "failed"
+    FAILED = "failed"
     CANCELLED = "cancelled"
-    TIMEOUT   = "timeout"
+    TIMEOUT = "timeout"
 
 
 @dataclass
 class ExecutionResult:
     """Result of running an R command: status, exit code, captured output."""
 
-    status:     ExecutionStatus
+    status: ExecutionStatus
     returncode: int | None
-    stdout:     str
-    stderr:     str
-    extra:      dict[str, Any] = field(default_factory=dict)
+    stdout: str
+    stderr: str
+    extra: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_success(self) -> bool:

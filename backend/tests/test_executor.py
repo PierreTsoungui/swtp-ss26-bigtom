@@ -5,6 +5,7 @@ Python interpreter standing in for ``docker exec Rscript``), so cancellation,
 timeout, output streaming and error extraction are verified against real process
 behaviour without needing Docker or R.
 """
+
 import asyncio
 import sys
 from dataclasses import dataclass, field
@@ -44,16 +45,15 @@ def _python(code: str, *, timeout_seconds: int = 30) -> FakeCommand:
 
 
 def _run(command, cancel_event=None, on_progress=None):
-    return asyncio.run(
-        run_r_script(command, cancel_event or asyncio.Event(), on_progress)
-    )
+    return asyncio.run(run_r_script(command, cancel_event or asyncio.Event(), on_progress))
 
 
 # ── Success / output streaming ────────────────────────────────────────────────
 
+
 def test_successful_run_captures_output_and_forwards_progress():
     code = (
-        "print('{\"type\": \"progress\", \"percent\": 50, \"message\": \"halfway\"}')\n"
+        'print(\'{"type": "progress", "percent": 50, "message": "halfway"}\')\n'
         "print('plain log line')"
     )
     events = []
@@ -77,8 +77,7 @@ def test_nonzero_exit_is_reported_as_failed():
 
 def test_structured_r_error_is_captured_in_extra():
     code = (
-        "print('{\"type\": \"error\", \"message\": \"No sample variance\"}')\n"
-        "import sys; sys.exit(1)"
+        'print(\'{"type": "error", "message": "No sample variance"}\')\n' "import sys; sys.exit(1)"
     )
     result = _run(_python(code))
     assert result.status is ExecutionStatus.FAILED
@@ -86,11 +85,7 @@ def test_structured_r_error_is_captured_in_extra():
 
 
 def test_failing_progress_callback_does_not_break_streaming():
-    code = (
-        "print('{\"type\": \"progress\", \"percent\": 10}')\n"
-        "print('line-2')\n"
-        "print('line-3')"
-    )
+    code = 'print(\'{"type": "progress", "percent": 10}\')\n' "print('line-2')\n" "print('line-3')"
 
     async def bad_progress(data):
         raise RuntimeError("callback boom")
@@ -104,6 +99,7 @@ def test_failing_progress_callback_does_not_break_streaming():
 
 
 # ── Timeout / cancellation ────────────────────────────────────────────────────
+
 
 def test_timeout_sets_timeout_status_and_kills_the_process(tmp_path):
     marker = tmp_path / "finished.marker"
@@ -128,6 +124,7 @@ def test_cancellation_terminates_the_process(tmp_path):
 
 
 # ── Command construction failure ──────────────────────────────────────────────
+
 
 def test_command_build_failure_fails_cleanly():
     command = BrokenCommand(script="", job_id="test", job_dir="/tmp", sample_sheet="")

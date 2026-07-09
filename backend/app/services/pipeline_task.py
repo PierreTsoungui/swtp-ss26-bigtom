@@ -12,9 +12,10 @@ This keeps lifecycle management in one place: a bug fix here applies to every
 pipeline automatically, without each service maintaining its own try/finally
 for registration.
 """
+
 import asyncio
 import logging
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from app.services import job_manager
 

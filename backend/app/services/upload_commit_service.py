@@ -7,6 +7,7 @@ canonical ``SampleSheet.csv``), persists the filter settings and creates the
 job. The route then launches the existing filtering pipeline. The staging
 directory is removed on success.
 """
+
 import logging
 import shutil
 import uuid
@@ -17,7 +18,11 @@ from app.models.upload import ColumnMapping, CommitRequest
 from app.services import intake_guards, job_manager, staging_manager
 from app.services.file_handler import clean_job_files, ensure_upload_dir, save_filter_settings
 from app.services.job_manager import JobPhase, JobStatusValue
-from app.services.samplesheet_normalizer import normalize_sample_sheet, read_sample_sheet_table
+from app.services.samplesheet_normalizer import (
+    build_canonical_csv,
+    find_basename_column,
+    read_sample_sheet_table,
+)
 from app.services.upload_inspect_service import load_internal
 
 logger = logging.getLogger(__name__)
@@ -40,7 +45,9 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
             instance,
         )
 
-    selected_pairs = _resolve_selected_pairs(req.selected_pair_ids, internal.get("pairs", {}), instance)
+    selected_pairs = _resolve_selected_pairs(
+        req.selected_pair_ids, internal.get("pairs", {}), instance
+    )
 
     # Intake guards — reject an oversized cohort or a full disk BEFORE building
     # the job dir, so the pipeline never starts work it cannot finish within the
@@ -65,6 +72,11 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
         # Structured error: roll back but keep its type/status.
         clean_job_files(job_id)
         raise
+    except OSError as exc:
+        # Disk-write failure (e.g. a full volume, ENOSPC): roll back the half-built
+        # job dir and surface a structured 507/500 instead of a bare 500.
+        clean_job_files(job_id)
+        raise intake_guards.storage_error(exc, instance) from exc
     except Exception as exc:
         # Rollback boundary: clean up the half-built job dir on any other failure
         # and re-raise as a structured 500 (never swallow).
@@ -87,6 +99,7 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _resolve_selected_pairs(pair_ids: list[str], pair_map: dict, instance: str) -> list[dict]:
     if not pair_ids:
         raise AppException(ErrorTypes.NO_IDAT_FILES, "No IDAT pair was selected.", instance)
@@ -95,9 +108,13 @@ def _resolve_selected_pairs(pair_ids: list[str], pair_map: dict, instance: str) 
     for pid in pair_ids:
         pair = pair_map.get(pid)
         if pair is None:
-            raise AppException(ErrorTypes.INVALID_SELECTION, f"Unknown IDAT pair: {pid!r}", instance)
+            raise AppException(
+                ErrorTypes.INVALID_SELECTION, f"Unknown IDAT pair: {pid!r}", instance
+            )
         if not pair.get("grn") or not pair.get("red"):
-            raise AppException(ErrorTypes.UNPAIRED_IDATS, f"IDAT pair is incomplete: {pid!r}", instance)
+            raise AppException(
+                ErrorTypes.UNPAIRED_IDATS, f"IDAT pair is incomplete: {pid!r}", instance
+            )
         resolved.append(pair)
     return resolved
 
@@ -123,21 +140,30 @@ def _build_canonical_sheet(
     Enforces three things before the pipeline can start:
 
     1. every mapped column actually exists in the chosen sheet;
-    2. the mapped ``Sentrix_ID``/``Sentrix_Position`` columns build array ids
-       (``<id>_<position>``) that overlap the selected IDAT pairs — a mismatch
-       almost always means the wrong columns were picked, so we hard-fail with a
-       plain-text hint instead of starting a job that cannot find its IDATs;
+    2. the sheet is **restricted to the rows that correspond to an uploaded IDAT
+       pair**, and at least one row must match — a full disjoint almost always
+       means the wrong columns were picked, so we hard-fail with a plain-text hint
+       instead of starting a job that cannot find its IDATs. Restricting the sheet
+       also lets a user upload a subset of a large cohort: the sheet may describe
+       more samples than were uploaded, and R requires every remaining row to have
+       its files on disk. The linkage key is the ``Basename`` column when the sheet
+       provides one, and otherwise the ``<Sentrix_ID>_<Sentrix_Position>`` array id
+       (see ``_select_matching_rows``);
     3. (distinctness of the four roles is guaranteed by ``ColumnMapping``).
     """
     src = (session_dir / sheet_rel).resolve()
     if not src.is_relative_to(session_dir.resolve()) or not src.is_file():
-        raise AppException(ErrorTypes.INVALID_SELECTION, f"Sample sheet not in staging: {sheet_rel!r}", instance)
+        raise AppException(
+            ErrorTypes.INVALID_SELECTION, f"Sample sheet not in staging: {sheet_rel!r}", instance
+        )
 
     content = src.read_bytes()
     try:
         raw_headers, rows = read_sample_sheet_table(content, Path(sheet_rel).name)
     except ValueError as exc:
-        raise AppException(ErrorTypes.INVALID_CSV_CONTENT, f"Sample sheet could not be read: {exc}", instance) from exc
+        raise AppException(
+            ErrorTypes.INVALID_CSV_CONTENT, f"Sample sheet could not be read: {exc}", instance
+        ) from exc
 
     role_map = mapping.as_role_dict()
     missing = [raw for raw in role_map.values() if raw not in raw_headers]
@@ -149,42 +175,84 @@ def _build_canonical_sheet(
             instance,
         )
 
-    _check_idats_match_sheet(raw_headers, rows, mapping, selected_pair_ids, instance)
+    basename_col = find_basename_column(raw_headers)
+    kept_rows = _select_matching_rows(
+        raw_headers, rows, mapping, basename_col, selected_pair_ids, instance
+    )
 
-    return normalize_sample_sheet(content, Path(sheet_rel).name, column_mapping=role_map)
+    return build_canonical_csv(raw_headers, kept_rows, column_mapping=role_map)
 
 
-def _check_idats_match_sheet(
+def _select_matching_rows(
     raw_headers: list[str],
     rows: list[list[str]],
     mapping: ColumnMapping,
+    basename_col: str | None,
     selected_pair_ids: list[str],
     instance: str,
-) -> None:
-    """Hard-fail when the mapped chip columns match none of the selected IDATs."""
+) -> list[list[str]]:
+    """Return only the sheet rows whose IDAT linkage key was actually uploaded.
+
+    Two linkage modes exist, mirroring ``r_backend/init_filter.R::prepare_targets``:
+
+    * **Basename mode** — when the sheet carries a ``Basename`` column, each row's
+      IDAT prefix is that value verbatim (files ``<Basename>_Grn.idat`` /
+      ``<Basename>_Red.idat``). This is authoritative, so the chip columns are not
+      used for matching.
+    * **Sentrix mode** (default) — the prefix is the array id
+      ``<Sentrix_ID>_<Sentrix_Position>``.
+
+    Rows whose key is not among ``selected_pair_ids`` are dropped so the canonical
+    sheet describes exactly the uploaded samples. If nothing matches, the mapping
+    is almost certainly wrong and we raise ``INVALID_COLUMN_MAPPING``.
+    """
     if not selected_pair_ids:
-        return  # the empty-selection case is handled by _resolve_selected_pairs
+        return rows  # the empty-selection case is handled by _resolve_selected_pairs
+
+    selected = set(selected_pair_ids)
+    if basename_col is not None:
+        idx = raw_headers.index(basename_col)
+        keyed = [(row, _clean(row[idx]) if idx < len(row) else "") for row in rows]
+        kept = [row for row, key in keyed if key in selected]
+        if not kept:
+            example_sheet = next((key for _, key in keyed if key), "—")
+            raise AppException(
+                ErrorTypes.INVALID_COLUMN_MAPPING,
+                f"The '{basename_col}' column does not match any of the uploaded IDAT "
+                f"pairs: it produces e.g. the prefix '{example_sheet}', while the IDAT "
+                f"files expect e.g. '{sorted(selected)[0]}'. Each value must name a "
+                "'<Basename>_Grn.idat' / '<Basename>_Red.idat' pair.",
+                instance,
+            )
+        return kept
 
     id_idx = raw_headers.index(mapping.sentrix_id)
     pos_idx = raw_headers.index(mapping.sentrix_position)
-    sheet_ids = {
-        f"{_clean(row[id_idx])}_{_clean(row[pos_idx])}"
-        for row in rows
-        if id_idx < len(row) and pos_idx < len(row) and _clean(row[id_idx]) and _clean(row[pos_idx])
-    }
 
-    if sheet_ids.isdisjoint(selected_pair_ids):
-        example_sheet = next(iter(sorted(sheet_ids)), "—")
-        example_idat = sorted(selected_pair_ids)[0]
+    def _array_id(row: list[str]) -> str:
+        if (
+            id_idx < len(row)
+            and pos_idx < len(row)
+            and _clean(row[id_idx])
+            and _clean(row[pos_idx])
+        ):
+            return f"{_clean(row[id_idx])}_{_clean(row[pos_idx])}"
+        return ""
+
+    keyed = [(row, _array_id(row)) for row in rows]
+    kept = [row for row, key in keyed if key in selected]
+    if not kept:
+        example_sheet = next((key for _, key in keyed if key), "—")
         raise AppException(
             ErrorTypes.INVALID_COLUMN_MAPPING,
             "The mapped columns do not match any of the uploaded IDAT pairs: "
             f"Sentrix_ID='{mapping.sentrix_id}', Sentrix_Position='{mapping.sentrix_position}' "
             f"produce e.g. the array id '{example_sheet}', while the IDAT files expect "
-            f"e.g. '{example_idat}'. Please check which columns contain the chip barcode "
-            "and the position.",
+            f"e.g. '{sorted(selected)[0]}'. Please check which columns contain the chip "
+            "barcode and the position.",
             instance,
         )
+    return kept
 
 
 def _clean(value: str) -> str:

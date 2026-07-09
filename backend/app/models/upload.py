@@ -1,6 +1,5 @@
 # app/models/upload.py
 """Request/response models for the upload step (legacy single-shot + inspect/commit)."""
-from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -14,18 +13,19 @@ class UploadResponse(BaseModel):
     back to the client.
     """
 
-    job_id:          str
-    status:          str
+    job_id: str
+    status: str
     filter_settings: dict
 
 
 # ── Folder / ZIP upload: inspect → commit ─────────────────────────────────────
 
+
 class FileEntry(BaseModel):
     """A single staged file."""
 
-    name:       str
-    rel_path:   str
+    name: str
+    rel_path: str
     size_bytes: int
 
 
@@ -36,10 +36,10 @@ class SuggestedMapping(BaseModel):
     exists, otherwise the user picks it manually.
     """
 
-    sentrix_id:       Optional[str] = None
-    sentrix_position: Optional[str] = None
-    sample_group:     Optional[str] = None
-    sample_name:      Optional[str] = None
+    sentrix_id: str | None = None
+    sentrix_position: str | None = None
+    sample_group: str | None = None
+    sample_name: str | None = None
 
 
 class SampleSheetCandidate(BaseModel):
@@ -50,51 +50,51 @@ class SampleSheetCandidate(BaseModel):
     dropdowns where a column could be recognized automatically.
     """
 
-    id:                str
-    name:              str
-    rel_path:          str
-    size_bytes:        int
-    recognized:        bool = True
-    recommended:       bool = False
-    sample_count:      Optional[int] = None
-    columns:           list[str] = Field(default_factory=list)
+    id: str
+    name: str
+    rel_path: str
+    size_bytes: int
+    recognized: bool = True
+    recommended: bool = False
+    sample_count: int | None = None
+    columns: list[str] = Field(default_factory=list)
     suggested_mapping: SuggestedMapping = Field(default_factory=SuggestedMapping)
 
 
 class IdatPair(BaseModel):
     """A Grn/Red IDAT pair (one sample). ``complete`` iff both channels exist."""
 
-    pair_id:  str
-    grn:      Optional[FileEntry] = None
-    red:      Optional[FileEntry] = None
+    pair_id: str
+    grn: FileEntry | None = None
+    red: FileEntry | None = None
     complete: bool
 
 
 class OtherFile(BaseModel):
     """A real file that was found but not used (unsupported / unrecognized)."""
 
-    name:     str
+    name: str
     rel_path: str
-    reason:   str
+    reason: str
 
 
 class ManifestError(BaseModel):
     """A non-fatal, UI-blocking condition (e.g. more than one sample sheet)."""
 
-    code:    str
+    code: str
     message: str
 
 
 class InspectManifest(BaseModel):
     """Result of inspecting an upload: everything found, classified by role."""
 
-    session_id:    str
-    source:        str  # "zip" | "files"
+    session_id: str
+    source: str  # "zip" | "files"
     sample_sheets: list[SampleSheetCandidate] = Field(default_factory=list)
-    idats:         list[IdatPair] = Field(default_factory=list)
-    other_files:   list[OtherFile] = Field(default_factory=list)
-    errors:        list[ManifestError] = Field(default_factory=list)
-    expires_at:    str
+    idats: list[IdatPair] = Field(default_factory=list)
+    other_files: list[OtherFile] = Field(default_factory=list)
+    errors: list[ManifestError] = Field(default_factory=list)
+    expires_at: str
 
 
 class ColumnMapping(BaseModel):
@@ -106,10 +106,10 @@ class ColumnMapping(BaseModel):
     chosen sheet's ``columns``.
     """
 
-    sentrix_id:       str
+    sentrix_id: str
     sentrix_position: str
-    sample_group:     str
-    sample_name:      str
+    sample_group: str
+    sample_name: str
 
     @model_validator(mode="after")
     def _roles_must_be_distinct(self) -> "ColumnMapping":
@@ -121,28 +121,28 @@ class ColumnMapping(BaseModel):
     def as_role_dict(self) -> dict[str, str]:
         """Return ``canonical role name -> raw column`` for the normalizer."""
         return {
-            "Sentrix_ID":       self.sentrix_id,
+            "Sentrix_ID": self.sentrix_id,
             "Sentrix_Position": self.sentrix_position,
-            "Sample_Group":     self.sample_group,
-            "Sample_Name":      self.sample_name,
+            "Sample_Group": self.sample_group,
+            "Sample_Name": self.sample_name,
         }
 
 
 class CommitRequest(BaseModel):
     """The user's confirmed selection, sent to start the pipeline."""
 
-    session_id:               str
+    session_id: str
     selected_sample_sheet_id: str
-    selected_pair_ids:        list[str] = Field(default_factory=list)
-    column_mapping:           ColumnMapping
-    filter_settings:          FilterSettings = Field(default_factory=FilterSettings)
+    selected_pair_ids: list[str] = Field(default_factory=list)
+    column_mapping: ColumnMapping
+    filter_settings: FilterSettings = Field(default_factory=FilterSettings)
 
 
 class SheetPreview(BaseModel):
     """A small tabular preview of a candidate sample sheet."""
 
-    sheet_id:   str
-    columns:    list[str]
-    rows:       list[list[str]]
+    sheet_id: str
+    columns: list[str]
+    rows: list[list[str]]
     total_rows: int
-    truncated:  bool
+    truncated: bool

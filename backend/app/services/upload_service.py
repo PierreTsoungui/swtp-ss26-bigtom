@@ -4,12 +4,12 @@
 The upload route stays a thin HTTP adapter; everything that is business logic
 (saving files with rollback, sequencing the first pipeline phase) lives here.
 """
+
 import asyncio
 import json
 import logging
 import os
 from pathlib import Path
-from typing import List
 
 from fastapi import UploadFile
 
@@ -17,15 +17,15 @@ from app.core.error_types import AppException, ErrorTypes
 from app.models.filter import FilterSettings
 from app.services import intake_guards, job_manager
 from app.services.file_handler import (
+    clean_job_files,
+    save_filter_settings,
     save_idat_files,
     save_sample_sheet,
-    save_filter_settings,
-    clean_job_files,
 )
 from app.services.job_manager import JobPhase, JobStatusValue
 from app.services.normalization_preview_service import run_normalization_preview
-from app.services.pipeline_outcome import progress_fields, handle_step_result, StepOutcome
-from app.services.r_executor import run_r_script, FilteringCommand
+from app.services.pipeline_outcome import StepOutcome, handle_step_result, progress_fields
+from app.services.r_executor import FilteringCommand, run_r_script
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 def persist_upload_files(
     job_id: str,
     job_dir: Path,
-    idat_files: List[UploadFile],
+    idat_files: list[UploadFile],
     sample_sheet: UploadFile,
     filter_settings: FilterSettings,
     instance: str,
@@ -71,9 +71,7 @@ def persist_upload_files(
         # failure must still clean up the half-written job dir. It re-raises as a
         # structured 500 — it never swallows the error.
         clean_job_files(job_id)
-        raise AppException(
-            ErrorTypes.SAVE_FAILED, f"Error while saving: {exc}", instance
-        ) from exc
+        raise AppException(ErrorTypes.SAVE_FAILED, f"Error while saving: {exc}", instance) from exc
 
 
 async def run_upload_pipeline(
@@ -115,16 +113,19 @@ async def run_upload_pipeline(
 
     # Cancellation is a clean outcome: reset_service owns deletion, so no terminal
     # state is written here (handle_step_result performs no transition on cancel).
-    if handle_step_result(
-        job_id,
-        result,
-        phase=JobPhase.FILTERING,
-        fallback="The R script was aborted.",
-        timeout_step="Error: the R script exceeded its time limit.",
-        timeout_detail="R script execution timeout.",
-        failure_step="Error during filtering.",
-        cancel_log=f"Job execution cancelled cleanly via reset: job_id={job_id}",
-    ) is not StepOutcome.SUCCESS:
+    if (
+        handle_step_result(
+            job_id,
+            result,
+            phase=JobPhase.FILTERING,
+            fallback="The R script was aborted.",
+            timeout_step="Error: the R script exceeded its time limit.",
+            timeout_detail="R script execution timeout.",
+            failure_step="Error during filtering.",
+            cancel_log=f"Job execution cancelled cleanly via reset: job_id={job_id}",
+        )
+        is not StepOutcome.SUCCESS
+    ):
         return
 
     # init_filter.R must emit filter_stats.json; its absence means a silent failure.

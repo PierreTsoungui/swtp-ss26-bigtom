@@ -21,6 +21,7 @@ def _run(coro):
 
 def test_parallel_within_budget():
     """Two 4 GiB steps both fit a 10 GiB budget → they overlap."""
+
     async def scenario():
         gov = ResourceGovernor(memory_budget_gb=10, core_budget=4)
         events = []
@@ -41,6 +42,7 @@ def test_parallel_within_budget():
 
 def test_memory_budget_serialises():
     """Two 8 GiB steps cannot share a 10 GiB budget → they run one after another."""
+
     async def scenario():
         gov = ResourceGovernor(memory_budget_gb=10, core_budget=4)
         events = []
@@ -64,6 +66,7 @@ def test_memory_budget_serialises():
 
 def test_core_budget_serialises_independently_of_memory():
     """Memory is plentiful but the 2-core budget only admits one 2-core step."""
+
     async def scenario():
         gov = ResourceGovernor(memory_budget_gb=100, core_budget=2)
         events = []
@@ -86,6 +89,7 @@ def test_core_budget_serialises_independently_of_memory():
 
 def test_oversized_step_runs_alone_without_deadlock():
     """A step needing more than the whole budget is clamped and still runs."""
+
     async def scenario():
         gov = ResourceGovernor(memory_budget_gb=8, core_budget=2)
         ran = []
@@ -98,6 +102,7 @@ def test_oversized_step_runs_alone_without_deadlock():
 
 def test_on_wait_fires_only_when_queued():
     """The queued-notice hook fires for the step that has to wait, not the first."""
+
     async def scenario():
         gov = ResourceGovernor(memory_budget_gb=10, core_budget=4)
         waited = []
@@ -105,6 +110,7 @@ def test_on_wait_fires_only_when_queued():
         async def job(name):
             async def note():
                 waited.append(name)
+
             async with gov.slot(8, 1, label=name, on_wait=note):
                 await asyncio.sleep(0.15)
 
@@ -118,6 +124,7 @@ def test_on_wait_fires_only_when_queued():
 
 def test_budget_fully_restored_after_release():
     """Every acquire is matched by a release → the budget returns to full."""
+
     async def scenario():
         gov = ResourceGovernor(memory_budget_gb=12, core_budget=2)
         async with gov.slot(12, 2, label="all"):
