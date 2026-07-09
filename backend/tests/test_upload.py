@@ -11,10 +11,17 @@ from app.main import app
 client = TestClient(app)
 
 
-# TEST DATA PATHS: adjust this path to point at your test data.
-
-TEST_DATA_DIR     = Path(__file__).resolve().parents[1].parent / "jobs" / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
-SAMPLE_SHEET_PATH = Path(__file__).resolve().parents[1].parent / "jobs" / "07b7fa29-8a9d-418d-bc16-8308a2b387fd" / "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
+# TEST DATA PATHS
+# In the container the backend lives at /app and jobs are mounted at /app/jobs.
+# On the host the backend lives at .../backend and jobs are one level up at .../jobs.
+_BACKEND_DIR = Path(__file__).resolve().parents[1]
+_JOBS_ROOT = (
+    _BACKEND_DIR / "jobs"
+    if (_BACKEND_DIR / "jobs").exists()
+    else _BACKEND_DIR.parent / "jobs"
+)
+TEST_DATA_DIR     = _JOBS_ROOT / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
+SAMPLE_SHEET_PATH = TEST_DATA_DIR / "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
 
 # Create minimal test data if missing so tests are self-contained
 if not TEST_DATA_DIR.exists():
@@ -196,30 +203,28 @@ class TestUpload:
 
     # ── filter_settings: Out-of-Range Values ──────────────────────────────
 
-    def test_upload_cutoff_out_of_range_gets_default(self):
-        """cutoff=0.5 outside valid range → default 0.01."""
+    def test_upload_cutoff_out_of_range_returns_400(self):
+        """cutoff=0.5 outside [0.01, 0.05] → HTTP 400, no silent fallback."""
         settings = wrap({"det_p": {"enabled": True, "cutoff": 0.5}})
         response = client.post(
             "/api/v1/upload",
             files=valid_files(),
             data={"filter_settings": settings},
         )
-        assert response.status_code == 201
-        assert response.json()["filter_settings"]["det_p"]["cutoff"] == 0.01
+        assert response.status_code == 400
 
-    def test_upload_maf_cutoff_out_of_range_gets_default(self):
-        """maf_cutoff=1.5 outside [0.01, 0.1] → default 0.05."""
+    def test_upload_maf_cutoff_out_of_range_returns_400(self):
+        """maf_cutoff=1.5 outside [0.0, 0.5] → HTTP 400, no silent fallback."""
         settings = wrap({"snp": {"enabled": True, "maf_cutoff": 1.5}})
         response = client.post(
             "/api/v1/upload",
             files=valid_files(),
             data={"filter_settings": settings},
         )
-        assert response.status_code == 201
-        assert response.json()["filter_settings"]["snp"]["maf_cutoff"] == 0.05
+        assert response.status_code == 400
 
-    def test_upload_maf_cutoff_zero_triggers_default(self):
-        """maf_cutoff=0.0 → default 0.05."""
+    def test_upload_maf_cutoff_zero_is_valid(self):
+        """maf_cutoff=0.0 is at the lower bound of [0.0, 0.5] and must be accepted."""
         settings = wrap({"snp": {"enabled": True, "maf_cutoff": 0.0}})
         response = client.post(
             "/api/v1/upload",
@@ -227,29 +232,27 @@ class TestUpload:
             data={"filter_settings": settings},
         )
         assert response.status_code == 201
-        assert response.json()["filter_settings"]["snp"]["maf_cutoff"] == 0.05
+        assert response.json()["filter_settings"]["snp"]["maf_cutoff"] == 0.0
 
-    def test_upload_bead_cutoff_out_of_range_gets_default(self):
-        """bead_cutoff=2.5 → default 0.05."""
+    def test_upload_bead_cutoff_out_of_range_returns_400(self):
+        """bead_cutoff=2.5 outside [0.0, 1.0] → HTTP 400, no silent fallback."""
         settings = wrap({"bead_count": {"enabled": True, "bead_cutoff": 2.5}})
         response = client.post(
             "/api/v1/upload",
             files=valid_files(),
             data={"filter_settings": settings},
         )
-        assert response.status_code == 201
-        assert response.json()["filter_settings"]["bead_count"]["bead_cutoff"] == 0.05
+        assert response.status_code == 400
 
-    def test_upload_sample_failure_rate_out_of_range_gets_default(self):
-        """sample_failure_rate=5.0 → default 0.10."""
+    def test_upload_sample_failure_rate_out_of_range_returns_400(self):
+        """sample_failure_rate=5.0 outside [0.05, 0.2] → HTTP 400, no silent fallback."""
         settings = wrap({"sample_quality": {"enabled": True, "sample_failure_rate": 5.0}})
         response = client.post(
             "/api/v1/upload",
             files=valid_files(),
             data={"filter_settings": settings},
         )
-        assert response.status_code == 201
-        assert response.json()["filter_settings"]["sample_quality"]["sample_failure_rate"] == 0.10
+        assert response.status_code == 400
 
     def test_upload_cutoff_as_string_gets_coerced(self):
         """cutoff as string '0.01' → coerced to float."""

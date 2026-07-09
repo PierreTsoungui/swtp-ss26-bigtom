@@ -1,6 +1,10 @@
+import os
 import sys
 import asyncio
 import json
+import tempfile
+import shutil
+import atexit
 import pytest
 from pathlib import Path
 from unittest.mock import patch
@@ -8,6 +12,12 @@ from unittest.mock import patch
 # Python path correction
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
+
+# Redirect JOB_BASE_DIR to a writable temp dir before any app import so that
+# tests work regardless of who runs them (root or UID 1000 in Docker).
+_TEST_JOBS_DIR = tempfile.mkdtemp(prefix="pytest_bigtom_")
+os.environ["JOB_BASE_DIR"] = _TEST_JOBS_DIR
+atexit.register(shutil.rmtree, _TEST_JOBS_DIR, ignore_errors=True)
 
 
 async def mock_run_r_script(
@@ -132,10 +142,16 @@ with patch("app.services.r_executor.run_r_script", mock_run_r_script):
 
 client = TestClient(app)
 
-# TEST DATA PATHS: adjust these paths to point at your test data.
-
-TEST_DATA_DIR = Path(__file__).resolve().parents[1].parent / "jobs" / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
-SAMPLE_SHEET_PATH = Path(__file__).resolve().parents[1].parent / "jobs" / "07b7fa29-8a9d-418d-bc16-8308a2b387fd" / "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
+# TEST DATA PATHS
+# In the container BACKEND_DIR=/app and jobs are mounted at /app/jobs.
+# On the host BACKEND_DIR=.../backend and jobs live one level up at .../jobs.
+_JOBS_ROOT = (
+    BACKEND_DIR / "jobs"
+    if (BACKEND_DIR / "jobs").exists()
+    else BACKEND_DIR.parent / "jobs"
+)
+TEST_DATA_DIR = _JOBS_ROOT / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
+SAMPLE_SHEET_PATH = TEST_DATA_DIR / "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
 
 # Create minimal test data if missing so tests are self-contained
 if not TEST_DATA_DIR.exists():

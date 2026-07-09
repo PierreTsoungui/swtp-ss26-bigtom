@@ -3,6 +3,7 @@
 import pytest
 import time
 import tempfile
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from datetime import datetime, timedelta
 
@@ -121,7 +122,7 @@ class TestNormalization:
             )
             
             if response.status_code == 409:
-                print("⚠️ Raw method transition not allowed (as expected)")
+                print("Raw method transition not allowed (as expected)")
                 assert response.status_code == 409
             else:
                 assert response.status_code == 202
@@ -186,7 +187,7 @@ class TestNormalization:
             )
             
             if response.status_code == 409:
-                print("⚠️ Transition not allowed (as expected)")
+                print("Transition not allowed (as expected)")
                 assert response.status_code == 409
             else:
                 assert response.status_code == 202
@@ -233,7 +234,7 @@ class TestNormalization:
             )
             
             if response.status_code == 409:
-                print("⚠️ Transition not allowed (as expected)")
+                print("Transition not allowed (as expected)")
                 assert response.status_code == 409
             else:
                 assert response.status_code == 202
@@ -261,7 +262,7 @@ class TestNormalization:
             )
             
             if response.status_code == 409:
-                print("⚠️ Transition not allowed (as expected)")
+                print("Transition not allowed (as expected)")
                 assert response.status_code == 409
             else:
                 assert response.status_code == 202
@@ -271,11 +272,82 @@ class TestNormalization:
         finally:
             self.cleanup_job(job_id)
 
-    # ── SKIP TESTS ────────────────────────────────────────────────────────────
-
     def test_job_state_transition_to_running(self):
-        """Test that job transitions to running state - SKIP if not implemented."""
-        pytest.skip("Transition not implemented in job_manager.py")
+        """POST /normalize triggers (NORMALIZATION, WAITING) → (NORMALIZATION, RUNNING)
+        synchronously, before the 202 response is returned.
+
+        This synchronous transition is a deliberate design guarantee (see normalize.py):
+        a follow-up GET /status poll issued right after the 202 can never race ahead of
+        the background task and observe stale WAITING state.
+
+        The pipeline background task is neutralised with an AsyncMock so the
+        test captures the job state exactly as the route leaves it — without
+        the full normalization + SVD pipeline running through to BATCH/WAITING
+        (which is what happens in production once the background task completes).
+
+        The test verifies three invariants:
+        1. HTTP contract  — 202 with the correct response body.
+        2. Synchronous state mutation — the in-memory job is already RUNNING
+           at progress 0 when the route handler returns, before any background
+           work runs.
+        3. Double-submit protection — a second POST while RUNNING is rejected
+           with 409 (InvalidTransitionError → INVALID_STATE_TRANSITION).
+        """
+        job_id = self.create_job_direct(
+            phase=JobPhase.NORMALIZATION.value,
+            status=JobStatusValue.WAITING.value,
+        )
+
+        try:
+            # ── precondition ──────────────────────────────────────────────────
+            pre = job_manager.jobs[job_id]
+            assert pre.phase == JobPhase.NORMALIZATION.value
+            assert pre.status == JobStatusValue.WAITING.value
+
+            # Freeze the pipeline so the background task is a no-op.
+            # Without this, TestClient runs background tasks synchronously and
+            # the job advances to BATCH/WAITING before client.post() returns.
+            with patch(
+                "app.services.pipeline_task.run_job_pipeline",
+                new_callable=AsyncMock,
+            ):
+                # ── act ───────────────────────────────────────────────────────
+                response = client.post(
+                    f"/api/v1/normalize/{job_id}",
+                    json={"method": "noob"},
+                )
+
+            # ── 1: HTTP contract ──────────────────────────────────────────────
+            assert response.status_code == 202
+            data = response.json()
+            assert data["job_id"] == job_id
+            assert data["status"] == JobStatusValue.RUNNING.value
+            assert data["method"] == "noob"
+
+            # ── 2: synchronous state mutation ─────────────────────────────────
+            # The route must commit RUNNING to the in-memory store before it
+            # returns, not after — checked here while the background task is
+            # still frozen.
+            job = job_manager.jobs[job_id]
+            assert job.phase == JobPhase.NORMALIZATION.value
+            assert job.status == JobStatusValue.RUNNING.value
+            assert job.progress_percent == 0
+
+            # ── 3: double-submit protection ───────────────────────────────────
+            # (NORMALIZATION, RUNNING) → (NORMALIZATION, RUNNING) is not in the
+            # allowed transition graph, so a second POST must be rejected.
+            with patch(
+                "app.services.pipeline_task.run_job_pipeline",
+                new_callable=AsyncMock,
+            ):
+                response2 = client.post(
+                    f"/api/v1/normalize/{job_id}",
+                    json={"method": "noob"},
+                )
+            assert response2.status_code == 409
+
+        finally:
+            self.cleanup_job(job_id)
 
     def test_job_in_wrong_state_returns_conflict(self):
         """Test that job in wrong state returns conflict."""

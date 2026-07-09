@@ -57,11 +57,16 @@ NA12873,,,Coriell,,206891110001,R08C01
 
 def test_epic_csv_keeps_canonical_columns_and_data():
     headers, rows = parse_canonical(normalize_sample_sheet(EPIC_CSV, "SampleSheet.csv"))
+    # The reserved Basename contract column is appended: for a chip-layout sheet it
+    # is <Sentrix_ID>_<Sentrix_Position>, so the R backend reads one column to
+    # locate the IDATs regardless of the source convention.
     assert headers == [
         "Sample_Name", "Sample_Well", "Sample_Plate",
-        "Sample_Group", "Pool_ID", "Sentrix_ID", "Sentrix_Position",
+        "Sample_Group", "Pool_ID", "Sentrix_ID", "Sentrix_Position", "Basename",
     ]
-    assert rows[0] == ["HeLa", "", "", "Cellline", "", "206891110001", "R01C01"]
+    assert rows[0] == [
+        "HeLa", "", "", "Cellline", "", "206891110001", "R01C01", "206891110001_R01C01",
+    ]
     assert len(rows) == 3
 
 
@@ -142,8 +147,8 @@ def test_xlsx_with_header_block_aligns_columns():
 def test_semicolon_delimited_csv():
     sheet = b"[Data]\nSample_Name;Sentrix_ID;Sentrix_Position\nHeLa;206891110001;R01C01\n"
     headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv"))
-    assert headers == ["Sample_Name", "Sentrix_ID", "Sentrix_Position"]
-    assert rows[0] == ["HeLa", "206891110001", "R01C01"]
+    assert headers == ["Sample_Name", "Sentrix_ID", "Sentrix_Position", "Basename"]
+    assert rows[0] == ["HeLa", "206891110001", "R01C01", "206891110001_R01C01"]
 
 
 # ── Trailing empty columns are dropped ─────────────────────────────────────────
@@ -151,7 +156,7 @@ def test_semicolon_delimited_csv():
 def test_trailing_empty_header_columns_dropped():
     sheet = b"[Data]\nSample_Name,Sentrix_ID,Sentrix_Position,,\nHeLa,206891110001,R01C01,,\n"
     headers, _ = parse_canonical(normalize_sample_sheet(sheet, "x.csv"))
-    assert headers == ["Sample_Name", "Sentrix_ID", "Sentrix_Position"]
+    assert headers == ["Sample_Name", "Sentrix_ID", "Sentrix_Position", "Basename"]
 
 
 # ── Basename-only sheet (used by the minimal upload test fixture) ──────────────
@@ -182,6 +187,38 @@ def test_basename_column_preserved_through_explicit_mapping():
     headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv", column_mapping=mapping))
     assert "Basename" in headers
     assert rows[0][headers.index("Basename")] == "uuid-1_noid"
+
+
+def test_basename_contract_survives_role_mapped_onto_it():
+    # The reported bug: mapping the Sample_Name role ONTO the Basename column used
+    # to rename it away, destroying the file-location key. The reserved Basename
+    # contract must be (re)installed from the raw sheet regardless, so R can still
+    # locate the <Basename>_{Grn,Red}.idat files.
+    sheet = (
+        b"Basename,Sample_Name,Sample_Group,Sentrix_ID,Sample_Position\n"
+        b"uuid-1_noid,Sample_001,Normal,TEST288941,A01\n"
+    )
+    mapping = {
+        "Sentrix_ID": "Sentrix_ID",
+        "Sentrix_Position": "Sample_Position",
+        "Sample_Group": "Sample_Group",
+        "Sample_Name": "Basename",   # user picks the Basename column as the name
+    }
+    headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv", column_mapping=mapping))
+    # Sample_Name now carries the uuid, AND the file-location contract is intact.
+    assert rows[0][headers.index("Sample_Name")] == "uuid-1_noid"
+    assert headers.count("Basename") == 1
+    assert rows[0][headers.index("Basename")] == "uuid-1_noid"
+
+
+def test_sentrix_sheet_gets_basename_contract_from_chip_coordinates():
+    # A pure chip-layout sheet (no Basename source): the contract column is still
+    # written, derived as <Sentrix_ID>_<Sentrix_Position>, so both conventions
+    # converge on one identical sheet shape for the R backend.
+    sheet = b"[Data]\nSample_Name,Sentrix_ID,Sentrix_Position\nHeLa,206891110001,R01C01\n"
+    headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv"))
+    assert headers.count("Basename") == 1
+    assert rows[0][headers.index("Basename")] == "206891110001_R01C01"
 
 
 def test_basename_like_column_is_renamed_to_exact_canonical():
@@ -217,8 +254,10 @@ def test_explicit_mapping_renames_chosen_columns():
     headers, rows = parse_canonical(
         normalize_sample_sheet(CUSTOM_CSV, "custom.csv", column_mapping=mapping)
     )
-    assert headers == ["Sample_Name", "Sample_Group", "Sentrix_ID", "Sentrix_Position"]
-    assert rows[0] == ["P1", "Tumor", "206891110001", "R01C01"]
+    assert headers == [
+        "Sample_Name", "Sample_Group", "Sentrix_ID", "Sentrix_Position", "Basename",
+    ]
+    assert rows[0] == ["P1", "Tumor", "206891110001", "R01C01", "206891110001_R01C01"]
 
 
 def test_explicit_mapping_passes_other_columns_through():
