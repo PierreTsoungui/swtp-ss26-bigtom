@@ -60,7 +60,7 @@ The contract fixes four **canonical roles** — the columns every consumer reads
 | Sample identity | `Sample_Name` | Human-readable identifier for a sample. |
 | Biological group | `Sample_Group` | The biological grouping used as the default source for comparison, batch, and covariate selection. |
 
-`Sentrix_ID` and `Sentrix_Position` together form the **array id** (`<Sentrix_ID>_<Sentrix_Position>`, e.g. `206891110001_R01C01`), which must match the uploaded IDAT filenames — this linkage is what ties a sample-sheet row to its raw data.
+`Sentrix_ID` and `Sentrix_Position` together form the **array id** (`<Sentrix_ID>_<Sentrix_Position>`, e.g. `206891110001_R01C01`), which by default must match the uploaded IDAT filenames — this linkage is what ties a sample-sheet row to its raw data. See §3.6 for the alternative `Basename` linkage.
 
 ### 3.4 Runtime column roles (batch, covariate, comparison group)
 
@@ -80,6 +80,19 @@ Two paths produce the canonical column names:
 - **Explicit user mapping (primary).** During the two-phase upload the user maps the four canonical roles to the raw columns of the chosen sheet via dropdowns. The user is authoritative: exactly those columns are renamed to the canonical role names, and all other columns are passed through unchanged. Pre-filled suggestions are offered where a confident alias match exists, but the user confirms them.
 - **Alias auto-detection (fallback).** When no explicit mapping is provided (the deprecated single-shot upload, or an already-canonical sheet), known Illumina aliases (§4.2) are mapped automatically.
 
+### 3.6 IDAT linkage: array id vs. `Basename`
+
+A sample-sheet row is tied to its IDAT pair through a **file prefix**; the files are `<prefix>_Grn.idat` and `<prefix>_Red.idat`. Two conventions are supported:
+
+| Mode | Prefix | When it applies |
+|---|---|---|
+| Array id (default) | `<Sentrix_ID>_<Sentrix_Position>` | No `Basename` column is present. |
+| `Basename` | the row's `Basename` value, verbatim | The sheet carries a column named `Basename` (matched case/spacing-insensitively). |
+
+When a `Basename` column is present it is **authoritative** and takes precedence over the chip columns for locating and de-duplicating the IDAT files; the `Sentrix_ID`/`Sentrix_Position` columns still ride along as metadata. The `Basename` column is preserved verbatim into the canonical sheet under exactly that name, because the downstream consumer matches it literally.
+
+The same identity carries through the whole pipeline: the loaded data's per-sample columns are named after the `Basename` (or the array id in the default case), so every downstream step that joins the sample sheet to the data — group colouring, batch/covariate selection, differential analysis, the heatmap — keys on that identity. This is why a `Basename` sheet whose chip columns do not match the filenames still groups correctly.
+
 ---
 
 ## 4. Reference
@@ -92,6 +105,7 @@ Two paths produce the canonical column names:
 | `Sentrix_Position` | Chip position | Yes | Part of the array id. |
 | `Sample_Name` | Sample identity | Yes | Human-readable identifier. |
 | `Sample_Group` | Biological group | Yes | Default source of comparison/batch/covariate selection. |
+| `Basename` | IDAT prefix | Optional | Alternative IDAT linkage (§3.6). When present, authoritative for locating the files; preserved verbatim under this exact name. |
 | `Sample_Well` | Plate well | Optional | Passed through if present. |
 | `Sample_Plate` | Plate id | Optional | Passed through if present. |
 | `Pool_ID` | Pool id | Optional | Passed through if present. |
@@ -130,6 +144,8 @@ Canonicalization tolerates all of the following and still produces the canonical
 ### 4.4 Canonical output
 
 The single output of canonicalization is the canonical `SampleSheet.csv` (§3.2), stored in the job directory. Its location and lifecycle are defined in [job-directory-layout.md](./job-directory-layout.md). Its columns are the metadata source that [filter-mapping.md](./filter-mapping.md) and the batch/heatmap options draw upon.
+
+The canonical sheet is **restricted to the uploaded samples**: rows whose IDAT linkage key (§3.6) does not correspond to an uploaded IDAT pair are dropped. This lets a user upload a subset of a large cohort sheet — the sheet may describe more samples than were uploaded — while keeping the job directory self-consistent (every remaining row has its IDAT files on disk). At least one row must match; a full mismatch is rejected (§5).
 
 ---
 

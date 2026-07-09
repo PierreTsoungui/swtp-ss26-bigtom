@@ -370,6 +370,26 @@ test_that("validate_sample_sheet rejects duplicate identifiers in every layout",
   )), "Duplicate")
 })
 
+test_that("validate_sample_sheet dedups on Basename when Sentrix columns also exist", {
+  # A Basename dataset may carry placeholder Sentrix columns that repeat across
+  # rows. The Basename is what names the files, so it (not the Sentrix combo)
+  # decides uniqueness — matching prepare_targets(). Distinct Basenames pass even
+  # when the Sentrix combo is identical; duplicate Basenames fail.
+  skip_if_not_loaded()
+  expect_not_fatal(validate_sample_sheet(data.frame(
+    Basename = c("uuid1_noid", "uuid2_noid"),
+    Sample_Name = c("A", "B"),
+    Sentrix_ID = c("TEST1", "TEST1"), Sentrix_Position = c("A01", "A01"),
+    stringsAsFactors = FALSE
+  )))
+  expect_fatal(validate_sample_sheet(data.frame(
+    Basename = c("dup_noid", "dup_noid"),
+    Sample_Name = c("A", "B"),
+    Sentrix_ID = c("TEST1", "TEST2"), Sentrix_Position = c("A01", "A02"),
+    stringsAsFactors = FALSE
+  )), "Duplicate")
+})
+
 # ── prepare_targets() ─────────────────────────────────────────────────────────
 
 #' Create a job directory populated with fake (empty) IDAT files.

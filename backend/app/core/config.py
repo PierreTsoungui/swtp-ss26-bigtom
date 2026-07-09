@@ -135,6 +135,15 @@ MAX_SAMPLES_PER_JOB = _get_nonneg_int("MAX_SAMPLES_PER_JOB", 48)
 # disk, above JOB_RETENTION_HOURS worth of expected traffic.
 MAX_JOBS_DISK_GB = _get_nonneg_float("MAX_JOBS_DISK_GB", 0.0)
 
+# Minimum free space (MB) required on the storage volume before an upload is
+# accepted. Unlike MAX_JOBS_DISK_GB (which only accounts for this app's own job
+# directories), this checks the *actual* free space reported by the filesystem,
+# so it also catches a disk filled by other tenants. Rejecting early turns a
+# would-be mid-stream "No space left on device" into a clear message before any
+# bytes are received. 0 = disabled (the writer still degrades a full disk into a
+# structured 507 either way).
+MIN_FREE_DISK_MB = _get_nonneg_int("MIN_FREE_DISK_MB", 0)
+
 # ── Upload limits ─────────────────────────────────────────────────────────────
 # Byte ceilings for an upload, configured in megabytes for readability. The IDAT
 # payload of a typical run is ~30 MB; the generous default leaves headroom for

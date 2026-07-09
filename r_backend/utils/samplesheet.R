@@ -56,6 +56,29 @@ sample_sheet_array_id <- function(samples) {
 }
 
 
+#' The per-sample identity that matches the loaded data's column names.
+#'
+#' minfi's \code{read.metharray.exp()} names every loaded sample
+#' \code{basename(Basename)}. The canonical sheet carries an explicit
+#' \code{Basename} column only for the alternative IDAT-naming convention; in the
+#' standard case the id is the chip array id (\code{Sentrix_ID_Sentrix_Position}).
+#' This returns the key that joins sample-sheet rows to (beta-)matrix columns,
+#' preferring \code{Basename} when present.
+#'
+#' @param samples A data.frame from \code{read_sample_sheet_smart()}.
+#' @return A character vector of per-sample match ids (\code{NA} where it cannot
+#'   be derived).
+sample_sheet_match_id <- function(samples) {
+  if ("Basename" %in% colnames(samples)) {
+    return(basename(as.character(samples$Basename)))
+  }
+  if (all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(samples))) {
+    return(sample_sheet_array_id(samples))
+  }
+  rep(NA_character_, nrow(samples))
+}
+
+
 # ── Sample / matrix alignment ─────────────────────────────────────────────────
 
 #' Strip IDAT name decorations from an identifier.
@@ -73,7 +96,8 @@ sample_sheet_array_id <- function(samples) {
 #'
 #' The single, robust aligner shared by every analysis script. It matches the
 #' matrix columns to sample-sheet rows by the best-covering identifier — trying
-#' \code{Sample_Name} first, then the combined \code{Array_ID}
+#' \code{Basename} (the identity minfi assigns when the alternative IDAT-naming
+#' convention is used), then \code{Sample_Name}, then the combined \code{Array_ID}
 #' (Sentrix_ID_Sentrix_Position) — using whitespace-normalised comparison. The
 #' behaviour when not every column matches is selected via \code{mode}:
 #' \describe{
@@ -122,20 +146,32 @@ align_samples_to_matrix <- function(beta, samples,
     normalize_id(beta_raw)
   }
 
-  # Candidate identifier columns, in priority order.
+  # Candidate identifiers, highest priority first. When a Basename column is
+  # present, minfi names the loaded sample columns basename(Basename), so it is
+  # the most reliable key and wins ties; Sample_Name and the chip Array_ID follow.
+  # Array_ID is also attached as a column for backward compatibility with callers
+  # that reference it (e.g. batch_svd excludes it from grouping variables).
   if (all(c("Sentrix_ID", "Sentrix_Position") %in% colnames(samples))) {
     samples$Array_ID <- sample_sheet_array_id(samples)
   } else if (!"Array_ID" %in% colnames(samples)) {
     samples$Array_ID <- NA_character_
   }
-  id_candidates <- intersect(c("Sample_Name", "Array_ID"), colnames(samples))
+  id_sources <- list()
+  if ("Basename" %in% colnames(samples)) {
+    id_sources[["Basename"]] <- basename(as.character(samples$Basename))
+  }
+  if ("Sample_Name" %in% colnames(samples)) {
+    id_sources[["Sample_Name"]] <- as.character(samples$Sample_Name)
+  }
+  id_sources[["Array_ID"]] <- as.character(samples$Array_ID)
 
-  # Pick the candidate with the highest coverage of the matrix columns.
+  # Pick the identifier with the highest coverage of the matrix columns (strict
+  # '>' keeps the higher-priority source on ties).
   best_col <- NA_character_
   best_cov <- 0
-  for (cc in id_candidates) {
-    ids <- normalize_id(samples[[cc]])
-    if (all(is.na(ids) | !nzchar(ids) | ids == "NA")) next # column carries no usable id
+  for (cc in names(id_sources)) {
+    ids <- normalize_id(id_sources[[cc]])
+    if (all(is.na(ids) | !nzchar(ids) | ids == "NA")) next # carries no usable id
     cov <- mean(beta_ids %in% ids)
     if (cov > best_cov) {
       best_cov <- cov
@@ -143,9 +179,9 @@ align_samples_to_matrix <- function(beta, samples,
     }
   }
 
-  # Reject ambiguous (duplicated) identifiers in the chosen column.
+  # Reject ambiguous (duplicated) values in the chosen identifier.
   assert_unique_ids <- function(col) {
-    ids <- normalize_id(samples[[col]])
+    ids <- normalize_id(id_sources[[col]])
     ids <- ids[nzchar(ids)]
     if (anyDuplicated(ids)) {
       emit_error(sprintf("Sample sheet has duplicate '%s' identifiers; cannot align unambiguously.", col))
@@ -155,7 +191,7 @@ align_samples_to_matrix <- function(beta, samples,
   # --- Full 1:1 identifier match: valid for every mode ---
   if (best_cov == 1) {
     assert_unique_ids(best_col)
-    idx <- match(beta_ids, normalize_id(samples[[best_col]]))
+    idx <- match(beta_ids, normalize_id(id_sources[[best_col]]))
     return(list(
       beta = beta, samples = samples[idx, , drop = FALSE],
       id_col = best_col, method = "id"
@@ -168,7 +204,7 @@ align_samples_to_matrix <- function(beta, samples,
 
   if (mode == "intersect" && !is.na(best_col)) {
     assert_unique_ids(best_col)
-    ids <- normalize_id(samples[[best_col]])
+    ids <- normalize_id(id_sources[[best_col]])
     common <- intersect(beta_ids, ids)
     if (length(common) < min_common) {
       emit_error(sprintf(

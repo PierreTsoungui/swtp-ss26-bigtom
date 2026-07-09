@@ -269,11 +269,14 @@ validate_sample_sheet <- function(sheet) {
     ))
   }
 
-  # Duplicate detection on the most specific identifier available.
-  ids <- if (has_standard) {
-    paste0(sheet$Sentrix_ID, "_", sheet$Sentrix_Position)
-  } else if (has_basename) {
+  # Duplicate detection on the identifier that actually locates the IDAT files.
+  # Basename takes precedence when present, matching prepare_targets(): a sheet
+  # may legitimately carry both a Basename column and (placeholder) Sentrix
+  # columns, and the Basename is what names the files on disk.
+  ids <- if (has_basename) {
     basename(as.character(sheet$Basename))
+  } else if (has_standard) {
+    paste0(sheet$Sentrix_ID, "_", sheet$Sentrix_Position)
   } else {
     as.character(sheet$Sample_ID)
   }

@@ -48,6 +48,15 @@ CANONICAL_ROLES: Tuple[str, ...] = (
     "Sample_Name",
 )
 
+# Some cohorts (e.g. TCGA-derived exports) name their IDAT files after an opaque
+# per-sample prefix instead of ``<Sentrix_ID>_<Sentrix_Position>``, and carry that
+# prefix in a ``Basename`` column: the files are ``<Basename>_Grn.idat`` /
+# ``<Basename>_Red.idat``. When such a column is present it is authoritative for
+# locating the IDAT files (see ``r_backend/init_filter.R::prepare_targets``). We
+# keep it under this exact canonical name because the R backend matches it
+# literally (``"Basename" %in% colnames(sheet)``).
+BASENAME_COLUMN = "Basename"
+
 # Delimiters we try to detect in CSV uploads, most-specific first.
 _CSV_DELIMITERS = (";", "\t", ",")
 
@@ -73,6 +82,15 @@ _HEADER_ALIASES = {
     "sampleplate": "Sample_Plate",
     "poolid": "Pool_ID",
 }
+
+
+def _normalize_key(name: str) -> str:
+    """Normalize a header for alias/role lookup: trim, lowercase, drop spaces/underscores.
+
+    So ``"Sentrix Barcode"``, ``"sentrix_barcode"`` and ``"SentrixBarcode"`` all
+    collapse to the same lookup key.
+    """
+    return name.strip().lower().replace(" ", "").replace("_", "")
 
 
 def normalize_sample_sheet(
@@ -105,11 +123,29 @@ def normalize_sample_sheet(
     structural problem so the upload layer can surface it as a 400.
     """
     raw_headers, rows = read_sample_sheet_table(content, filename)
+    return build_canonical_csv(raw_headers, rows, column_mapping)
 
+
+def build_canonical_csv(
+    raw_headers: List[str],
+    rows: List[List[str]],
+    column_mapping: Optional[Dict[str, str]] = None,
+) -> str:
+    """Render already-parsed ``(raw_headers, rows)`` as the canonical CSV text.
+
+    This is the back-half of :func:`normalize_sample_sheet`, split out so callers
+    that have already read (and possibly filtered) the raw table — e.g. the commit
+    step, which drops rows that do not correspond to an uploaded IDAT pair — can
+    reuse the exact same header canonicalization without re-reading the source.
+    """
     if column_mapping:
         headers = _apply_explicit_mapping(raw_headers, column_mapping)
     else:
         headers = _canonicalize_headers(raw_headers)
+
+    # Regardless of path, normalize a Basename-like column to the exact canonical
+    # name so the R backend recognizes the alternative IDAT-naming convention.
+    headers = _canonicalize_basename(headers)
 
     return _write_canonical_csv(headers, rows)
 
@@ -163,11 +199,24 @@ def suggest_column_mapping(raw_headers: List[str]) -> Dict[str, str]:
     """
     suggestion: Dict[str, str] = {}
     for name in raw_headers:
-        key = name.strip().lower().replace(" ", "").replace("_", "")
-        role = _HEADER_ALIASES.get(key)
+        role = _HEADER_ALIASES.get(_normalize_key(name))
         if role in CANONICAL_ROLES and role not in suggestion:
             suggestion[role] = name.strip()
     return suggestion
+
+
+def find_basename_column(headers: List[str]) -> Optional[str]:
+    """Return the raw header that denotes the IDAT ``Basename``, or ``None``.
+
+    Detection is tolerant to case and spacing/underscores (``Basename``,
+    ``basename`` and ``Base Name`` all match), mirroring the alias handling used
+    for the other columns. The first match wins. The returned value is the
+    (whitespace-trimmed) raw header, so callers can look it up in the raw table.
+    """
+    for name in headers:
+        if _normalize_key(name) == _normalize_key(BASENAME_COLUMN):
+            return name.strip()
+    return None
 
 
 # ── Reading the various source formats into a string grid ──────────────────────
@@ -275,12 +324,33 @@ def _canonicalize_headers(headers: List[str]) -> List[str]:
     seen = set()
     for name in headers:
         cleaned = name.strip()
-        key = cleaned.lower().replace(" ", "").replace("_", "")
-        canonical = _HEADER_ALIASES.get(key, cleaned)
+        canonical = _HEADER_ALIASES.get(_normalize_key(name), cleaned)
         if canonical in seen and canonical != cleaned:
             canonical = cleaned  # avoid creating a duplicate canonical column
         result.append(canonical)
         seen.add(canonical)
+    return result
+
+
+def _canonicalize_basename(headers: List[str]) -> List[str]:
+    """Rename a Basename-like column to the exact canonical ``Basename``.
+
+    The R backend recognizes the alternative IDAT-naming convention by the literal
+    column name, so a column spelled ``basename`` / ``Base Name`` must be
+    normalized. This is a no-op when a canonical ``Basename`` is already present
+    or none is found; only the first match is renamed.
+    """
+    if BASENAME_COLUMN in headers:
+        return headers
+
+    result: List[str] = []
+    renamed = False
+    for name in headers:
+        if not renamed and _normalize_key(name) == _normalize_key(BASENAME_COLUMN):
+            result.append(BASENAME_COLUMN)
+            renamed = True
+        else:
+            result.append(name)
     return result
 
 

@@ -34,7 +34,7 @@ from app.models.upload import (
     SampleSheetCandidate,
     SuggestedMapping,
 )
-from app.services import staging_manager
+from app.services import intake_guards, staging_manager
 from app.services.archive_utils import ArchiveError, safe_extract_zip
 from app.services.samplesheet_normalizer import (
     read_sample_sheet_table,
@@ -69,6 +69,9 @@ async def inspect_upload(files: list[UploadFile]) -> InspectManifest:
     if not files:
         raise AppException(ErrorTypes.NO_SUPPORTED_FILES, "No files were uploaded.")
 
+    # Fail fast on a near-full volume, before streaming gigabytes we cannot store.
+    intake_guards.enforce_free_disk_space()
+
     session_id, session_dir = staging_manager.create_session()
     try:
         manifest = await asyncio.to_thread(_stage_and_build, files, session_id, session_dir)
@@ -76,6 +79,11 @@ async def inspect_upload(files: list[UploadFile]) -> InspectManifest:
     except (AppException, ArchiveError):
         staging_manager.delete_session(session_id)
         raise
+    except OSError as exc:
+        # A disk-write failure (most often ENOSPC) must become a structured error,
+        # not a bare 500. The partial staging dir is discarded with the session.
+        staging_manager.delete_session(session_id)
+        raise intake_guards.storage_error(exc) from exc
     except Exception:
         staging_manager.delete_session(session_id)
         logger.exception("Unexpected error during inspect: session_id=%s", session_id)

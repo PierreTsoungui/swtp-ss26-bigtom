@@ -16,6 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.services.samplesheet_normalizer import (
+    find_basename_column,
     normalize_sample_sheet,
     read_sample_sheet_table,
     suggest_column_mapping,
@@ -160,6 +161,42 @@ def test_basename_only_sheet_is_accepted():
     headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv"))
     assert headers == ["Basename"]
     assert rows == [["sample_1"], ["sample_2"]]
+
+
+# ── Basename naming convention (files are <Basename>_{Grn,Red}.idat) ────────────
+
+def test_basename_column_preserved_through_explicit_mapping():
+    # A real TCGA-style sheet: the IDATs are named after the Basename, not the
+    # (placeholder) Sentrix columns. The Basename column must survive the mapping
+    # verbatim so the R backend can use it to locate the files.
+    sheet = (
+        b"Basename,Sample_Name,Sample_Group,Sentrix_ID,Sample_Position\n"
+        b"uuid-1_noid,Sample_001,Normal,TEST288941,A01\n"
+    )
+    mapping = {
+        "Sentrix_ID": "Sentrix_ID",
+        "Sentrix_Position": "Sample_Position",
+        "Sample_Group": "Sample_Group",
+        "Sample_Name": "Sample_Name",
+    }
+    headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv", column_mapping=mapping))
+    assert "Basename" in headers
+    assert rows[0][headers.index("Basename")] == "uuid-1_noid"
+
+
+def test_basename_like_column_is_renamed_to_exact_canonical():
+    # R matches the column literally ("Basename"), so "base name" / "BASENAME"
+    # must be normalized to the exact canonical spelling.
+    sheet = b"base name,Sample_Name\nuuid-1_noid,S1\n"
+    headers, _ = parse_canonical(normalize_sample_sheet(sheet, "x.csv"))
+    assert "Basename" in headers
+    assert "base name" not in headers
+
+
+def test_find_basename_column_is_tolerant_and_none_when_absent():
+    assert find_basename_column(["Sample_Name", "Basename", "Chip"]) == "Basename"
+    assert find_basename_column(["Sample_Name", "base_name"]) == "base_name"
+    assert find_basename_column(["Sample_Name", "Sentrix_ID"]) is None
 
 
 # ── Explicit role mapping (user picks columns via dropdowns) ────────────────────
