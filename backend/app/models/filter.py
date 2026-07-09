@@ -1,9 +1,10 @@
 # app/models/filter.py
 """Request models for the filtering step.
 
-These mirror the filter options the frontend offers. Every numeric field clamps
-out-of-range or non-numeric input back to a safe default via a validator, so a
-malformed request can never push an invalid cutoff into the R filter script.
+Every numeric field validates its value against a documented, spec-aligned range
+(see Lastenheft FLT-06). A value outside the range raises a ValidationError that
+the route layer maps to HTTP 400. There are no silent defaults for out-of-range
+input — an invalid parameter always produces an error, never a quiet substitution.
 """
 from pydantic import BaseModel, Field, field_validator
 
@@ -17,14 +18,14 @@ class FilterDetP(BaseModel):
     @field_validator("cutoff", mode="before")
     @classmethod
     def validate_cutoff(cls, v):
-        """Clamp the cutoff to [0.01, 0.05]; fall back to the default otherwise."""
+        """Reject cutoff values outside [0.01, 0.05]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.05:
-                return v
         except (TypeError, ValueError):
-            pass
-        return 0.01
+            raise ValueError("cutoff must be a number")
+        if not (0.01 <= v <= 0.05):
+            raise ValueError(f"cutoff must be between 0.01 and 0.05, got {v}")
+        return v
 
 
 class FilterBeadCount(BaseModel):
@@ -36,14 +37,14 @@ class FilterBeadCount(BaseModel):
     @field_validator("bead_cutoff", mode="before")
     @classmethod
     def validate_bead_cutoff(cls, v):
-        """Clamp the bead cutoff to [0.01, 0.1]; fall back to the default otherwise."""
+        """Reject bead_cutoff values outside [0.0, 1.0]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.1:
-                return v
         except (TypeError, ValueError):
-            pass
-        return 0.05
+            raise ValueError("bead_cutoff must be a number")
+        if not (0.0 <= v <= 1.0):
+            raise ValueError(f"bead_cutoff must be between 0.0 and 1.0, got {v}")
+        return v
 
 
 class FilterNonCpg(BaseModel):
@@ -61,14 +62,14 @@ class FilterSnp(BaseModel):
     @field_validator("maf_cutoff", mode="before")
     @classmethod
     def validate_maf_cutoff(cls, v):
-        """Clamp the MAF cutoff to [0.01, 0.1]; fall back to the default otherwise."""
+        """Reject maf_cutoff values outside [0.0, 0.5]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.1:
-                return v
         except (TypeError, ValueError):
-            pass
-        return 0.05
+            raise ValueError("maf_cutoff must be a number")
+        if not (0.0 <= v <= 0.5):
+            raise ValueError(f"maf_cutoff must be between 0.0 and 0.5, got {v}")
+        return v
 
 
 class FilterMultiHit(BaseModel):
@@ -95,26 +96,26 @@ class FilterSampleQuality(BaseModel):
     @field_validator("detection_p_cutoff", mode="before")
     @classmethod
     def validate_detection_p_cutoff(cls, v):
-        """Clamp the detection p-value cutoff to [0.01, 0.05]; else use the default."""
+        """Reject detection_p_cutoff values outside [0.01, 0.05]."""
         try:
             v = float(v)
-            if 0.01 <= v <= 0.05:
-                return v
         except (TypeError, ValueError):
-            pass
-        return 0.01
+            raise ValueError("detection_p_cutoff must be a number")
+        if not (0.01 <= v <= 0.05):
+            raise ValueError(f"detection_p_cutoff must be between 0.01 and 0.05, got {v}")
+        return v
 
     @field_validator("sample_failure_rate", mode="before")
     @classmethod
     def validate_sample_failure_rate(cls, v):
-        """Clamp the sample failure rate to [0.05, 0.2]; else use the default."""
+        """Reject sample_failure_rate values outside [0.05, 0.2]."""
         try:
             v = float(v)
-            if 0.05 <= v <= 0.2:
-                return v
         except (TypeError, ValueError):
-            pass
-        return 0.10
+            raise ValueError("sample_failure_rate must be a number")
+        if not (0.05 <= v <= 0.2):
+            raise ValueError(f"sample_failure_rate must be between 0.05 and 0.2, got {v}")
+        return v
 
 
 class FilterSettings(BaseModel):

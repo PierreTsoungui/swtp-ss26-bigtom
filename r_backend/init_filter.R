@@ -368,6 +368,44 @@ prepare_targets <- function(sheet, job_dir) {
 }
 
 
+#' Verify every sample's IDAT comes from the same array platform.
+#'
+#' minfi's \code{read.metharray.exp} cannot combine IDAT files of different array
+#' types — their bead-address counts differ — and fails with an opaque error that
+#' surfaces to the user as "the files may be corrupted". Reading the cheap
+#' per-file probe count (\code{idat_probe_count}) up front lets us reject a mixed
+#' upload with a precise, actionable message that names the affected samples.
+#'
+#' @param targets Sample sheet with an absolute \code{Basename} column (as
+#'   returned by \code{prepare_targets}).
+#' @return Invisibly \code{TRUE}; emits a fatal error when array types are mixed.
+assert_uniform_array_type <- function(targets) {
+  grn_files <- paste0(targets$Basename, "_Grn.idat")
+  counts <- vapply(grn_files, idat_probe_count, integer(1L), USE.NAMES = FALSE)
+
+  labels <- if ("Sample_Name" %in% colnames(targets)) {
+    as.character(targets$Sample_Name)
+  } else {
+    basename(as.character(targets$Basename))
+  }
+
+  known <- !is.na(counts)
+  distinct <- sort(unique(counts[known]))
+  if (length(distinct) > 1L) {
+    groups <- vapply(distinct, function(cnt) {
+      sprintf("%d probes (%s)", cnt, paste(labels[known & counts == cnt], collapse = ", "))
+    }, character(1L))
+    emit_error(paste0(
+      "The uploaded IDAT files come from different array types and cannot be ",
+      "analyzed together. Every sample must be from the same platform (450K, ",
+      "EPIC, or EPICv2). Detected: ", paste(groups, collapse = " vs. "), "."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ── Probe filters (pure: each returns the probe IDs to remove) ─────────────────
 
 #' Probes whose detection p-value exceeds the cutoff in any sample.
@@ -837,6 +875,10 @@ main <- function(sample_sheet_path, job_dir) {
     error = function(e) emit_error(conditionMessage(e))
   )
   emit_progress(9, paste("Basename example:", targets$Basename[1]))
+
+  # Fail fast on a mixed-platform upload: minfi cannot combine IDATs of different
+  # array types and would otherwise abort with an opaque "corrupted files" error.
+  assert_uniform_array_type(targets)
 
   # Load IDAT files into a raw RGChannelSet.
   emit_progress(10, "Loading IDAT files")

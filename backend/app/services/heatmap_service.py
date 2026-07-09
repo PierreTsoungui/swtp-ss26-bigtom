@@ -15,6 +15,7 @@ from app.models.heatmap import GroupingPayload
 from app.services.table_filter import apply_filters
 from app.services.r_executor import run_r_script, HeatmapCommand
 from app.services.job_paths import JOBS_DIR, resolve_job_dir
+from app.services.samplesheet_normalizer import BASENAME_COLUMN
 from app.services.samplesheet_parser import read_data_section, columns_by_index
 from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
 
@@ -366,6 +367,8 @@ def find_annotation_columns(job_dir: Path) -> list[dict]:
         for i, header in enumerate(headers):
             values = col_values[i]
             if not values:        # fully empty column → nothing to annotate
+                continue
+            if header == BASENAME_COLUMN:  # system file-location key, not biology
                 continue
             n_distinct = len(set(values))
             columns.append({

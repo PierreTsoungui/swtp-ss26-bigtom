@@ -12,6 +12,7 @@ so it is strictly validated as a UUID and the resolved directory must stay
 inside ``STAGING_BASE_DIR`` — a session id can never be used for path traversal.
 """
 import logging
+import os
 import shutil
 import time
 import uuid
@@ -57,18 +58,32 @@ def _resolve_session_dir(session_id: str) -> Path:
 
 
 def _is_expired(session_dir: Path) -> bool:
-    age_seconds = time.time() - session_dir.stat().st_mtime
-    return age_seconds > STAGING_RETENTION_HOURS * 3600
+    try:
+        age_seconds = time.time() - session_dir.stat().st_mtime
+        return age_seconds > STAGING_RETENTION_HOURS * 3600
+    except OSError:
+        return True  # concurrent cleanup already removed the directory
 
 
 def require_session(session_id: str) -> Path:
-    """Return the session directory, or raise NOT_FOUND / EXPIRED."""
+    """Return the session directory, or raise NOT_FOUND / EXPIRED.
+
+    Every successful call touches the directory mtime so that the TTL window
+    slides forward with each user interaction (rolling expiry).  A user who is
+    actively reviewing the inspect result never loses the session mid-workflow;
+    only truly abandoned sessions expire after STAGING_RETENTION_HOURS of
+    inactivity.
+    """
     session_dir = _resolve_session_dir(session_id)
     if not session_dir.is_dir():
         raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Upload session not found: {session_id}")
     if _is_expired(session_dir):
         delete_session(session_id)
         raise AppException(ErrorTypes.SESSION_EXPIRED, "The upload session has expired.")
+    try:
+        os.utime(session_dir, None)  # rolling TTL: reset expiry on every access
+    except OSError:
+        pass  # concurrent cleanup already removed the directory; next call will return NOT_FOUND
     return session_dir
 
 

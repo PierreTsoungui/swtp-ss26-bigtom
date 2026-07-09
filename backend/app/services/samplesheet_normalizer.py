@@ -48,13 +48,19 @@ CANONICAL_ROLES: Tuple[str, ...] = (
     "Sample_Name",
 )
 
-# Some cohorts (e.g. TCGA-derived exports) name their IDAT files after an opaque
-# per-sample prefix instead of ``<Sentrix_ID>_<Sentrix_Position>``, and carry that
-# prefix in a ``Basename`` column: the files are ``<Basename>_Grn.idat`` /
-# ``<Basename>_Red.idat``. When such a column is present it is authoritative for
-# locating the IDAT files (see ``r_backend/init_filter.R::prepare_targets``). We
-# keep it under this exact canonical name because the R backend matches it
-# literally (``"Basename" %in% colnames(sheet)``).
+# The reserved column that every canonical sheet carries as the single,
+# authoritative IDAT file-location contract. The files on disk are
+# ``<Basename>_Grn.idat`` / ``<Basename>_Red.idat``, and the R backend reads
+# ONLY this column to locate them (``"Basename" %in% colnames(sheet)``); minfi
+# then names each loaded sample ``basename(Basename)``.
+#
+# Different cohorts encode the file prefix differently — a ``Sentrix_ID`` +
+# ``Sentrix_Position`` pair (the classic chip layout), or an opaque per-sample
+# id in an explicit ``Basename`` column (e.g. TCGA ``<uuid>_noid`` exports). We
+# resolve whichever convention the source sheet uses ONCE, here at upload time
+# (see :func:`_resolve_linkage_keys`), and write the result into this one column.
+# Downstream therefore never needs to know how the prefix was derived, and a new
+# convention (e.g. a ``Filename`` column) is a single branch in the resolver.
 BASENAME_COLUMN = "Basename"
 
 # Delimiters we try to detect in CSV uploads, most-specific first.
@@ -138,6 +144,12 @@ def build_canonical_csv(
     step, which drops rows that do not correspond to an uploaded IDAT pair — can
     reuse the exact same header canonicalization without re-reading the source.
     """
+    # Derive the IDAT file-location contract from the RAW sheet FIRST, before any
+    # role renaming can consume its source column (e.g. a user mapping the
+    # Sample_Name role onto the sheet's Basename column). The result is installed
+    # into the reserved Basename column below, independent of the role mapping.
+    linkage = _resolve_linkage_keys(raw_headers, rows, column_mapping)
+
     if column_mapping:
         headers = _apply_explicit_mapping(raw_headers, column_mapping)
     else:
@@ -146,6 +158,8 @@ def build_canonical_csv(
     # Regardless of path, normalize a Basename-like column to the exact canonical
     # name so the R backend recognizes the alternative IDAT-naming convention.
     headers = _canonicalize_basename(headers)
+
+    headers, rows = _install_basename_contract(headers, rows, linkage)
 
     return _write_canonical_csv(headers, rows)
 
@@ -217,6 +231,105 @@ def find_basename_column(headers: List[str]) -> Optional[str]:
         if _normalize_key(name) == _normalize_key(BASENAME_COLUMN):
             return name.strip()
     return None
+
+
+# ── IDAT file-location contract ────────────────────────────────────────────────
+
+def _resolve_linkage_keys(
+    raw_headers: List[str],
+    rows: List[List[str]],
+    column_mapping: Optional[Dict[str, str]],
+) -> Optional[List[str]]:
+    """Derive the per-row IDAT file-location prefix from the raw sheet.
+
+    Returns one prefix per row — the value written into the reserved
+    :data:`BASENAME_COLUMN` — or ``None`` when the sheet carries none of the
+    supported linkage conventions (in which case no contract column is written
+    and the R backend resolves/reports it on its own).
+
+    The conventions are tried in priority order; the FIRST one a sheet satisfies
+    wins. This is the single place in the whole pipeline that knows how IDAT files
+    are located, so supporting another convention later (e.g. a ``Filename``
+    column) means adding one branch here — no R or downstream change is required.
+    """
+    # 1. An explicit Basename column is authoritative when present (e.g. TCGA
+    #    ``<uuid>_noid`` exports whose Sentrix columns are placeholders).
+    basename_col = find_basename_column(raw_headers)
+    if basename_col is not None:
+        idx = raw_headers.index(basename_col)
+        return [_cell(row, idx) for row in rows]
+
+    # 2. The classic chip layout: ``<Sentrix_ID>_<Sentrix_Position>``.
+    id_col, pos_col = _resolve_sentrix_columns(raw_headers, column_mapping)
+    if id_col is not None and pos_col is not None:
+        i, p = raw_headers.index(id_col), raw_headers.index(pos_col)
+        keys = []
+        for row in rows:
+            chip, pos = _cell(row, i), _cell(row, p)
+            keys.append(f"{chip}_{pos}" if chip and pos else "")
+        return keys
+
+    # (Future conventions — e.g. a ``Filename`` column — slot in here.)
+    return None
+
+
+def _resolve_sentrix_columns(
+    raw_headers: List[str], column_mapping: Optional[Dict[str, str]]
+) -> Tuple[Optional[str], Optional[str]]:
+    """Return the raw ``(Sentrix_ID, Sentrix_Position)`` column names, or ``(None, None)``.
+
+    Uses the explicit user mapping when given, otherwise the Illumina alias table,
+    mirroring how :func:`build_canonical_csv` renames these columns — so the value
+    written into the contract column always matches the ``Sentrix_ID`` /
+    ``Sentrix_Position`` columns that end up in the canonical sheet.
+    """
+    if column_mapping:
+        id_col = column_mapping.get("Sentrix_ID")
+        pos_col = column_mapping.get("Sentrix_Position")
+    else:
+        suggested = suggest_column_mapping(raw_headers)
+        id_col = suggested.get("Sentrix_ID")
+        pos_col = suggested.get("Sentrix_Position")
+    if id_col in raw_headers and pos_col in raw_headers:
+        return id_col, pos_col
+    return None, None
+
+
+def _install_basename_contract(
+    headers: List[str], rows: List[List[str]], linkage: Optional[List[str]]
+) -> Tuple[List[str], List[List[str]]]:
+    """Guarantee a single reserved ``Basename`` column holding the linkage keys.
+
+    Applied AFTER the role mapping, so mapping a role onto the source Basename
+    column can never strip the file-location contract: the column is (re)written
+    here from the linkage computed off the raw sheet. A no-op when the linkage
+    could not be derived (``None``).
+    """
+    if linkage is None:
+        return headers, rows
+
+    if BASENAME_COLUMN in headers:
+        idx = headers.index(BASENAME_COLUMN)
+        rows = [_with_value(row, idx, linkage[r]) for r, row in enumerate(rows)]
+        return headers, rows
+
+    headers = headers + [BASENAME_COLUMN]
+    rows = [row + [linkage[r]] for r, row in enumerate(rows)]
+    return headers, rows
+
+
+def _cell(row: List[str], idx: int) -> str:
+    """Whitespace-trimmed value at ``idx``, or ``""`` when the row is short."""
+    return row[idx].strip() if idx < len(row) else ""
+
+
+def _with_value(row: List[str], idx: int, value: str) -> List[str]:
+    """Return a copy of ``row`` with ``row[idx] = value`` (padding when short)."""
+    row = list(row)
+    while len(row) <= idx:
+        row.append("")
+    row[idx] = value
+    return row
 
 
 # ── Reading the various source formats into a string grid ──────────────────────
