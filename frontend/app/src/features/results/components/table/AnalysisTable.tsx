@@ -90,7 +90,7 @@ export function AnalysisTable({
             ref={tableContainerRef}
             sx={{
               position: "relative",
-              // Scroll-Schatten auf der rechten Seite
+              // Scrolling Shadow on right side
               ...(canScrollRight && {
                 "&::after": {
                   content: '""',

@@ -47,7 +47,6 @@ export function useNormalizationPreview(jobId: string | null): Result {
       return (await res.json()) as NormalizationPreview;
     },
     [jobId],
-    // Unwrap the structured problem so the page can render it directly.
     {
       enabled: jobId != null,
       mapError: (e) => (e instanceof ProblemError ? e.problem : (e as PreviewError)),

@@ -9,7 +9,6 @@ interface FilteringStatsProps {
   stats: FilteringStatsType | null | undefined;
 }
 
-// Formatter for localized number strings (English locale for consistent technical output)
 const numberFormatter = new Intl.NumberFormat("en-US");
 
 /** Formats large numbers with thousands separators. */
@@ -44,7 +43,6 @@ export function FilteringStats({ stats }: FilteringStatsProps) {
     );
   }
 
-  // Derive the ordered table rows for the enabled probe filters (see filterSteps).
   const filterSteps = buildFilterSteps(stats);
   const hasSampleQuality = stats.sample_quality?.enabled;
 

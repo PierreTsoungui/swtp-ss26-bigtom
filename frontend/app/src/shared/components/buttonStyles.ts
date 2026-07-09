@@ -31,8 +31,6 @@ export type ButtonVariant = "primary" | "secondary" | "danger";
  */
 export type ButtonSize = "sm" | "md" | "lg" | "icon";
 
-// Shared by every button: consistent shape (rounded-md), a 1px border, the same
-// colour transition, a single focus ring and a single disabled treatment.
 const BASE =
   "inline-flex items-center justify-center gap-2 rounded-md border font-semibold " +
   "transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 " +
@@ -45,9 +43,6 @@ const SIZES: Record<ButtonSize, string> = {
   icon: "h-9 w-9 text-lg leading-none",
 };
 
-// Every variant defines the same set of properties (border colour, background,
-// text colour, and the hover response), so the hover reaction is uniform: filled
-// variants darken, the outline variant fills subtly. Only the colour differs.
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
     "border-primary bg-primary text-primary-text hover:border-primary-hover hover:bg-primary-hover",

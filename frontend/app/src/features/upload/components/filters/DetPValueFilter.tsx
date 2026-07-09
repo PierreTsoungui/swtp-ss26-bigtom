@@ -77,9 +77,6 @@ export function DetPValueFilter({ value, onChange }: DetPValueFilterProps) {
             error={!validation.isValid}
             helperText={validation.error || constraints.description}
           />
-          {/*<Box sx={{ fontSize: "0.75rem", color: "text.secondary" }}>
-                        Valid: {constraints.min} - {constraints.max}
-                    </Box>*/}
         </Stack>
       </AccordionDetails>
     </Accordion>

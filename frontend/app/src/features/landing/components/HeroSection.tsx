@@ -48,8 +48,6 @@ export function HeroSection() {
         </div>
 
         <div className="mt-12 flex justify-center">
-          {/* The landing call-to-action reuses the shared button styling for
-              consistency, and is the single button allowed to carry a glow. */}
           <Link
             to="/upload"
             className={buttonClasses(

@@ -31,7 +31,6 @@ export function filterStatsAvailable(status: JobStatus | null): boolean {
     return status.status === JobStatusValue.COMPLETED;
   }
 
-  // Any phase after filtering: the statistics already exist.
   return true;
 }
 

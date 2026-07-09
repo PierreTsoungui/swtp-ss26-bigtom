@@ -35,8 +35,6 @@ export async function readApiError(response: Response, fallback: string): Promis
     const raw = await response.text();
     if (raw) {
       try {
-        // The body is untrusted and may be malformed, so every RFC-9457 field
-        // is treated as optional (`Partial`) regardless of the canonical type.
         const body = JSON.parse(raw) as Partial<ProblemDetail>;
         const message = body.detail?.trim() || body.title?.trim();
         if (message) return message;

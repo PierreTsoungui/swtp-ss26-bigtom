@@ -93,12 +93,7 @@ export function useBatchCorrection(jobId: string | undefined): UseBatchCorrectio
   }, [jobId]);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect --
-       Canonical data-fetching effect: it drives loading/data/error state from an
-       asynchronous request whenever the target job changes. `fetchHistory` is a
-       stable `useCallback` keyed by `jobId`. */
     void fetchHistory();
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [fetchHistory]);
 
   const runBatch = useCallback(
@@ -147,8 +142,6 @@ export function useBatchCorrection(jobId: string | undefined): UseBatchCorrectio
         const res = await fetch(`${API_BASE}/batch/${jobId}/skip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          // The group selection makes Δβ deterministic (case − control). Sent
-          // only when the user picked one; otherwise the backend auto-detects.
           body: groupSelection ? JSON.stringify(groupSelection) : undefined,
         });
 

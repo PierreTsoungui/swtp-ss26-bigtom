@@ -36,10 +36,6 @@ export const useGenerateHeatMap = (jobId: string | null) => {
         body: JSON.stringify(payload),
       });
 
-      // Read the error body defensively: a server fault may return a
-      // non-JSON body, so we must not blindly call response.json() before
-      // confirming success (that is what produced the opaque
-      // "JSON.parse: unexpected character" error users reported).
       if (!response.ok) {
         throw new Error(await readApiError(response, "Heatmap generation failed"));
       }

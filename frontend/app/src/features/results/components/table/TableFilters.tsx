@@ -206,12 +206,10 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
 }: TableFiltersProps<T>) {
   const [showFilters, setShowFilters] = useState(false);
 
-  // A single typed view of the filter values for keyed reads and validation.
   const filterValues = filters as Record<string, string>;
 
   const hasFilters = Object.values(filters).some((value) => value !== "" && value !== null);
 
-  // Count the active (non-empty) filters for the badge.
   const activeFilterCount = Object.values(filters).filter((v) => v !== "" && v !== null).length;
 
   const filterDefs = FILTER_DEFINITIONS[table];
@@ -220,8 +218,6 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
     onChange(key as keyof T, value);
   };
 
-  // Typed validation so a non-number (or out-of-range / start>stop) shows a clear
-  // message and blocks Apply — instead of silently sending a bad request.
   const errors = validateFilters(filterValues, filterDefs);
   const hasErrors = Object.keys(errors).length > 0;
 
@@ -269,9 +265,6 @@ export function TableFilters<T extends DmpFilters | DmrFilters>({
                     ))}
                   </select>
                 ) : (
-                  // Numeric fields are rendered as text so an invalid entry
-                  // (e.g. "abc") stays visible and can be flagged, rather
-                  // than being silently dropped by a native number input.
                   <input
                     type="text"
                     inputMode={filterDef.type === "number" ? "decimal" : "text"}

@@ -30,7 +30,6 @@ function ErrorMessage({ open, vertical, horizontal, error, onClose }: ErrorMessa
     }
 
     if (typeof error === "object" && "title" in error && "detail" in error) {
-      // Narrowed to ProblemDetail by the `in` checks above.
       return `${error.title}: ${error.detail}`;
     }
 

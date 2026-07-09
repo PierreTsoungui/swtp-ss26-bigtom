@@ -45,9 +45,6 @@ export function StepIndicator({ currentStepId }: StepIndicatorProps) {
                       : "border-neutral-textSecondary bg-neutral-card text-neutral-textSecondary"
                 }`}
               >
-                {/* A completed step shows only the check mark; otherwise the
-                    number. Rendering just one glyph keeps it perfectly centered
-                    (previously the number + check shifted the number sideways). */}
                 {isCompleted ? (
                   <span aria-hidden="true" className="leading-none">
                     ✓

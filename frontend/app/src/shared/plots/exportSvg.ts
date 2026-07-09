@@ -33,7 +33,6 @@ export function exportSvgAsPng(
         return;
       }
 
-      // Ensure solid white background for print (prevent transparency).
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
