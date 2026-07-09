@@ -1,15 +1,16 @@
 # app/services/normalize_service.py
 """Normalization pipeline: run normalize.R (or copy raw) then the round-0 SVD."""
+
 import asyncio
 import logging
 import os
 import shutil
 
-from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
+from app.services.job_manager import JobPhase, JobStatusValue, set_progress, transition_job
 from app.services.job_paths import JOBS_DIR
+from app.services.pipeline_outcome import StepOutcome, handle_step_result, progress_fields
+from app.services.r_executor import BatchInitCommand, NormalizationCommand, run_r_script
 from app.services.samplesheet_parser import find_sample_sheet_name
-from app.services.pipeline_outcome import progress_fields, handle_step_result, StepOutcome
-from app.services.r_executor import run_r_script, NormalizationCommand, BatchInitCommand
 
 logger = logging.getLogger(__name__)
 
@@ -82,16 +83,19 @@ async def _run_normalization_step(
         on_progress=on_progress,
     )
 
-    if handle_step_result(
-        job_id,
-        result,
-        phase=JobPhase.NORMALIZATION,
-        fallback="normalize.R exited with an error.",
-        timeout_step="Error: normalize.R exceeded its time limit.",
-        timeout_detail="Normalization timeout.",
-        failure_step="Error during normalization.",
-        cancel_log=f"Normalization R script cancelled: job_id={job_id}",
-    ) is not StepOutcome.SUCCESS:
+    if (
+        handle_step_result(
+            job_id,
+            result,
+            phase=JobPhase.NORMALIZATION,
+            fallback="normalize.R exited with an error.",
+            timeout_step="Error: normalize.R exceeded its time limit.",
+            timeout_detail="Normalization timeout.",
+            failure_step="Error during normalization.",
+            cancel_log=f"Normalization R script cancelled: job_id={job_id}",
+        )
+        is not StepOutcome.SUCCESS
+    ):
         return False
 
     transition_job(
@@ -108,7 +112,7 @@ async def _copy_raw_data(job_id: str, job_dir: str) -> bool:
     """Provide raw data unchanged (method == 'raw'): copy filtered → normalized."""
     set_progress(job_id, percent=0, message="Copying the filtered raw data...")
 
-    filtered   = os.path.join(job_dir, "filtered_data.rds")
+    filtered = os.path.join(job_dir, "filtered_data.rds")
     normalized = os.path.join(job_dir, "normalized_data.rds")
 
     if not os.path.exists(filtered):
@@ -176,16 +180,19 @@ async def _run_svd_step(
         on_progress=on_progress,
     )
 
-    if handle_step_result(
-        job_id,
-        result,
-        phase=JobPhase.SVD,
-        fallback="batch_svd.R exited with an error.",
-        timeout_step="Error: batch_svd.R exceeded its time limit.",
-        timeout_detail="SVD plot timeout.",
-        failure_step="Error during SVD plot generation (round 0).",
-        cancel_log=f"SVD plot cancelled: job_id={job_id}",
-    ) is not StepOutcome.SUCCESS:
+    if (
+        handle_step_result(
+            job_id,
+            result,
+            phase=JobPhase.SVD,
+            fallback="batch_svd.R exited with an error.",
+            timeout_step="Error: batch_svd.R exceeded its time limit.",
+            timeout_detail="SVD plot timeout.",
+            failure_step="Error during SVD plot generation (round 0).",
+            cancel_log=f"SVD plot cancelled: job_id={job_id}",
+        )
+        is not StepOutcome.SUCCESS
+    ):
         return
 
     transition_job(

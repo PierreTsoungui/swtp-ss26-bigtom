@@ -3,6 +3,7 @@
 Covers the failure/timeout message classification and the cancel/timeout/failure
 policy that every pipeline service relies on.
 """
+
 import pytest
 
 from app.services import job_manager
@@ -17,15 +18,14 @@ from app.services.r_executor import ExecutionResult, ExecutionStatus
 
 
 def _result(status, *, returncode=0, stdout="", stderr="", extra=None):
-    result = ExecutionResult(
-        status=status, returncode=returncode, stdout=stdout, stderr=stderr
-    )
+    result = ExecutionResult(status=status, returncode=returncode, stdout=stdout, stderr=stderr)
     if extra:
         result.extra.update(extra)
     return result
 
 
 # ── failure_detail ────────────────────────────────────────────────────────────
+
 
 def test_timeout_returns_the_timeout_message_not_stderr():
     result = _result(ExecutionStatus.TIMEOUT, stderr="Loading required package: minfi")
@@ -58,14 +58,13 @@ def test_fallback_is_used_when_nothing_available():
 
 # ── progress_fields ───────────────────────────────────────────────────────────
 
+
 def test_progress_fields_reads_primary_keys():
     assert progress_fields({"percent": 50, "message": "step"}) == (50, "step")
 
 
 def test_progress_fields_reads_alternative_keys():
-    assert progress_fields(
-        {"progress_percent": 30, "current_step": "other"}
-    ) == (30, "other")
+    assert progress_fields({"progress_percent": 30, "current_step": "other"}) == (30, "other")
 
 
 def test_progress_fields_defaults_on_missing_keys():
@@ -73,6 +72,7 @@ def test_progress_fields_defaults_on_missing_keys():
 
 
 # ── handle_step_result ────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def running_job():

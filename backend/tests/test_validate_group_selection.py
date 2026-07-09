@@ -2,18 +2,14 @@
 
 Verifies each rejection path for the DMP/DMR comparison-group selection.
 """
+
 import pytest
 
 from app.core.error_types import AppException, ErrorTypes
 from app.services.batch_service import validate_group_selection
 
 SHEET = (
-    "[Data]\n"
-    "Sample_Name,Sample_Group\n"
-    "S1,case\n"
-    "S2,control\n"
-    "S3,case\n"
-    "S4,control\n"
+    "[Data]\n" "Sample_Name,Sample_Group\n" "S1,case\n" "S2,control\n" "S3,case\n" "S4,control\n"
 )
 
 

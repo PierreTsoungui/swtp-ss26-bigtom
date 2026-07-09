@@ -1,10 +1,13 @@
 # app/api/routes/filter.py
 """Route for retrieving the filter statistics of a job."""
+
 import json
+
 from fastapi import APIRouter, HTTPException, Request
-from app.services.job_manager import get_job, JobPhase, JobStatusValue
-from app.services.job_paths import JOBS_DIR, validate_job_id
+
 from app.core.error_types import ErrorTypes, problem_detail
+from app.services.job_manager import JobPhase, JobStatusValue, get_job
+from app.services.job_paths import JOBS_DIR, validate_job_id
 
 router = APIRouter()
 
@@ -82,5 +85,5 @@ async def get_filter_stats(request: Request, job_id: str):
             ),
         )
 
-    with open(stats_path, "r", encoding="utf-8") as f:
+    with open(stats_path, encoding="utf-8") as f:
         return json.load(f)

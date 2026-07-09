@@ -11,12 +11,14 @@ Security: ``session_id`` always comes from the client on commit/preview/delete,
 so it is strictly validated as a UUID and the resolved directory must stay
 inside ``STAGING_BASE_DIR`` — a session id can never be used for path traversal.
 """
+
+import contextlib
 import logging
 import os
 import shutil
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.config import STAGING_BASE_DIR, STAGING_RETENTION_HOURS
@@ -80,17 +82,17 @@ def require_session(session_id: str) -> Path:
     if _is_expired(session_dir):
         delete_session(session_id)
         raise AppException(ErrorTypes.SESSION_EXPIRED, "The upload session has expired.")
-    try:
+    # Concurrent cleanup may have already removed the directory; suppress the
+    # OSError — the next call will return NOT_FOUND via the is_dir() check above.
+    with contextlib.suppress(OSError):
         os.utime(session_dir, None)  # rolling TTL: reset expiry on every access
-    except OSError:
-        pass  # concurrent cleanup already removed the directory; next call will return NOT_FOUND
     return session_dir
 
 
 def expires_at(session_dir: Path) -> str:
     """ISO-8601 expiry timestamp for a session directory (UTC)."""
     expiry = session_dir.stat().st_mtime + STAGING_RETENTION_HOURS * 3600
-    return datetime.fromtimestamp(expiry, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(expiry, tz=UTC).isoformat()
 
 
 def delete_session(session_id: str) -> None:

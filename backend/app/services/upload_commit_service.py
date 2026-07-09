@@ -7,6 +7,7 @@ canonical ``SampleSheet.csv``), persists the filter settings and creates the
 job. The route then launches the existing filtering pipeline. The staging
 directory is removed on success.
 """
+
 import logging
 import shutil
 import uuid
@@ -44,7 +45,9 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
             instance,
         )
 
-    selected_pairs = _resolve_selected_pairs(req.selected_pair_ids, internal.get("pairs", {}), instance)
+    selected_pairs = _resolve_selected_pairs(
+        req.selected_pair_ids, internal.get("pairs", {}), instance
+    )
 
     # Intake guards — reject an oversized cohort or a full disk BEFORE building
     # the job dir, so the pipeline never starts work it cannot finish within the
@@ -96,6 +99,7 @@ def persist_committed_job(req: CommitRequest, instance: str) -> tuple[str, Path]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _resolve_selected_pairs(pair_ids: list[str], pair_map: dict, instance: str) -> list[dict]:
     if not pair_ids:
         raise AppException(ErrorTypes.NO_IDAT_FILES, "No IDAT pair was selected.", instance)
@@ -104,9 +108,13 @@ def _resolve_selected_pairs(pair_ids: list[str], pair_map: dict, instance: str) 
     for pid in pair_ids:
         pair = pair_map.get(pid)
         if pair is None:
-            raise AppException(ErrorTypes.INVALID_SELECTION, f"Unknown IDAT pair: {pid!r}", instance)
+            raise AppException(
+                ErrorTypes.INVALID_SELECTION, f"Unknown IDAT pair: {pid!r}", instance
+            )
         if not pair.get("grn") or not pair.get("red"):
-            raise AppException(ErrorTypes.UNPAIRED_IDATS, f"IDAT pair is incomplete: {pid!r}", instance)
+            raise AppException(
+                ErrorTypes.UNPAIRED_IDATS, f"IDAT pair is incomplete: {pid!r}", instance
+            )
         resolved.append(pair)
     return resolved
 
@@ -145,13 +153,17 @@ def _build_canonical_sheet(
     """
     src = (session_dir / sheet_rel).resolve()
     if not src.is_relative_to(session_dir.resolve()) or not src.is_file():
-        raise AppException(ErrorTypes.INVALID_SELECTION, f"Sample sheet not in staging: {sheet_rel!r}", instance)
+        raise AppException(
+            ErrorTypes.INVALID_SELECTION, f"Sample sheet not in staging: {sheet_rel!r}", instance
+        )
 
     content = src.read_bytes()
     try:
         raw_headers, rows = read_sample_sheet_table(content, Path(sheet_rel).name)
     except ValueError as exc:
-        raise AppException(ErrorTypes.INVALID_CSV_CONTENT, f"Sample sheet could not be read: {exc}", instance) from exc
+        raise AppException(
+            ErrorTypes.INVALID_CSV_CONTENT, f"Sample sheet could not be read: {exc}", instance
+        ) from exc
 
     role_map = mapping.as_role_dict()
     missing = [raw for raw in role_map.values() if raw not in raw_headers]
@@ -164,7 +176,9 @@ def _build_canonical_sheet(
         )
 
     basename_col = find_basename_column(raw_headers)
-    kept_rows = _select_matching_rows(raw_headers, rows, mapping, basename_col, selected_pair_ids, instance)
+    kept_rows = _select_matching_rows(
+        raw_headers, rows, mapping, basename_col, selected_pair_ids, instance
+    )
 
     return build_canonical_csv(raw_headers, kept_rows, column_mapping=role_map)
 
@@ -216,7 +230,12 @@ def _select_matching_rows(
     pos_idx = raw_headers.index(mapping.sentrix_position)
 
     def _array_id(row: list[str]) -> str:
-        if id_idx < len(row) and pos_idx < len(row) and _clean(row[id_idx]) and _clean(row[pos_idx]):
+        if (
+            id_idx < len(row)
+            and pos_idx < len(row)
+            and _clean(row[id_idx])
+            and _clean(row[pos_idx])
+        ):
             return f"{_clean(row[id_idx])}_{_clean(row[pos_idx])}"
         return ""
 

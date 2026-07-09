@@ -1,33 +1,35 @@
 # app/services/batch_service.py
 """Batch-correction and downstream-analysis services, plus sample-sheet helpers."""
+
 import asyncio
 import logging
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from app.core.atomic_io import write_json_atomic, read_json_or_default
+from app.core.atomic_io import read_json_or_default, write_json_atomic
 from app.core.config import DMR_CORES
 from app.core.error_types import BatchException, ErrorTypes
-from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
+from app.services.job_manager import JobPhase, JobStatusValue, set_progress, transition_job
 from app.services.job_paths import JOBS_DIR, resolve_job_dir
+from app.services.pipeline_outcome import (
+    StepOutcome,
+    failure_detail,
+    handle_step_result,
+    progress_fields,
+)
+from app.services.r_executor import (
+    BatchCorrectionCommand,
+    BetaExtractionCommand,
+    DmpAnalysisCommand,
+    DmrAnalysisCommand,
+    SvdPlotCommand,
+    run_r_script,
+)
+
 # find_sample_sheet_name is re-exported here so existing importers
 # (heatmap/normalize services, routes) keep resolving it from batch_service.
 from app.services.samplesheet_parser import find_sample_sheet_name, read_data_section
-from app.services.pipeline_outcome import (
-    progress_fields,
-    failure_detail,
-    handle_step_result,
-    StepOutcome,
-)
-from app.services.r_executor import (
-    run_r_script,
-    BatchCorrectionCommand,
-    SvdPlotCommand,
-    DmrAnalysisCommand,
-    DmpAnalysisCommand,
-    BetaExtractionCommand,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +70,7 @@ def _build_initial_history(job_id: str) -> dict:
                 "type": "initial",
                 "svd_plot": f"/api/v1/batch/{job_id}/svd-plot/0",
                 "settings_used": None,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
         ],
         "current_round": 0,
@@ -122,7 +124,9 @@ def get_eligible_columns(job_dir: Path) -> list[dict]:
     return eligible
 
 
-def validate_group_selection(job_dir: Path, group_column: str, case_group: str, control_group: str) -> None:
+def validate_group_selection(
+    job_dir: Path, group_column: str, case_group: str, control_group: str
+) -> None:
     """Validate a DMP/DMR group selection against the sample sheet.
 
     Permissive about *which* column is chosen (any grouping column), strict about
@@ -180,6 +184,7 @@ def get_samplesheet_preview(job_dir: Path, max_rows: int = 50) -> dict:
 # register a cancel_event or wrap the task lifecycle itself
 # (see r_executor_spec.md section 6, rule 3).
 
+
 async def run_batch_pipeline_task(
     job_id: str,
     settings_dict: dict,
@@ -211,16 +216,19 @@ async def run_batch_pipeline_task(
             on_progress=on_batch_progress,
         )
 
-        if handle_step_result(
-            job_id,
-            correction_result,
-            phase=JobPhase.BATCH,
-            fallback="batch_correct.R exited with an error.",
-            timeout_step="Error: batch_correct.R exceeded its time limit.",
-            timeout_detail="Batch correction timeout.",
-            failure_step="Error during the mathematical batch correction.",
-            cancel_log=f"Batch correction cancelled: job_id={job_id}",
-        ) is not StepOutcome.SUCCESS:
+        if (
+            handle_step_result(
+                job_id,
+                correction_result,
+                phase=JobPhase.BATCH,
+                fallback="batch_correct.R exited with an error.",
+                timeout_step="Error: batch_correct.R exceeded its time limit.",
+                timeout_detail="Batch correction timeout.",
+                failure_step="Error during the mathematical batch correction.",
+                cancel_log=f"Batch correction cancelled: job_id={job_id}",
+            )
+            is not StepOutcome.SUCCESS
+        ):
             return
 
         # Batch correction done → open the SVD phase.
@@ -267,28 +275,33 @@ async def run_batch_pipeline_task(
             on_progress=on_svd_progress,
         )
 
-        if handle_step_result(
-            job_id,
-            plot_result,
-            phase=JobPhase.SVD,
-            fallback="batch_svd.R exited with an error.",
-            timeout_step="Error: batch_svd.R exceeded its time limit.",
-            timeout_detail="SVD plot timeout.",
-            failure_step="Error during SVD plot visualization.",
-            cancel_log=f"SVD plot cancelled: job_id={job_id}",
-        ) is not StepOutcome.SUCCESS:
+        if (
+            handle_step_result(
+                job_id,
+                plot_result,
+                phase=JobPhase.SVD,
+                fallback="batch_svd.R exited with an error.",
+                timeout_step="Error: batch_svd.R exceeded its time limit.",
+                timeout_detail="SVD plot timeout.",
+                failure_step="Error during SVD plot visualization.",
+                cancel_log=f"SVD plot cancelled: job_id={job_id}",
+            )
+            is not StepOutcome.SUCCESS
+        ):
             return
 
         # Update the batch history.
         logger.info("Updating batch history: job_id=%s", job_id)
         history_data = load_history(job_dir, job_id)
-        history_data["rounds"].append({
-            "round": next_round,
-            "type": "correction",
-            "svd_plot": f"/api/v1/batch/{job_id}/svd-plot/{next_round}",
-            "settings_used": settings_dict,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
+        history_data["rounds"].append(
+            {
+                "round": next_round,
+                "type": "correction",
+                "svd_plot": f"/api/v1/batch/{job_id}/svd-plot/{next_round}",
+                "settings_used": settings_dict,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
         history_data["current_round"] = next_round
         history_data["correction_applied"] = True
         save_history(job_dir, history_data)
@@ -353,7 +366,9 @@ async def run_downstream_analysis_task(
         # Bridge step: extract the beta matrix only when batch correction was skipped.
         if extract_from_normalized:
             logger.info("Batch skipped — extracting the uncorrected beta matrix: job_id=%s", job_id)
-            set_progress(job_id, percent=2, message="Extracting the beta matrix from the normalized data...")
+            set_progress(
+                job_id, percent=2, message="Extracting the beta matrix from the normalized data..."
+            )
 
             extraction_result = await run_r_script(
                 command=BetaExtractionCommand(
@@ -371,9 +386,7 @@ async def run_downstream_analysis_task(
                 return
 
             if not extraction_result.is_success:
-                raise RuntimeError(
-                    failure_detail(extraction_result, "Beta extraction failed.")
-                )
+                raise RuntimeError(failure_detail(extraction_result, "Beta extraction failed."))
         else:
             # corrected_data.rds is already a beta matrix (removeBatchEffect on
             # getBeta). DMR/DMP read beta.rds, so make the corrected matrix the
@@ -411,7 +424,17 @@ async def run_downstream_analysis_task(
                 # adjPvalDmr = 1.0 → keep all found regions (significance is a
                 # table filter); nCores parallelizes bootstraps; then the group
                 # selection (column, case, control) for a deterministic sign.
-                extra_args=["beta.rds", "3", "NULL", "1.0", "1000", array_type, "10", str(DMR_CORES), *group_args],
+                extra_args=[
+                    "beta.rds",
+                    "3",
+                    "NULL",
+                    "1.0",
+                    "1000",
+                    array_type,
+                    "10",
+                    str(DMR_CORES),
+                    *group_args,
+                ],
             ),
             cancel_event=cancel_event,
             on_progress=on_dmr_progress,

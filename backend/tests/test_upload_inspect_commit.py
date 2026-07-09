@@ -1,4 +1,5 @@
 """Integration tests for the inspect → commit upload flow (UPL-01)."""
+
 import errno
 import io
 import shutil
@@ -11,9 +12,9 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.main import app
 from app.core import config
-from app.services import staging_manager, file_handler
+from app.main import app
+from app.services import file_handler, staging_manager
 
 client = TestClient(app)
 
@@ -72,13 +73,16 @@ def _inspect_zip(entries: dict[str, bytes]):
 
 # ── Inspect ───────────────────────────────────────────────────────────────────
 
+
 def test_inspect_zip_classifies_files():
-    resp = _inspect_zip({
-        "Demo/SampleSheet.csv": SHEET,
-        "Demo/206891110001_R01C01_Grn.idat": IDAT,
-        "Demo/206891110001_R01C01_Red.idat": IDAT,
-        "Demo/readme.txt": b"hello",
-    })
+    resp = _inspect_zip(
+        {
+            "Demo/SampleSheet.csv": SHEET,
+            "Demo/206891110001_R01C01_Grn.idat": IDAT,
+            "Demo/206891110001_R01C01_Red.idat": IDAT,
+            "Demo/readme.txt": b"hello",
+        }
+    )
     assert resp.status_code == 201
     data = resp.json()
 
@@ -99,12 +103,14 @@ def test_inspect_zip_classifies_files():
 
 
 def test_inspect_multiple_sheets_are_listed_without_error():
-    resp = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "Other_SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    })
+    resp = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "Other_SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    )
     assert resp.status_code == 201
     data = resp.json()
     # All candidates are offered; the user picks one via radio (no blocking error).
@@ -113,11 +119,14 @@ def test_inspect_multiple_sheets_are_listed_without_error():
 
 
 def test_inspect_individual_files():
-    resp = client.post("/api/v1/upload/inspect", files=[
-        ("files", ("SampleSheet.csv", SHEET, "text/csv")),
-        ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
-        ("files", ("206891110001_R01C01_Red.idat", IDAT, "application/octet-stream")),
-    ])
+    resp = client.post(
+        "/api/v1/upload/inspect",
+        files=[
+            ("files", ("SampleSheet.csv", SHEET, "text/csv")),
+            ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
+            ("files", ("206891110001_R01C01_Red.idat", IDAT, "application/octet-stream")),
+        ],
+    )
     assert resp.status_code == 201
     data = resp.json()
     assert data["source"] == "files"
@@ -126,16 +135,19 @@ def test_inspect_individual_files():
 
 def test_inspect_zip_mixed_with_individual_files():
     # A ZIP dropped alongside loose IDATs must still be extracted and merged.
-    resp = client.post("/api/v1/upload/inspect", files=[
-        ("files", ("data.zip", _zip_bytes({"SampleSheet.csv": SHEET}), "application/zip")),
-        ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
-        ("files", ("206891110001_R01C01_Red.idat", IDAT, "application/octet-stream")),
-    ])
+    resp = client.post(
+        "/api/v1/upload/inspect",
+        files=[
+            ("files", ("data.zip", _zip_bytes({"SampleSheet.csv": SHEET}), "application/zip")),
+            ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
+            ("files", ("206891110001_R01C01_Red.idat", IDAT, "application/octet-stream")),
+        ],
+    )
     assert resp.status_code == 201
     data = resp.json()
     assert data["source"] == "zip"
-    assert len(data["sample_sheets"]) == 1          # from the ZIP
-    assert data["idats"][0]["complete"] is True     # from the loose files
+    assert len(data["sample_sheets"]) == 1  # from the ZIP
+    assert data["idats"][0]["complete"] is True  # from the loose files
     assert data["errors"] == []
 
 
@@ -147,17 +159,22 @@ def test_inspect_no_supported_files_is_fatal():
 
 # ── Disk-exhaustion handling ──────────────────────────────────────────────────
 
+
 def test_inspect_out_of_disk_space_returns_507(monkeypatch):
     # A full volume during streaming (ENOSPC) must degrade to a structured 507,
     # never a raw 500 traceback, and the partial staging session must be removed.
     def _enospc(*args, **kwargs):
         raise OSError(errno.ENOSPC, "No space left on device")
+
     monkeypatch.setattr("app.services.upload_inspect_service._stream_to_file", _enospc)
 
-    resp = client.post("/api/v1/upload/inspect", files=[
-        ("files", ("SampleSheet.csv", SHEET, "text/csv")),
-        ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
-    ])
+    resp = client.post(
+        "/api/v1/upload/inspect",
+        files=[
+            ("files", ("SampleSheet.csv", SHEET, "text/csv")),
+            ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
+        ],
+    )
     assert resp.status_code == 507
     assert resp.json()["type"] == "/errors/storage-limit-exceeded"
     assert list(config.STAGING_BASE_DIR.iterdir()) == []  # session cleaned up
@@ -166,11 +183,15 @@ def test_inspect_out_of_disk_space_returns_507(monkeypatch):
 def test_inspect_generic_disk_error_returns_500(monkeypatch):
     def _eio(*args, **kwargs):
         raise OSError(errno.EIO, "I/O error")
+
     monkeypatch.setattr("app.services.upload_inspect_service._stream_to_file", _eio)
 
-    resp = client.post("/api/v1/upload/inspect", files=[
-        ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
-    ])
+    resp = client.post(
+        "/api/v1/upload/inspect",
+        files=[
+            ("files", ("206891110001_R01C01_Grn.idat", IDAT, "application/octet-stream")),
+        ],
+    )
     assert resp.status_code == 500
     assert resp.json()["type"] == "/errors/save-failed"
 
@@ -180,29 +201,37 @@ def test_inspect_low_free_space_rejected_before_streaming(monkeypatch):
     # rejected before a single byte is streamed.
     monkeypatch.setattr(config, "MIN_FREE_DISK_MB", 1000)
     monkeypatch.setattr(
-        shutil, "disk_usage",
-        lambda _p: shutil._ntuple_diskusage(2 * 1024 ** 3, 1024 ** 3, 50 * 1024 ** 2),  # 50 MB free
+        shutil,
+        "disk_usage",
+        lambda _p: shutil._ntuple_diskusage(2 * 1024**3, 1024**3, 50 * 1024**2),  # 50 MB free
     )
 
     def _must_not_stream(*args, **kwargs):
         raise AssertionError("streaming must not start when the disk is low")
+
     monkeypatch.setattr("app.services.upload_inspect_service._stream_to_file", _must_not_stream)
 
-    resp = client.post("/api/v1/upload/inspect", files=[
-        ("files", ("SampleSheet.csv", SHEET, "text/csv")),
-    ])
+    resp = client.post(
+        "/api/v1/upload/inspect",
+        files=[
+            ("files", ("SampleSheet.csv", SHEET, "text/csv")),
+        ],
+    )
     assert resp.status_code == 507
     assert resp.json()["type"] == "/errors/storage-limit-exceeded"
 
 
 # ── Preview ───────────────────────────────────────────────────────────────────
 
+
 def test_preview_returns_table():
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
     sid = data["session_id"]
     sheet_id = data["sample_sheets"][0]["id"]
 
@@ -216,26 +245,33 @@ def test_preview_returns_table():
 
 # ── Commit ────────────────────────────────────────────────────────────────────
 
+
 def test_commit_starts_job(monkeypatch):
     # Don't actually run the R pipeline.
     async def _noop(*args, **kwargs):
         return None
+
     monkeypatch.setattr("app.services.upload_service.run_upload_pipeline", _noop)
 
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
     sid = data["session_id"]
 
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": sid,
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": [data["idats"][0]["pair_id"]],
-        "column_mapping": MAPPING,
-        "filter_settings": {"det_p": {"enabled": True, "cutoff": 0.01}},
-    })
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": sid,
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": [data["idats"][0]["pair_id"]],
+            "column_mapping": MAPPING,
+            "filter_settings": {"det_p": {"enabled": True, "cutoff": 0.01}},
+        },
+    )
     assert resp.status_code == 201
     body = resp.json()
     assert len(body["job_id"]) == 36
@@ -250,34 +286,43 @@ def test_commit_starts_job(monkeypatch):
     # The chosen filter settings must actually reach the job (regression guard:
     # the frontend used to double-wrap them, so everything fell back to disabled).
     import json as _json
+
     settings = _json.loads((job_dir / "filter_settings.json").read_text())
     assert settings["det_p"]["enabled"] is True
     assert settings["det_p"]["cutoff"] == 0.01
 
 
 def test_commit_unknown_session_404():
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": "00000000-0000-0000-0000-000000000000",
-        "selected_sample_sheet_id": "sheet-1",
-        "selected_pair_ids": ["x"],
-        "column_mapping": MAPPING,
-    })
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": "00000000-0000-0000-0000-000000000000",
+            "selected_sample_sheet_id": "sheet-1",
+            "selected_pair_ids": ["x"],
+            "column_mapping": MAPPING,
+        },
+    )
     assert resp.status_code == 404
     assert resp.json()["type"] == "/errors/session-not-found"
 
 
 def test_commit_without_pairs_rejected():
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": [],
-        "column_mapping": MAPPING,
-    })
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": [],
+            "column_mapping": MAPPING,
+        },
+    )
     assert resp.status_code == 400
     assert resp.json()["type"] == "/errors/no-idat-files"
 
@@ -285,70 +330,90 @@ def test_commit_without_pairs_rejected():
 def test_commit_missing_column_mapping_is_422():
     # column_mapping is required: the UI only enables Start once all four roles
     # are chosen, and the backend enforces the same structurally.
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": [data["idats"][0]["pair_id"]],
-    })
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": [data["idats"][0]["pair_id"]],
+        },
+    )
     assert resp.status_code == 422
 
 
 def test_commit_duplicate_role_columns_rejected():
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": [data["idats"][0]["pair_id"]],
-        "column_mapping": {**MAPPING, "sample_name": "Sentrix_ID"},  # reused column
-    })
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": [data["idats"][0]["pair_id"]],
+            "column_mapping": {**MAPPING, "sample_name": "Sentrix_ID"},  # reused column
+        },
+    )
     assert resp.status_code == 422
 
 
 def test_commit_mapping_to_missing_column_rejected():
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": [data["idats"][0]["pair_id"]],
-        "column_mapping": {**MAPPING, "sample_group": "Nonexistent_Column"},
-    })
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": [data["idats"][0]["pair_id"]],
+            "column_mapping": {**MAPPING, "sample_group": "Nonexistent_Column"},
+        },
+    )
     assert resp.status_code == 400
     assert resp.json()["type"] == "/errors/invalid-column-mapping"
 
 
 def test_commit_mapping_mismatched_with_idats_rejected():
     # Picking the wrong chip columns yields array ids that match no IDAT pair.
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": [data["idats"][0]["pair_id"]],
-        # Swap: Sample_Name/Sample_Group are not chip columns, so the built
-        # array ids ("HeLa_Cellline") match no uploaded IDAT.
-        "column_mapping": {
-            "sentrix_id": "Sample_Name",
-            "sentrix_position": "Sample_Group",
-            "sample_group": "Sentrix_ID",
-            "sample_name": "Sentrix_Position",
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": [data["idats"][0]["pair_id"]],
+            # Swap: Sample_Name/Sample_Group are not chip columns, so the built
+            # array ids ("HeLa_Cellline") match no uploaded IDAT.
+            "column_mapping": {
+                "sentrix_id": "Sample_Name",
+                "sentrix_position": "Sample_Group",
+                "sample_group": "Sentrix_ID",
+                "sample_name": "Sentrix_Position",
+            },
         },
-    })
+    )
     assert resp.status_code == 400
     assert resp.json()["type"] == "/errors/invalid-column-mapping"
 
@@ -358,29 +423,35 @@ def test_commit_custom_sheet_columns_get_canonicalized(monkeypatch):
     # the explicit mapping so downstream sees the canonical roles.
     async def _noop(*args, **kwargs):
         return None
+
     monkeypatch.setattr("app.services.upload_service.run_upload_pipeline", _noop)
 
-    data = _inspect_zip({
-        "Custom.csv": CUSTOM_SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
+    data = _inspect_zip(
+        {
+            "Custom.csv": CUSTOM_SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
     sheet = data["sample_sheets"][0]
     assert sheet["columns"] == ["Patient", "Diagnosis", "Chip", "Well"]
     # Nothing auto-recognized for these names.
     assert sheet["suggested_mapping"]["sentrix_id"] is None
 
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": sheet["id"],
-        "selected_pair_ids": [data["idats"][0]["pair_id"]],
-        "column_mapping": {
-            "sentrix_id": "Chip",
-            "sentrix_position": "Well",
-            "sample_group": "Diagnosis",
-            "sample_name": "Patient",
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": sheet["id"],
+            "selected_pair_ids": [data["idats"][0]["pair_id"]],
+            "column_mapping": {
+                "sentrix_id": "Chip",
+                "sentrix_position": "Well",
+                "sample_group": "Diagnosis",
+                "sample_name": "Patient",
+            },
         },
-    })
+    )
     assert resp.status_code == 201
     job_dir = file_handler.UPLOAD_BASE_DIR / resp.json()["job_id"]
     header = (job_dir / "SampleSheet.csv").read_text().splitlines()[1]
@@ -411,24 +482,30 @@ def test_commit_basename_sheet_matches_by_basename(monkeypatch):
     # sheet so init_filter can locate the files.
     async def _noop(*args, **kwargs):
         return None
+
     monkeypatch.setattr("app.services.upload_service.run_upload_pipeline", _noop)
 
-    data = _inspect_zip({
-        "Basename.csv": BASENAME_SHEET,
-        "uuid-1_noid_Grn.idat": IDAT,
-        "uuid-1_noid_Red.idat": IDAT,
-        "uuid-2_noid_Grn.idat": IDAT,
-        "uuid-2_noid_Red.idat": IDAT,
-    }).json()
+    data = _inspect_zip(
+        {
+            "Basename.csv": BASENAME_SHEET,
+            "uuid-1_noid_Grn.idat": IDAT,
+            "uuid-1_noid_Red.idat": IDAT,
+            "uuid-2_noid_Grn.idat": IDAT,
+            "uuid-2_noid_Red.idat": IDAT,
+        }
+    ).json()
     pair_ids = [p["pair_id"] for p in data["idats"]]
     assert set(pair_ids) == {"uuid-1_noid", "uuid-2_noid"}
 
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": pair_ids,
-        "column_mapping": BASENAME_MAPPING,
-    })
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": pair_ids,
+            "column_mapping": BASENAME_MAPPING,
+        },
+    )
     assert resp.status_code == 201
     job_dir = file_handler.UPLOAD_BASE_DIR / resp.json()["job_id"]
     header = (job_dir / "SampleSheet.csv").read_text().splitlines()[1]
@@ -442,6 +519,7 @@ def test_commit_subsets_sheet_to_uploaded_samples(monkeypatch):
     # with "No IDAT files found for sample(s): ...". This is the reported bug.
     async def _noop(*args, **kwargs):
         return None
+
     monkeypatch.setattr("app.services.upload_service.run_upload_pipeline", _noop)
 
     big_sheet = (
@@ -450,19 +528,24 @@ def test_commit_subsets_sheet_to_uploaded_samples(monkeypatch):
         b"uuid-2_noid,Sample_002,Tumor,TEST2,A02\n"
         b"uuid-3_noid,Sample_003,Tumor,TEST3,A03\n"
     )
-    data = _inspect_zip({
-        "Basename.csv": big_sheet,
-        "uuid-2_noid_Grn.idat": IDAT,   # only sample 2 was uploaded
-        "uuid-2_noid_Red.idat": IDAT,
-    }).json()
+    data = _inspect_zip(
+        {
+            "Basename.csv": big_sheet,
+            "uuid-2_noid_Grn.idat": IDAT,  # only sample 2 was uploaded
+            "uuid-2_noid_Red.idat": IDAT,
+        }
+    ).json()
     assert [p["pair_id"] for p in data["idats"]] == ["uuid-2_noid"]
 
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": ["uuid-2_noid"],
-        "column_mapping": BASENAME_MAPPING,
-    })
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": ["uuid-2_noid"],
+            "column_mapping": BASENAME_MAPPING,
+        },
+    )
     assert resp.status_code == 201
 
     job_dir = file_handler.UPLOAD_BASE_DIR / resp.json()["job_id"]
@@ -477,28 +560,35 @@ def test_commit_subsets_sheet_to_uploaded_samples(monkeypatch):
 
 def test_commit_basename_sheet_mismatch_rejected():
     # Basename column present but its values name none of the uploaded IDATs.
-    data = _inspect_zip({
-        "Basename.csv": BASENAME_SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
-    resp = client.post("/api/v1/upload/commit", json={
-        "session_id": data["session_id"],
-        "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
-        "selected_pair_ids": [data["idats"][0]["pair_id"]],
-        "column_mapping": BASENAME_MAPPING,
-    })
+    data = _inspect_zip(
+        {
+            "Basename.csv": BASENAME_SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
+    resp = client.post(
+        "/api/v1/upload/commit",
+        json={
+            "session_id": data["session_id"],
+            "selected_sample_sheet_id": data["sample_sheets"][0]["id"],
+            "selected_pair_ids": [data["idats"][0]["pair_id"]],
+            "column_mapping": BASENAME_MAPPING,
+        },
+    )
     assert resp.status_code == 400
     assert resp.json()["type"] == "/errors/invalid-column-mapping"
     assert "Basename" in resp.json()["detail"]
 
 
 def test_discard_session():
-    data = _inspect_zip({
-        "SampleSheet.csv": SHEET,
-        "206891110001_R01C01_Grn.idat": IDAT,
-        "206891110001_R01C01_Red.idat": IDAT,
-    }).json()
+    data = _inspect_zip(
+        {
+            "SampleSheet.csv": SHEET,
+            "206891110001_R01C01_Grn.idat": IDAT,
+            "206891110001_R01C01_Red.idat": IDAT,
+        }
+    ).json()
     sid = data["session_id"]
     assert (config.STAGING_BASE_DIR / sid).exists()
 

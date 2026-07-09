@@ -1,6 +1,8 @@
 """Pydantic schemas for the generic, paginated table API."""
-from pydantic import BaseModel
+
 from typing import Any
+
+from pydantic import BaseModel
 
 
 class ColumnMeta(BaseModel):

@@ -34,8 +34,8 @@ convention = "pep257"
 known-first-party = ["app"]
 
 [tool.ruff.lint.per-file-ignores]
-# Tests need no docstrings; keep everything else (unused imports, bugs) enforced.
-"tests/*" = ["D"]
+# Tests need no docstrings and commonly use sys.path.insert before app imports.
+"tests/*" = ["D", "E402"]
 
 # ── Type checking ─────────────────────────────────────────────────────────────
 [tool.mypy]

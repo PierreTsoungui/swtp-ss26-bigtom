@@ -6,6 +6,7 @@ Every numeric field validates its value against a documented, spec-aligned range
 the route layer maps to HTTP 400. There are no silent defaults for out-of-range
 input — an invalid parameter always produces an error, never a quiet substitution.
 """
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -13,7 +14,7 @@ class FilterDetP(BaseModel):
     """Detection p-value filter."""
 
     enabled: bool = False
-    cutoff:  float = Field(default=0.01)
+    cutoff: float = Field(default=0.01)
 
     @field_validator("cutoff", mode="before")
     @classmethod
@@ -21,8 +22,8 @@ class FilterDetP(BaseModel):
         """Reject cutoff values outside [0.01, 0.05]."""
         try:
             v = float(v)
-        except (TypeError, ValueError):
-            raise ValueError("cutoff must be a number")
+        except (TypeError, ValueError) as err:
+            raise ValueError("cutoff must be a number") from err
         if not (0.01 <= v <= 0.05):
             raise ValueError(f"cutoff must be between 0.01 and 0.05, got {v}")
         return v
@@ -31,7 +32,7 @@ class FilterDetP(BaseModel):
 class FilterBeadCount(BaseModel):
     """Bead-count filter."""
 
-    enabled:     bool = False
+    enabled: bool = False
     bead_cutoff: float = Field(default=0.05)
 
     @field_validator("bead_cutoff", mode="before")
@@ -40,8 +41,8 @@ class FilterBeadCount(BaseModel):
         """Reject bead_cutoff values outside [0.0, 1.0]."""
         try:
             v = float(v)
-        except (TypeError, ValueError):
-            raise ValueError("bead_cutoff must be a number")
+        except (TypeError, ValueError) as err:
+            raise ValueError("bead_cutoff must be a number") from err
         if not (0.0 <= v <= 1.0):
             raise ValueError(f"bead_cutoff must be between 0.0 and 1.0, got {v}")
         return v
@@ -56,7 +57,7 @@ class FilterNonCpg(BaseModel):
 class FilterSnp(BaseModel):
     """SNP-overlap filter."""
 
-    enabled:    bool = False
+    enabled: bool = False
     maf_cutoff: float = Field(default=0.05)
 
     @field_validator("maf_cutoff", mode="before")
@@ -65,8 +66,8 @@ class FilterSnp(BaseModel):
         """Reject maf_cutoff values outside [0.0, 0.5]."""
         try:
             v = float(v)
-        except (TypeError, ValueError):
-            raise ValueError("maf_cutoff must be a number")
+        except (TypeError, ValueError) as err:
+            raise ValueError("maf_cutoff must be a number") from err
         if not (0.0 <= v <= 0.5):
             raise ValueError(f"maf_cutoff must be between 0.0 and 0.5, got {v}")
         return v
@@ -87,10 +88,10 @@ class FilterXyChromosomes(BaseModel):
 class FilterSampleQuality(BaseModel):
     """Sample-level quality control (detection p-value, failure rate, PCA outliers)."""
 
-    enabled:                      bool = False
-    detection_p_cutoff:           float = Field(default=0.01)
-    sample_failure_rate:          float = Field(default=0.10)
-    remove_failed_samples:        bool = Field(default=True)
+    enabled: bool = False
+    detection_p_cutoff: float = Field(default=0.01)
+    sample_failure_rate: float = Field(default=0.10)
+    remove_failed_samples: bool = Field(default=True)
     enable_pca_outlier_detection: bool = Field(default=True)
 
     @field_validator("detection_p_cutoff", mode="before")
@@ -99,8 +100,8 @@ class FilterSampleQuality(BaseModel):
         """Reject detection_p_cutoff values outside [0.01, 0.05]."""
         try:
             v = float(v)
-        except (TypeError, ValueError):
-            raise ValueError("detection_p_cutoff must be a number")
+        except (TypeError, ValueError) as err:
+            raise ValueError("detection_p_cutoff must be a number") from err
         if not (0.01 <= v <= 0.05):
             raise ValueError(f"detection_p_cutoff must be between 0.01 and 0.05, got {v}")
         return v
@@ -111,8 +112,8 @@ class FilterSampleQuality(BaseModel):
         """Reject sample_failure_rate values outside [0.05, 0.2]."""
         try:
             v = float(v)
-        except (TypeError, ValueError):
-            raise ValueError("sample_failure_rate must be a number")
+        except (TypeError, ValueError) as err:
+            raise ValueError("sample_failure_rate must be a number") from err
         if not (0.05 <= v <= 0.2):
             raise ValueError(f"sample_failure_rate must be between 0.05 and 0.2, got {v}")
         return v
@@ -125,10 +126,10 @@ class FilterSettings(BaseModel):
     request is always valid.
     """
 
-    det_p:          FilterDetP          = Field(default_factory=FilterDetP)
-    bead_count:     FilterBeadCount     = Field(default_factory=FilterBeadCount)
-    non_cpg:        FilterNonCpg        = Field(default_factory=FilterNonCpg)
-    snp:            FilterSnp           = Field(default_factory=FilterSnp)
-    multi_hit:      FilterMultiHit      = Field(default_factory=FilterMultiHit)
+    det_p: FilterDetP = Field(default_factory=FilterDetP)
+    bead_count: FilterBeadCount = Field(default_factory=FilterBeadCount)
+    non_cpg: FilterNonCpg = Field(default_factory=FilterNonCpg)
+    snp: FilterSnp = Field(default_factory=FilterSnp)
+    multi_hit: FilterMultiHit = Field(default_factory=FilterMultiHit)
     xy_chromosomes: FilterXyChromosomes = Field(default_factory=FilterXyChromosomes)
     sample_quality: FilterSampleQuality = Field(default_factory=FilterSampleQuality)

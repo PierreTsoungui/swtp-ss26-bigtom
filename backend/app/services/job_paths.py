@@ -5,6 +5,7 @@ One ``JOBS_DIR`` (derived from the centrally configured ``JOB_BASE_DIR``) and on
 job's directory the same way, instead of re-deriving the base path and the
 "not found" error in each module.
 """
+
 import re
 from pathlib import Path
 

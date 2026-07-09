@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Awaitable, Callable, Optional
 
 from app.core import config
 
@@ -48,7 +48,8 @@ class ResourceGovernor:
         self._waiting = 0
         logger.info(
             "ResourceGovernor initialised: memory_budget=%.1fGiB core_budget=%d",
-            self._total_mem, self._total_cores,
+            self._total_mem,
+            self._total_cores,
         )
 
     @property
@@ -69,7 +70,7 @@ class ResourceGovernor:
         cores: int,
         *,
         label: str = "R",
-        on_wait: Optional[Callable[[], Awaitable[None]]] = None,
+        on_wait: Callable[[], Awaitable[None]] | None = None,
     ):
         """Hold a memory+core slot for the duration of the ``async with`` block.
 
@@ -88,8 +89,12 @@ class ResourceGovernor:
                 logger.info(
                     "Compute slot QUEUED: label=%s need=(%.1fGiB,%dc) "
                     "available=(%.1fGiB,%dc) queued=%d",
-                    label, need_mem, need_cores,
-                    self._avail_mem, self._avail_cores, self._waiting,
+                    label,
+                    need_mem,
+                    need_cores,
+                    self._avail_mem,
+                    self._avail_cores,
+                    self._waiting,
                 )
                 if on_wait is not None:
                     try:
@@ -98,8 +103,7 @@ class ResourceGovernor:
                         logger.exception("on_wait hook failed: label=%s", label)
                 try:
                     await self._cond.wait_for(
-                        lambda: self._avail_mem >= need_mem
-                        and self._avail_cores >= need_cores
+                        lambda: self._avail_mem >= need_mem and self._avail_cores >= need_cores
                     )
                 finally:
                     self._waiting -= 1
@@ -107,7 +111,9 @@ class ResourceGovernor:
             self._avail_cores -= need_cores
             logger.info(
                 "Compute slot ACQUIRED: label=%s remaining=(%.1fGiB,%dc)",
-                label, self._avail_mem, self._avail_cores,
+                label,
+                self._avail_mem,
+                self._avail_cores,
             )
 
         try:
@@ -121,7 +127,9 @@ class ResourceGovernor:
                 self._cond.notify_all()
                 logger.info(
                     "Compute slot RELEASED: label=%s remaining=(%.1fGiB,%dc)",
-                    label, self._avail_mem, self._avail_cores,
+                    label,
+                    self._avail_mem,
+                    self._avail_cores,
                 )
 
 

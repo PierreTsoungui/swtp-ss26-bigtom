@@ -5,6 +5,7 @@ Illumina column aliases, or Excel's float coercion — must come out as one
 canonical ``[Data]`` CSV with the column names the R backend relies on.
 The fixtures here mirror the real sheets customers have actually uploaded.
 """
+
 import csv
 import io
 import sys
@@ -22,8 +23,8 @@ from app.services.samplesheet_normalizer import (
     suggest_column_mapping,
 )
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def parse_canonical(text: str):
     """Parse normalizer output back into (headers, rows), asserting the shape."""
@@ -61,11 +62,24 @@ def test_epic_csv_keeps_canonical_columns_and_data():
     # is <Sentrix_ID>_<Sentrix_Position>, so the R backend reads one column to
     # locate the IDATs regardless of the source convention.
     assert headers == [
-        "Sample_Name", "Sample_Well", "Sample_Plate",
-        "Sample_Group", "Pool_ID", "Sentrix_ID", "Sentrix_Position", "Basename",
+        "Sample_Name",
+        "Sample_Well",
+        "Sample_Plate",
+        "Sample_Group",
+        "Pool_ID",
+        "Sentrix_ID",
+        "Sentrix_Position",
+        "Basename",
     ]
     assert rows[0] == [
-        "HeLa", "", "", "Cellline", "", "206891110001", "R01C01", "206891110001_R01C01",
+        "HeLa",
+        "",
+        "",
+        "Cellline",
+        "",
+        "206891110001",
+        "R01C01",
+        "206891110001_R01C01",
     ]
     assert len(rows) == 3
 
@@ -108,6 +122,7 @@ def test_sentrix_aliases_are_renamed_to_canonical():
 
 # ── Excel upload: float-coerced barcode must survive as a clean integer ─────────
 
+
 def test_xlsx_barcode_not_corrupted_to_float():
     grid = [
         ["[Data]"],
@@ -115,9 +130,7 @@ def test_xlsx_barcode_not_corrupted_to_float():
         ["HeLa", 206891110001, "R01C01", "Cellline"],
         ["Jurkat", 206891110001, "R03C01", "Cellline"],
     ]
-    headers, rows = parse_canonical(
-        normalize_sample_sheet(make_xlsx(grid), "customer.xlsx")
-    )
+    headers, rows = parse_canonical(normalize_sample_sheet(make_xlsx(grid), "customer.xlsx"))
     sid = headers.index("Sentrix_ID")
     # Not "2.06891E+11" and not "206891110001.0".
     assert rows[0][sid] == "206891110001"
@@ -129,13 +142,17 @@ def test_xlsx_with_header_block_aligns_columns():
     grid = [
         ["Source", "https://example.com"],
         ["[Data]"],
-        ["Sample_ID", "Sample_Plate", "Sample_Name", "SentrixBarcode_A",
-         "SentrixPosition_A", "Sample_Group"],
+        [
+            "Sample_ID",
+            "Sample_Plate",
+            "Sample_Name",
+            "SentrixBarcode_A",
+            "SentrixPosition_A",
+            "Sample_Group",
+        ],
         ["HeLa", None, "HeLa", 206891110001, "R01C01", "Cellline"],
     ]
-    headers, rows = parse_canonical(
-        normalize_sample_sheet(make_xlsx(grid), "customer.xlsx")
-    )
+    headers, rows = parse_canonical(normalize_sample_sheet(make_xlsx(grid), "customer.xlsx"))
     assert rows[0][headers.index("Sample_Name")] == "HeLa"
     assert rows[0][headers.index("Sentrix_ID")] == "206891110001"
     assert rows[0][headers.index("Sentrix_Position")] == "R01C01"
@@ -143,6 +160,7 @@ def test_xlsx_with_header_block_aligns_columns():
 
 
 # ── Delimiter detection ────────────────────────────────────────────────────────
+
 
 def test_semicolon_delimited_csv():
     sheet = b"[Data]\nSample_Name;Sentrix_ID;Sentrix_Position\nHeLa;206891110001;R01C01\n"
@@ -153,6 +171,7 @@ def test_semicolon_delimited_csv():
 
 # ── Trailing empty columns are dropped ─────────────────────────────────────────
 
+
 def test_trailing_empty_header_columns_dropped():
     sheet = b"[Data]\nSample_Name,Sentrix_ID,Sentrix_Position,,\nHeLa,206891110001,R01C01,,\n"
     headers, _ = parse_canonical(normalize_sample_sheet(sheet, "x.csv"))
@@ -160,6 +179,7 @@ def test_trailing_empty_header_columns_dropped():
 
 
 # ── Basename-only sheet (used by the minimal upload test fixture) ──────────────
+
 
 def test_basename_only_sheet_is_accepted():
     sheet = b"Basename\nsample_1\nsample_2\n"
@@ -169,6 +189,7 @@ def test_basename_only_sheet_is_accepted():
 
 
 # ── Basename naming convention (files are <Basename>_{Grn,Red}.idat) ────────────
+
 
 def test_basename_column_preserved_through_explicit_mapping():
     # A real TCGA-style sheet: the IDATs are named after the Basename, not the
@@ -202,7 +223,7 @@ def test_basename_contract_survives_role_mapped_onto_it():
         "Sentrix_ID": "Sentrix_ID",
         "Sentrix_Position": "Sample_Position",
         "Sample_Group": "Sample_Group",
-        "Sample_Name": "Basename",   # user picks the Basename column as the name
+        "Sample_Name": "Basename",  # user picks the Basename column as the name
     }
     headers, rows = parse_canonical(normalize_sample_sheet(sheet, "x.csv", column_mapping=mapping))
     # Sample_Name now carries the uuid, AND the file-location contract is intact.
@@ -255,7 +276,11 @@ def test_explicit_mapping_renames_chosen_columns():
         normalize_sample_sheet(CUSTOM_CSV, "custom.csv", column_mapping=mapping)
     )
     assert headers == [
-        "Sample_Name", "Sample_Group", "Sentrix_ID", "Sentrix_Position", "Basename",
+        "Sample_Name",
+        "Sample_Group",
+        "Sentrix_ID",
+        "Sentrix_Position",
+        "Basename",
     ]
     assert rows[0] == ["P1", "Tumor", "206891110001", "R01C01", "206891110001_R01C01"]
 
@@ -280,7 +305,7 @@ def test_explicit_mapping_disambiguates_colliding_column():
     mapping = {
         "Sentrix_ID": "Chip",
         "Sentrix_Position": "Well",
-        "Sample_Group": "Patient",   # role Sample_Group goes to the "Patient" column
+        "Sample_Group": "Patient",  # role Sample_Group goes to the "Patient" column
         "Sample_Name": "Extra",
     }
     headers, _ = parse_canonical(normalize_sample_sheet(sheet, "x.csv", column_mapping=mapping))
@@ -308,6 +333,7 @@ def test_mapping_to_missing_column_raises():
 
 
 # ── Error handling ─────────────────────────────────────────────────────────────
+
 
 def test_empty_sheet_raises():
     with pytest.raises(ValueError):

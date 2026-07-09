@@ -1,32 +1,33 @@
 # app/services/heatmap_service.py
 """Heatmap service: CpG selection, the heatmap.R pipeline, and grouping options."""
+
 import asyncio
 import json
 import logging
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
 from app.core.error_types import AppException, ErrorTypes
 from app.models.heatmap import GroupingPayload
-from app.services.table_filter import apply_filters
-from app.services.r_executor import run_r_script, HeatmapCommand
+from app.services.job_manager import JobPhase, JobStatusValue, set_progress, transition_job
 from app.services.job_paths import JOBS_DIR, resolve_job_dir
+from app.services.r_executor import HeatmapCommand, run_r_script
 from app.services.samplesheet_normalizer import BASENAME_COLUMN
-from app.services.samplesheet_parser import read_data_section, columns_by_index
-from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
+from app.services.samplesheet_parser import columns_by_index, read_data_section
+from app.services.table_filter import apply_filters
 
 logger = logging.getLogger(__name__)
 
-MAX_CPGS         = 500
+MAX_CPGS = 500
 HEATMAP_FILENAME = "heatmap.png"
-HEATMAP_INPUT_CSV = "heatmap_input.csv"   # filtered CpG IDs handed to R (single filter source)
+HEATMAP_INPUT_CSV = "heatmap_input.csv"  # filtered CpG IDs handed to R (single filter source)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def get_job_dir_or_404(job_id: str) -> Path:
     """Return the job's directory under ``JOBS_DIR`` or raise 404.
@@ -52,7 +53,7 @@ def _find_dmp_rds(job_dir: Path) -> Path:
         detail=(
             f"No DMP result RDS file found in job '{job_dir.name}'. "
             "Expected 'dmp_results.rds' or a filename containing 'dmp'."
-        )
+        ),
     )
 
 
@@ -64,10 +65,10 @@ def _build_r_env(grouping: GroupingPayload) -> dict:
     ``heatmap_input.csv``. R only renders.
     """
     env: dict = {
-        "HEATMAP_GROUP1":   grouping.primary,
+        "HEATMAP_GROUP1": grouping.primary,
         "HEATMAP_MAX_ROWS": str(MAX_CPGS),
-        "HEATMAP_OUTPUT":   HEATMAP_FILENAME,
-        "HEATMAP_INPUT":    HEATMAP_INPUT_CSV,
+        "HEATMAP_OUTPUT": HEATMAP_FILENAME,
+        "HEATMAP_INPUT": HEATMAP_INPUT_CSV,
     }
     if grouping.secondary:
         env["HEATMAP_GROUP2"] = grouping.secondary
@@ -94,7 +95,7 @@ def prepare_heatmap_input(job_id: str, job_dir: Path, filters: dict) -> int:
         )
 
     df = pd.read_csv(csv_path)
-    df = apply_filters(df, "dmp", filters or {})   # SAME filter layer as the table view
+    df = apply_filters(df, "dmp", filters or {})  # SAME filter layer as the table view
     n = len(df)
 
     if n == 0:
@@ -120,12 +121,13 @@ def prepare_heatmap_input(job_id: str, job_dir: Path, filters: dict) -> int:
 
 # ── Async pipeline task ───────────────────────────────────────────────────────
 
+
 async def run_heatmap_pipeline_task(
-    job_id:      str,
-    job_dir:     Path,
-    dmp_rds:     Path,
-    sheet_name:  str,
-    grouping:    GroupingPayload,
+    job_id: str,
+    job_dir: Path,
+    dmp_rds: Path,
+    sheet_name: str,
+    grouping: GroupingPayload,
     cancel_event: asyncio.Event,
 ) -> None:
     """Run heatmap.R in the Docker container, streaming status via on_progress.
@@ -145,9 +147,9 @@ async def run_heatmap_pipeline_task(
         if not isinstance(data, dict):
             return
         if data.get("type") == "progress":
-            step  = int(data.get("step", 1))
+            step = int(data.get("step", 1))
             total = int(data.get("total_steps", 8))
-            pct   = 5 + int((step / total) * 90)
+            pct = 5 + int((step / total) * 90)
             set_progress(job_id, percent=pct, message=data.get("message", ""))
 
     # ── Invoke the R script ────────────────────────────────────────────────
@@ -189,10 +191,10 @@ async def run_heatmap_pipeline_task(
         too_many = _parse_too_many_cpgs(result.stdout)
 
         error_payload = {
-            "type":     "https://api.bigtom.swtp/errors/heatmap-too-many-cpgs",
-            "title":    "Too many CpGs for heatmap",
-            "status":   400,
-            "detail":   (
+            "type": "https://api.bigtom.swtp/errors/heatmap-too-many-cpgs",
+            "title": "Too many CpGs for heatmap",
+            "status": 400,
+            "detail": (
                 f"At most {MAX_CPGS} allowed. "
                 f"Found: {too_many if too_many else 'unknown count'}."
             ),
@@ -226,7 +228,8 @@ async def run_heatmap_pipeline_task(
 
 # ── Helper: R-Output parsen ───────────────────────────────────────────────────
 
-def _parse_too_many_cpgs(stdout: str) -> Optional[int]:
+
+def _parse_too_many_cpgs(stdout: str) -> int | None:
     for line in stdout.splitlines():
         try:
             data = json.loads(line)
@@ -250,7 +253,7 @@ def _parse_too_many_cpgs(stdout: str) -> Optional[int]:
 
 
 def _parse_heatmap_metadata(stdout: str, job_dir: Path) -> dict:
-    detected_cpgs   = 0
+    detected_cpgs = 0
     plotted_samples = 0
 
     for line in stdout.splitlines():
@@ -260,7 +263,7 @@ def _parse_heatmap_metadata(stdout: str, job_dir: Path) -> dict:
                 continue
 
             if data.get("status") == "running" and "Beta matrix ready" in data.get("message", ""):
-                msg   = data["message"]
+                msg = data["message"]
                 parts = msg.split()
                 idx_rows = next((i for i, t in enumerate(parts) if t == "rows"), None)
                 idx_cols = next((i for i, t in enumerate(parts) if t == "columns"), None)
@@ -273,9 +276,9 @@ def _parse_heatmap_metadata(stdout: str, job_dir: Path) -> dict:
             pass
 
     return {
-        "detected_cpgs":   detected_cpgs,
+        "detected_cpgs": detected_cpgs,
         "plotted_samples": plotted_samples,
-        "message":         "Heatmap generated successfully. The PNG can be retrieved.",
+        "message": "Heatmap generated successfully. The PNG can be retrieved.",
     }
 
 
@@ -307,7 +310,7 @@ def get_grouping_options_from_samplesheet(job_dir: Path) -> list:
             values = col_values[i]
             if not values:
                 continue
-            counter      = Counter(values)
+            counter = Counter(values)
             unique_count = len(counter)
             if unique_count < 2:
                 continue
@@ -366,16 +369,18 @@ def find_annotation_columns(job_dir: Path) -> list[dict]:
         columns = []
         for i, header in enumerate(headers):
             values = col_values[i]
-            if not values:        # fully empty column → nothing to annotate
+            if not values:  # fully empty column → nothing to annotate
                 continue
             if header == BASENAME_COLUMN:  # system file-location key, not biology
                 continue
             n_distinct = len(set(values))
-            columns.append({
-                "name":       header,
-                "type":       _classify_column(values, n_distinct, total_samples),
-                "n_distinct": n_distinct,
-            })
+            columns.append(
+                {
+                    "name": header,
+                    "type": _classify_column(values, n_distinct, total_samples),
+                    "n_distinct": n_distinct,
+                }
+            )
 
         return columns
 

@@ -5,12 +5,13 @@ These pin the GDPR-relevant guarantee: a successful reset means the job's
 directory is gone, and a reset works even after the in-memory record has been
 evicted (as long as the directory still exists).
 """
+
 from fastapi.testclient import TestClient
 
+from app.core.error_types import ErrorTypes
 from app.main import app
 from app.services import file_handler, job_manager
-from app.services.job_manager import JobStatus, JobPhase, JobStatusValue
-from app.core.error_types import ErrorTypes
+from app.services.job_manager import JobPhase, JobStatus, JobStatusValue
 
 client = TestClient(app, raise_server_exceptions=False)
 

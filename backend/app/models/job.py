@@ -7,27 +7,29 @@ for individual pipeline steps live in their own domain modules
 (``upload.py``, ``normalize.py``, ``filter.py``, ``batch.py``, ``heatmap.py``,
 ``table.py``).
 """
-from typing import Optional, Dict, Any
+
+from typing import Any
+
 from pydantic import BaseModel
 
 
 class JobStatus(BaseModel):
     """Internal job model — stored in the job_manager registry."""
 
-    job_id:           str
-    status:           str
-    phase:            str
+    job_id: str
+    status: str
+    phase: str
     progress_percent: int
-    current_step:     str
-    error:            Optional[Dict[str, Any]] = None
+    current_step: str
+    error: dict[str, Any] | None = None
 
 
 class StatusResponse(BaseModel):
     """Job status as returned by GET /status/{job_id} (UPPC-conformant)."""
 
-    job_id:           str
-    status:           str
-    phase:            str
+    job_id: str
+    status: str
+    phase: str
     progress_percent: int
-    current_step:     str
-    error:            Optional[Dict[str, Any]] = None
+    current_step: str
+    error: dict[str, Any] | None = None

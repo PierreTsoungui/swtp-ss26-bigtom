@@ -7,6 +7,7 @@ subsequent read. These helpers write to a temporary file in the same directory
 and atomically ``os.replace`` it into place, so a reader ever only sees the old
 or the new complete file — never a half-written one.
 """
+
 import contextlib
 import json
 import os
@@ -24,9 +25,7 @@ def write_json_atomic(path: Path | str, data: Any, *, indent: int | None = None)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    fd, tmp_name = tempfile.mkstemp(
-        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
-    )
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=indent)
@@ -48,7 +47,7 @@ def read_json_or_default(path: Path | str, default: Any) -> Any:
     surfacing as a 500.
     """
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return default

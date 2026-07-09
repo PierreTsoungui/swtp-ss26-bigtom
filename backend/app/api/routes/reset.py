@@ -1,5 +1,6 @@
 # app/api/routes/reset.py
 """Route for cancelling and permanently deleting a job."""
+
 from __future__ import annotations
 
 import logging

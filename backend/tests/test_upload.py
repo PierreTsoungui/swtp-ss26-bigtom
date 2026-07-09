@@ -1,8 +1,9 @@
 import json
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
-from pathlib import Path
-import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -16,11 +17,9 @@ client = TestClient(app)
 # On the host the backend lives at .../backend and jobs are one level up at .../jobs.
 _BACKEND_DIR = Path(__file__).resolve().parents[1]
 _JOBS_ROOT = (
-    _BACKEND_DIR / "jobs"
-    if (_BACKEND_DIR / "jobs").exists()
-    else _BACKEND_DIR.parent / "jobs"
+    _BACKEND_DIR / "jobs" if (_BACKEND_DIR / "jobs").exists() else _BACKEND_DIR.parent / "jobs"
 )
-TEST_DATA_DIR     = _JOBS_ROOT / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
+TEST_DATA_DIR = _JOBS_ROOT / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
 SAMPLE_SHEET_PATH = TEST_DATA_DIR / "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
 
 # Create minimal test data if missing so tests are self-contained
@@ -49,10 +48,12 @@ def get_idat_files() -> list:
         # Use rglob to find IDATs in all subdirectories recursively
         for file_path in sorted(TEST_DATA_DIR.rglob("*.idat")):
             if file_path.is_file():
-                files.append((
-                    "idat_files",
-                    (file_path.name, file_path.read_bytes(), "application/octet-stream"),
-                ))
+                files.append(
+                    (
+                        "idat_files",
+                        (file_path.name, file_path.read_bytes(), "application/octet-stream"),
+                    )
+                )
     return files
 
 
@@ -68,8 +69,8 @@ def get_sample_sheet() -> tuple:
 
 def valid_files() -> list:
     """Return IDAT + sample sheet. Fail if files are missing."""
-    idats  = get_idat_files()
-    sheet  = get_sample_sheet()
+    idats = get_idat_files()
+    sheet = get_sample_sheet()
     if not idats or not sheet:
         pytest.fail(
             f"Test data not found!\n"
@@ -82,7 +83,6 @@ def valid_files() -> list:
 def wrap(settings: dict) -> str:
     """Wrap dict in the API contract: {'filter_settings': {...}}."""
     return json.dumps({"filter_settings": settings})
-
 
 
 # TEST CLASS: TestUpload
@@ -110,21 +110,23 @@ class TestUpload:
 
     def test_upload_success_with_valid_filter_settings(self):
         """Successful upload with complete, valid filter_settings."""
-        settings = wrap({
-            "det_p":          {"enabled": True,  "cutoff": 0.01},
-            "bead_count":     {"enabled": True,  "bead_cutoff": 0.05},
-            "non_cpg":        {"enabled": True},
-            "snp":            {"enabled": True,  "maf_cutoff": 0.05},
-            "multi_hit":      {"enabled": True},
-            "xy_chromosomes": {"enabled": False},
-            "sample_quality": {
-                "enabled": True,
-                "detection_p_cutoff": 0.01,
-                "sample_failure_rate": 0.10,
-                "remove_failed_samples": True,
-                "enable_pca_outlier_detection": True
+        settings = wrap(
+            {
+                "det_p": {"enabled": True, "cutoff": 0.01},
+                "bead_count": {"enabled": True, "bead_cutoff": 0.05},
+                "non_cpg": {"enabled": True},
+                "snp": {"enabled": True, "maf_cutoff": 0.05},
+                "multi_hit": {"enabled": True},
+                "xy_chromosomes": {"enabled": False},
+                "sample_quality": {
+                    "enabled": True,
+                    "detection_p_cutoff": 0.01,
+                    "sample_failure_rate": 0.10,
+                    "remove_failed_samples": True,
+                    "enable_pca_outlier_detection": True,
+                },
             }
-        })
+        )
         response = client.post(
             "/api/v1/upload",
             files=valid_files(),
@@ -138,15 +140,17 @@ class TestUpload:
 
     def test_upload_success_filter_all_disabled(self):
         """All filters disabled → valid configuration."""
-        settings = wrap({
-            "det_p":          {"enabled": False},
-            "bead_count":     {"enabled": False},
-            "non_cpg":        {"enabled": False},
-            "snp":            {"enabled": False},
-            "multi_hit":      {"enabled": False},
-            "xy_chromosomes": {"enabled": False},
-            "sample_quality": {"enabled": False}
-        })
+        settings = wrap(
+            {
+                "det_p": {"enabled": False},
+                "bead_count": {"enabled": False},
+                "non_cpg": {"enabled": False},
+                "snp": {"enabled": False},
+                "multi_hit": {"enabled": False},
+                "xy_chromosomes": {"enabled": False},
+                "sample_quality": {"enabled": False},
+            }
+        )
         response = client.post(
             "/api/v1/upload",
             files=valid_files(),
@@ -310,10 +314,12 @@ class TestUpload:
 
     def test_upload_filter_settings_unknown_keys_ignored(self):
         """Unknown keys are ignored by Pydantic."""
-        settings = wrap({
-            "det_p": {"enabled": True, "cutoff": 0.01},
-            "unknown_filter": {"enabled": True},
-        })
+        settings = wrap(
+            {
+                "det_p": {"enabled": True, "cutoff": 0.01},
+                "unknown_filter": {"enabled": True},
+            }
+        )
         response = client.post(
             "/api/v1/upload",
             files=valid_files(),

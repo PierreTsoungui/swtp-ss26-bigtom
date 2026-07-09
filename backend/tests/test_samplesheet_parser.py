@@ -3,6 +3,7 @@
 These cover the delimiter/padding/section-detection paths that were previously
 untested and are the most error-prone part of sheet handling.
 """
+
 import pytest
 
 from app.core.error_types import AppException, ErrorTypes
@@ -26,6 +27,7 @@ def _write_sheet_bytes(job_dir, raw: bytes):
 
 # ── find_sample_sheet_name ────────────────────────────────────────────────────
 
+
 def test_find_prefers_the_canonical_name(tmp_path):
     (tmp_path / "SampleSheet.csv").write_text("x")
     assert find_sample_sheet_name(tmp_path) == "SampleSheet.csv"
@@ -44,6 +46,7 @@ def test_find_raises_when_no_sheet_present(tmp_path):
 
 # ── read_data_section: delimiters ─────────────────────────────────────────────
 
+
 def test_reads_comma_delimited_data_section(tmp_path):
     _write_sheet(tmp_path, "[Data]\nSample_Name,Group\nS1,A\nS2,B\n")
     headers, rows = read_data_section(tmp_path)
@@ -59,6 +62,7 @@ def test_reads_semicolon_delimited_data_section(tmp_path):
 
 
 # ── read_data_section: section detection ──────────────────────────────────────
+
 
 def test_ignores_content_before_the_data_marker(tmp_path):
     _write_sheet(
@@ -89,6 +93,7 @@ def test_data_marker_without_rows_returns_empty(tmp_path):
 
 # ── read_data_section: ragged rows ────────────────────────────────────────────
 
+
 def test_short_rows_are_padded_to_header_width(tmp_path):
     _write_sheet(tmp_path, "[Data]\nA,B,C\nx,y\n")
     _, rows = read_data_section(tmp_path)
@@ -109,6 +114,7 @@ def test_blank_lines_within_the_data_section_are_skipped(tmp_path):
 
 
 # ── read_data_section: encoding ───────────────────────────────────────────────
+
 
 def test_bom_before_data_marker_does_not_corrupt_headers(tmp_path):
     # Illumina sheets carry a [Header]/[Data] structure, so a UTF-8 BOM sits well
@@ -139,6 +145,7 @@ def test_missing_sheet_raises_not_found(tmp_path):
 
 
 # ── columns_by_index ──────────────────────────────────────────────────────────
+
 
 def test_columns_by_index_groups_non_empty_values_per_column():
     headers = ["A", "B"]

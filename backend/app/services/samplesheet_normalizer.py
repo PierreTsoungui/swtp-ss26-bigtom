@@ -22,11 +22,11 @@ variants, we convert *once*, here, at upload time. Everything downstream then
 reads a single canonical CSV. This module is the single source of truth for that
 conversion; nothing else should parse a raw upload.
 """
+
 import csv
 import io
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -41,7 +41,7 @@ DATA_MARKER = "[Data]"
 # the biological grouping for DMP/DMR. When a sheet uses names the alias table
 # below does not know, the user maps these roles explicitly (see
 # ``normalize_sample_sheet(..., column_mapping=...)``).
-CANONICAL_ROLES: Tuple[str, ...] = (
+CANONICAL_ROLES: tuple[str, ...] = (
     "Sentrix_ID",
     "Sentrix_Position",
     "Sample_Group",
@@ -102,7 +102,7 @@ def _normalize_key(name: str) -> str:
 def normalize_sample_sheet(
     content: bytes,
     filename: str,
-    column_mapping: Optional[Dict[str, str]] = None,
+    column_mapping: dict[str, str] | None = None,
 ) -> str:
     """Convert a raw uploaded sample sheet into the canonical CSV text.
 
@@ -133,9 +133,9 @@ def normalize_sample_sheet(
 
 
 def build_canonical_csv(
-    raw_headers: List[str],
-    rows: List[List[str]],
-    column_mapping: Optional[Dict[str, str]] = None,
+    raw_headers: list[str],
+    rows: list[list[str]],
+    column_mapping: dict[str, str] | None = None,
 ) -> str:
     """Render already-parsed ``(raw_headers, rows)`` as the canonical CSV text.
 
@@ -164,7 +164,7 @@ def build_canonical_csv(
     return _write_canonical_csv(headers, rows)
 
 
-def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], List[List[str]]]:
+def read_sample_sheet_table(content: bytes, filename: str) -> tuple[list[str], list[list[str]]]:
     """Read a sheet's data section into ``(raw_headers, rows)`` without renaming.
 
     This is the shared front-half of the normalization: it reads the source
@@ -185,7 +185,7 @@ def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], L
 
     header_idx = _locate_header_row(grid)
     raw_headers = grid[header_idx]
-    raw_rows = grid[header_idx + 1:]
+    raw_rows = grid[header_idx + 1 :]
 
     # Keep only columns that actually have a name; trailing empty cells are a
     # common artefact of Excel exports (a fixed grid width padded with blanks).
@@ -203,7 +203,7 @@ def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], L
     return headers, rows
 
 
-def suggest_column_mapping(raw_headers: List[str]) -> Dict[str, str]:
+def suggest_column_mapping(raw_headers: list[str]) -> dict[str, str]:
     """Best-effort role → raw-column guess used to pre-fill the role dropdowns.
 
     Reuses the Illumina alias table: every raw header that resolves to one of the
@@ -211,7 +211,7 @@ def suggest_column_mapping(raw_headers: List[str]) -> Dict[str, str]:
     explicit ``Sentrix_ID`` beats a later ``SentrixBarcode_A``). Roles without a
     confident match are simply absent — the user picks those manually.
     """
-    suggestion: Dict[str, str] = {}
+    suggestion: dict[str, str] = {}
     for name in raw_headers:
         role = _HEADER_ALIASES.get(_normalize_key(name))
         if role in CANONICAL_ROLES and role not in suggestion:
@@ -219,7 +219,7 @@ def suggest_column_mapping(raw_headers: List[str]) -> Dict[str, str]:
     return suggestion
 
 
-def find_basename_column(headers: List[str]) -> Optional[str]:
+def find_basename_column(headers: list[str]) -> str | None:
     """Return the raw header that denotes the IDAT ``Basename``, or ``None``.
 
     Detection is tolerant to case and spacing/underscores (``Basename``,
@@ -235,11 +235,12 @@ def find_basename_column(headers: List[str]) -> Optional[str]:
 
 # ── IDAT file-location contract ────────────────────────────────────────────────
 
+
 def _resolve_linkage_keys(
-    raw_headers: List[str],
-    rows: List[List[str]],
-    column_mapping: Optional[Dict[str, str]],
-) -> Optional[List[str]]:
+    raw_headers: list[str],
+    rows: list[list[str]],
+    column_mapping: dict[str, str] | None,
+) -> list[str] | None:
     """Derive the per-row IDAT file-location prefix from the raw sheet.
 
     Returns one prefix per row — the value written into the reserved
@@ -274,8 +275,8 @@ def _resolve_linkage_keys(
 
 
 def _resolve_sentrix_columns(
-    raw_headers: List[str], column_mapping: Optional[Dict[str, str]]
-) -> Tuple[Optional[str], Optional[str]]:
+    raw_headers: list[str], column_mapping: dict[str, str] | None
+) -> tuple[str | None, str | None]:
     """Return the raw ``(Sentrix_ID, Sentrix_Position)`` column names, or ``(None, None)``.
 
     Uses the explicit user mapping when given, otherwise the Illumina alias table,
@@ -296,8 +297,8 @@ def _resolve_sentrix_columns(
 
 
 def _install_basename_contract(
-    headers: List[str], rows: List[List[str]], linkage: Optional[List[str]]
-) -> Tuple[List[str], List[List[str]]]:
+    headers: list[str], rows: list[list[str]], linkage: list[str] | None
+) -> tuple[list[str], list[list[str]]]:
     """Guarantee a single reserved ``Basename`` column holding the linkage keys.
 
     Applied AFTER the role mapping, so mapping a role onto the source Basename
@@ -318,12 +319,12 @@ def _install_basename_contract(
     return headers, rows
 
 
-def _cell(row: List[str], idx: int) -> str:
+def _cell(row: list[str], idx: int) -> str:
     """Whitespace-trimmed value at ``idx``, or ``""`` when the row is short."""
     return row[idx].strip() if idx < len(row) else ""
 
 
-def _with_value(row: List[str], idx: int, value: str) -> List[str]:
+def _with_value(row: list[str], idx: int, value: str) -> list[str]:
     """Return a copy of ``row`` with ``row[idx] = value`` (padding when short)."""
     row = list(row)
     while len(row) <= idx:
@@ -334,7 +335,8 @@ def _with_value(row: List[str], idx: int, value: str) -> List[str]:
 
 # ── Reading the various source formats into a string grid ──────────────────────
 
-def _read_excel_grid(content: bytes, ext: str) -> List[List[str]]:
+
+def _read_excel_grid(content: bytes, ext: str) -> list[list[str]]:
     """Read the first worksheet into a grid of strings.
 
     ``dtype=object`` + ``header=None`` keeps the raw cell layout intact (so the
@@ -348,9 +350,7 @@ def _read_excel_grid(content: bytes, ext: str) -> List[List[str]]:
         )
     except ImportError as exc:
         # xlrd is optional; give an actionable message instead of a stack trace.
-        raise ValueError(
-            f"Excel file ('{ext}') cannot be read: {exc}"
-        ) from exc
+        raise ValueError(f"Excel file ('{ext}') cannot be read: {exc}") from exc
     except Exception as exc:
         # Narrow in effect: pandas/openpyxl/xlrd raise a variety of types for a
         # malformed workbook; normalize them to one actionable ValueError.
@@ -359,7 +359,7 @@ def _read_excel_grid(content: bytes, ext: str) -> List[List[str]]:
     return [[_cell_to_str(cell) for cell in row] for row in df.itertuples(index=False)]
 
 
-def _read_csv_grid(content: bytes) -> List[List[str]]:
+def _read_csv_grid(content: bytes) -> list[list[str]]:
     """Decode and parse a CSV upload into a grid of strings."""
     text = content.decode("utf-8-sig", errors="replace")
     lines = text.splitlines()
@@ -368,7 +368,7 @@ def _read_csv_grid(content: bytes) -> List[List[str]]:
     return [[cell.strip() for cell in row] for row in reader]
 
 
-def _detect_delimiter(lines: List[str]) -> str:
+def _detect_delimiter(lines: list[str]) -> str:
     """Pick the delimiter from the first table-like line.
 
     Lines without any candidate delimiter are skipped, so a bare ``[Data]``
@@ -402,7 +402,8 @@ def _cell_to_str(value) -> str:
 
 # ── Structural normalization ───────────────────────────────────────────────────
 
-def _locate_header_row(grid: List[List[str]]) -> int:
+
+def _locate_header_row(grid: list[list[str]]) -> int:
     """Return the index of the column-header row.
 
     If a ``[Data]`` marker is present (Illumina format), the header is the next
@@ -426,14 +427,14 @@ def _locate_header_row(grid: List[List[str]]) -> int:
     raise ValueError("The sample sheet contains no usable rows.")
 
 
-def _canonicalize_headers(headers: List[str]) -> List[str]:
+def _canonicalize_headers(headers: list[str]) -> list[str]:
     """Map known Illumina aliases onto the canonical column names.
 
     A column is only renamed if its canonical target is not already present, so a
     sheet carrying both ``Sentrix_ID`` and ``SentrixBarcode_A`` never collapses
     into two columns with the same name.
     """
-    result: List[str] = []
+    result: list[str] = []
     seen = set()
     for name in headers:
         cleaned = name.strip()
@@ -445,7 +446,7 @@ def _canonicalize_headers(headers: List[str]) -> List[str]:
     return result
 
 
-def _canonicalize_basename(headers: List[str]) -> List[str]:
+def _canonicalize_basename(headers: list[str]) -> list[str]:
     """Rename a Basename-like column to the exact canonical ``Basename``.
 
     The R backend recognizes the alternative IDAT-naming convention by the literal
@@ -456,7 +457,7 @@ def _canonicalize_basename(headers: List[str]) -> List[str]:
     if BASENAME_COLUMN in headers:
         return headers
 
-    result: List[str] = []
+    result: list[str] = []
     renamed = False
     for name in headers:
         if not renamed and _normalize_key(name) == _normalize_key(BASENAME_COLUMN):
@@ -467,7 +468,7 @@ def _canonicalize_basename(headers: List[str]) -> List[str]:
     return result
 
 
-def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> List[str]:
+def _apply_explicit_mapping(raw_headers: list[str], mapping: dict[str, str]) -> list[str]:
     """Rename the user-mapped columns to their canonical role names.
 
     ``mapping`` is ``role -> raw column name`` (e.g. ``{"Sentrix_ID": "Chip"}``).
@@ -484,7 +485,7 @@ def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> 
     raw_to_role = {raw: role for role, raw in mapping.items()}
     targets = set(mapping.keys())
 
-    result: List[str] = []
+    result: list[str] = []
     assigned: set[str] = set()
     for name in raw_headers:
         role = raw_to_role.get(name)
@@ -498,12 +499,12 @@ def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> 
     return result
 
 
-def _select_and_pad(row: List[str], keep: List[int]) -> List[str]:
+def _select_and_pad(row: list[str], keep: list[int]) -> list[str]:
     """Project a data row onto the kept column indices, padding short rows."""
     return [row[i] if i < len(row) else "" for i in keep]
 
 
-def _write_canonical_csv(headers: List[str], rows: List[List[str]]) -> str:
+def _write_canonical_csv(headers: list[str], rows: list[list[str]]) -> str:
     """Serialize headers + rows as the canonical ``[Data]`` CSV text."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")

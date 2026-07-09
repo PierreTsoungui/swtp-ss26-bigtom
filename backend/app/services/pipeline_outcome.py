@@ -13,16 +13,17 @@ This lives in the service layer (not under ``r_executor``) because applying the
 policy requires ``job_manager.transition_job``; keeping it here avoids coupling
 the low-level R executor to job-state management.
 """
-import logging
-from enum import Enum
 
-from app.services.job_manager import transition_job, JobPhase, JobStatusValue
+import logging
+from enum import StrEnum
+
+from app.services.job_manager import JobPhase, JobStatusValue, transition_job
 from app.services.r_executor import ExecutionResult
 
 logger = logging.getLogger(__name__)
 
 
-class StepOutcome(str, Enum):
+class StepOutcome(StrEnum):
     """Result of interpreting a finished R step."""
 
     SUCCESS = "success"
@@ -105,9 +106,7 @@ def handle_step_result(
 
     if not result.is_success:
         detail = failure_detail(result, fallback)
-        logger.error(
-            "R step failed: job_id=%s phase=%s detail=%s", job_id, phase.value, detail
-        )
+        logger.error("R step failed: job_id=%s phase=%s detail=%s", job_id, phase.value, detail)
         transition_job(
             job_id,
             new_phase=phase,

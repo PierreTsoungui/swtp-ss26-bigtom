@@ -1,5 +1,6 @@
 # app/services/normalization_preview_service.py
 """Normalization-preview pipeline: run the R preview and collect its artifacts."""
+
 import asyncio
 import json
 import logging
@@ -7,8 +8,8 @@ from pathlib import Path
 
 from app.services import job_manager
 from app.services.job_manager import JobPhase, JobStatusValue
-from app.services.pipeline_outcome import progress_fields, handle_step_result, StepOutcome
-from app.services.r_executor import run_r_script, NormalizationPreviewCommand
+from app.services.pipeline_outcome import StepOutcome, handle_step_result, progress_fields
+from app.services.r_executor import NormalizationPreviewCommand, run_r_script
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,11 @@ def _scan_preview_artifacts(job_path: Path) -> dict[str, dict]:
     artifacts: dict[str, dict] = {}
 
     for png_file in sorted(job_path.glob("density_*.png")):
-        method = png_file.stem[len("density_"):]
+        method = png_file.stem[len("density_") :]
         artifacts.setdefault(method, {"density": None, "pca": None})["density"] = png_file.name
 
     for json_file in sorted(job_path.glob("pca_*.json")):
-        method = json_file.stem[len("pca_"):]
+        method = json_file.stem[len("pca_") :]
         artifacts.setdefault(method, {"density": None, "pca": None})["pca"] = json_file.name
 
     return artifacts
@@ -68,16 +69,19 @@ async def run_normalization_preview(
         on_progress=on_progress,
     )
 
-    if handle_step_result(
-        job_id,
-        result,
-        phase=JobPhase.NORMALIZATION_PREVIEW,
-        fallback="The R script exited with an error.",
-        timeout_step="Error: the R script exceeded its time limit.",
-        timeout_detail="Normalization preview timeout.",
-        failure_step="Error during the normalization preview.",
-        cancel_log=f"Normalization preview cancelled: job_id={job_id}",
-    ) is not StepOutcome.SUCCESS:
+    if (
+        handle_step_result(
+            job_id,
+            result,
+            phase=JobPhase.NORMALIZATION_PREVIEW,
+            fallback="The R script exited with an error.",
+            timeout_step="Error: the R script exceeded its time limit.",
+            timeout_detail="Normalization preview timeout.",
+            failure_step="Error during the normalization preview.",
+            cancel_log=f"Normalization preview cancelled: job_id={job_id}",
+        )
+        is not StepOutcome.SUCCESS
+    ):
         return
 
     # ── Plot detection: filesystem scan (primary strategy) ───────────────────
@@ -98,7 +102,8 @@ async def run_normalization_preview(
     if not preview_plots:
         logger.error(
             "No preview artifacts in the job directory: job_id=%s job_dir=%s",
-            job_id, job_dir,
+            job_id,
+            job_dir,
         )
         job_manager.transition_job(
             job_id,

@@ -1,16 +1,17 @@
 # tests/test_heatmap.py
 
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
-from pathlib import Path
-import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.core.error_types import ErrorTypes
 from app.main import app
 from app.models.job import JobStatus
 from app.services import heatmap_service, job_manager
-from app.core.error_types import ErrorTypes
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -18,6 +19,7 @@ VALID_JOB_ID = "test-heatmap-job"
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_job(tmp_path, monkeypatch):
@@ -74,6 +76,7 @@ def mock_job_with_samplesheet(mock_job):
 
 # ── GET /options TESTS ────────────────────────────────────────────────────────
 
+
 def test_get_heatmap_options_success(mock_job_with_samplesheet):
     """The options endpoint returns every column as a typed annotation candidate.
 
@@ -114,12 +117,7 @@ def test_get_heatmap_options_no_annotatable_columns(mock_job):
     """
     job_id, job_dir = mock_job
 
-    csv_content = (
-        "[Data],\n"
-        "Col_A,Col_B\n"
-        ",\n"
-        ",\n"
-    )
+    csv_content = "[Data],\n" "Col_A,Col_B\n" ",\n" ",\n"
     (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
 
     response = client.get(f"/api/v1/heatmap/{job_id}/options")
@@ -129,6 +127,7 @@ def test_get_heatmap_options_no_annotatable_columns(mock_job):
 
 
 # ── POST /{job_id} TESTS ──────────────────────────────────────────────────────
+
 
 def test_run_heatmap_success(mock_job_with_samplesheet, monkeypatch):
     """Test successful heatmap generation."""
@@ -158,6 +157,7 @@ def test_run_heatmap_with_secondary_grouping(mock_job_with_samplesheet, monkeypa
 
     async def mock_pipeline_task(*args, **kwargs):
         pass
+
     monkeypatch.setattr(heatmap_service, "run_heatmap_pipeline_task", mock_pipeline_task)
 
     payload = {
@@ -193,12 +193,7 @@ def test_run_heatmap_invalid_secondary_column(mock_job_with_samplesheet):
     """Test heatmap with invalid secondary grouping column."""
     job_id, _ = mock_job_with_samplesheet
 
-    payload = {
-        "grouping": {
-            "primary": "Sample_Group",
-            "secondary": "Fantasy_Column"
-        }
-    }
+    payload = {"grouping": {"primary": "Sample_Group", "secondary": "Fantasy_Column"}}
 
     response = client.post(f"/api/v1/heatmap/{job_id}", json=payload)
     assert response.status_code == 400
@@ -211,12 +206,7 @@ def test_run_heatmap_primary_equals_secondary(mock_job_with_samplesheet):
     """Test heatmap when primary equals secondary grouping."""
     job_id, _ = mock_job_with_samplesheet
 
-    payload = {
-        "grouping": {
-            "primary": "Sample_Group",
-            "secondary": "Sample_Group"
-        }
-    }
+    payload = {"grouping": {"primary": "Sample_Group", "secondary": "Sample_Group"}}
 
     response = client.post(f"/api/v1/heatmap/{job_id}", json=payload)
     assert response.status_code == 400
@@ -227,9 +217,7 @@ def test_run_heatmap_primary_equals_secondary(mock_job_with_samplesheet):
 
 def test_run_heatmap_job_not_found(mock_job):
     """Test heatmap for non-existent job."""
-    payload = {
-        "grouping": {"primary": "Sample_Group"}
-    }
+    payload = {"grouping": {"primary": "Sample_Group"}}
 
     response = client.post("/api/v1/heatmap/non-existent-job", json=payload)
     assert response.status_code == 404
@@ -275,9 +263,7 @@ def test_run_heatmap_no_dmp_rds(mock_job):
     )
     (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
 
-    payload = {
-        "grouping": {"primary": "Sample_Group"}
-    }
+    payload = {"grouping": {"primary": "Sample_Group"}}
 
     response = client.post(f"/api/v1/heatmap/{job_id}", json=payload)
     assert response.status_code == 404
@@ -287,6 +273,7 @@ def test_run_heatmap_no_dmp_rds(mock_job):
 
 
 # ── GET /{job_id} (PNG) TESTS ─────────────────────────────────────────────────
+
 
 def test_get_heatmap_png_success(mock_job):
     """Test successful PNG retrieval."""
@@ -320,5 +307,3 @@ def test_get_heatmap_png_job_not_found(mock_job):
 
     data = response.json()
     assert data["type"] == ErrorTypes.JOB_NOT_FOUND.path
-
-    

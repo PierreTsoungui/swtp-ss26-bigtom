@@ -65,10 +65,11 @@ def enforce_free_disk_space(instance: str | None = None) -> None:
     except OSError:
         return  # cannot determine free space; do not block on a measurement failure
 
-    if free < floor_mb * 1024 ** 2:
+    if free < floor_mb * 1024**2:
         logger.warning(
             "Upload rejected: only %.0f MB free (< floor %d MB)",
-            free / 1024 ** 2, floor_mb,
+            free / 1024**2,
+            floor_mb,
         )
         raise AppException(
             ErrorTypes.STORAGE_LIMIT_EXCEEDED,
@@ -114,11 +115,12 @@ def enforce_storage_limit(instance: str) -> None:
     if not limit_gb:
         return
     used = jobs_dir_size_bytes()
-    limit_bytes = int(limit_gb * 1024 ** 3)
+    limit_bytes = int(limit_gb * 1024**3)
     if used >= limit_bytes:
         logger.warning(
             "Upload rejected: job storage %.1f GB >= limit %g GB",
-            used / 1024 ** 3, limit_gb,
+            used / 1024**3,
+            limit_gb,
         )
         raise AppException(
             ErrorTypes.STORAGE_LIMIT_EXCEEDED,

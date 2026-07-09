@@ -1,13 +1,14 @@
-import os
-import sys
 import asyncio
-import json
-import tempfile
-import shutil
 import atexit
-import pytest
+import json
+import os
+import shutil
+import sys
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 # Python path correction
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -21,9 +22,7 @@ atexit.register(shutil.rmtree, _TEST_JOBS_DIR, ignore_errors=True)
 
 
 async def mock_run_r_script(
-    command,  # RCommand object (new signature)
-    cancel_event: asyncio.Event,
-    on_progress=None
+    command, cancel_event: asyncio.Event, on_progress=None  # RCommand object (new signature)
 ):
     """
     Mock for run_r_script - Simulates real R script behavior.
@@ -35,6 +34,7 @@ async def mock_run_r_script(
     - Handles different command modes (filtering, normalization_preview, etc.)
     """
     from pathlib import Path
+
     from app.services.r_executor.result import ExecutionResult, ExecutionStatus
 
     job_id = command.job_id
@@ -50,20 +50,17 @@ async def mock_run_r_script(
             (40, "Bead Count Filtering"),
             (60, "Non-CpG Filtering"),
             (80, "SNP Filtering"),
-            (100, "Filtering complete")
+            (100, "Filtering complete"),
         ]
     elif command.mode_label == "normalization_preview":
         progress_steps = [
             (25, "RAW normalization"),
             (50, "NOOB normalization"),
             (75, "QUANTILE normalization"),
-            (100, "Preview complete")
+            (100, "Preview complete"),
         ]
     else:
-        progress_steps = [
-            (50, "Processing..."),
-            (100, "Complete")
-        ]
+        progress_steps = [(50, "Processing..."), (100, "Complete")]
 
     for progress, step in progress_steps:
         if on_progress:
@@ -89,8 +86,8 @@ async def mock_run_r_script(
                 {"name": "Bead Count", "removed": 2613, "remaining": 470052},
                 {"name": "Non-CpG", "removed": 1432, "remaining": 468620},
                 {"name": "SNP", "removed": 856, "remaining": 467764},
-                {"name": "Multi-Hit", "removed": 234, "remaining": 467530}
-            ]
+                {"name": "Multi-Hit", "removed": 234, "remaining": 467530},
+            ],
         }
 
         # Save filter_stats.json (for GET /filter/.../stats)
@@ -104,16 +101,12 @@ async def mock_run_r_script(
     elif command.mode_label == "normalization_preview":
         # Simulate preview plots
         for method in ["raw", "noob", "quantile", "swan", "funnorm"]:
-            preview_plots.append({
-                "method": method,
-                "plot_kind": "density",
-                "file": f"density_{method}.png"
-            })
-            preview_plots.append({
-                "method": method,
-                "plot_kind": "pca",
-                "file": f"pca_{method}.png"
-            })
+            preview_plots.append(
+                {"method": method, "plot_kind": "density", "file": f"density_{method}.png"}
+            )
+            preview_plots.append(
+                {"method": method, "plot_kind": "pca", "file": f"pca_{method}.png"}
+            )
 
     print(f"[MOCK_R] Simulation complete for job {job_id}")
 
@@ -123,10 +116,7 @@ async def mock_run_r_script(
         returncode=0,
         stdout="Mock R script successful",
         stderr="",
-        extra={
-            "filter_stats": filter_stats,
-            "preview_plots": preview_plots
-        }
+        extra={"filter_stats": filter_stats, "preview_plots": preview_plots},
     )
 
     # Parse output (simulate command's parse_stdout hook)
@@ -137,8 +127,9 @@ async def mock_run_r_script(
 
 # Patch: Replace run_r_script with mock
 with patch("app.services.r_executor.run_r_script", mock_run_r_script):
-    from app.main import app
     from fastapi.testclient import TestClient
+
+    from app.main import app
 
 client = TestClient(app)
 
@@ -146,9 +137,7 @@ client = TestClient(app)
 # In the container BACKEND_DIR=/app and jobs are mounted at /app/jobs.
 # On the host BACKEND_DIR=.../backend and jobs live one level up at .../jobs.
 _JOBS_ROOT = (
-    BACKEND_DIR / "jobs"
-    if (BACKEND_DIR / "jobs").exists()
-    else BACKEND_DIR.parent / "jobs"
+    BACKEND_DIR / "jobs" if (BACKEND_DIR / "jobs").exists() else BACKEND_DIR.parent / "jobs"
 )
 TEST_DATA_DIR = _JOBS_ROOT / "07b7fa29-8a9d-418d-bc16-8308a2b387fd"
 SAMPLE_SHEET_PATH = TEST_DATA_DIR / "Demo_EPIC-8v2-0_A1_SampleSheet_16.csv"
@@ -179,10 +168,7 @@ def idat_files():
             if file_path.is_file():
                 with open(file_path, "rb") as f:
                     content = f.read()
-                files.append((
-                    "idat_files",
-                    (file_path.name, content, "application/octet-stream")
-                ))
+                files.append(("idat_files", (file_path.name, content, "application/octet-stream")))
     return files
 
 

@@ -21,6 +21,7 @@ every defence lives here, behind one function (``safe_extract_zip``):
 
 The limits come from ``app.core.upload_limits`` (single source of truth).
 """
+
 import logging
 import os
 import stat
@@ -55,8 +56,8 @@ class ArchiveError(Exception):
 class ExtractedFile:
     """A file that was safely written to the destination directory."""
 
-    path: Path      # absolute path on disk
-    rel_path: str   # path of the member inside the archive (for display)
+    path: Path  # absolute path on disk
+    rel_path: str  # path of the member inside the archive (for display)
 
 
 @dataclass
@@ -69,6 +70,7 @@ class ExtractionResult:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def safe_extract_zip(zip_path: Path, dest_dir: Path) -> ExtractionResult:
     """Extract the allowed files of ``zip_path`` into ``dest_dir``.
@@ -121,6 +123,7 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path) -> ExtractionResult:
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
+
 def _is_junk(member: zipfile.ZipInfo) -> bool:
     """Return True for entries dropped silently: dirs, symlinks, OS junk, hidden."""
     if member.is_dir():
@@ -135,10 +138,7 @@ def _is_junk(member: zipfile.ZipInfo) -> bool:
         return True
 
     basename = parts[-1] if parts else member.filename
-    if basename == ".DS_Store" or basename.startswith("."):
-        return True
-
-    return False
+    return basename == ".DS_Store" or basename.startswith(".")
 
 
 def _check_archive_envelope(members: list[zipfile.ZipInfo]) -> None:

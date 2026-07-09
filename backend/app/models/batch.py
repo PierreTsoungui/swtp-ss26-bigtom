@@ -1,15 +1,16 @@
 # app/models/batch.py
 """Pydantic schemas for the batch-correction and downstream-analysis API."""
 
+from typing import Any
+
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
 
 
 class BatchSettingsInner(BaseModel):
     """Batch-correction settings: the batch variable and its covariates."""
 
     batch_variable: str
-    covariates: List[str] = []
+    covariates: list[str] = []
 
 
 class BatchSettingsPayload(BaseModel):
@@ -26,7 +27,7 @@ class BatchRound(BaseModel):
     # URL of the static SVD heatmap (PNG for display; append ?format=pdf for the
     # publication-quality vector download).
     svd_plot: str
-    settings_used: Optional[Dict[str, Any]] = None
+    settings_used: dict[str, Any] | None = None
     timestamp: str
 
 
@@ -34,7 +35,7 @@ class BatchHistoryResponse(BaseModel):
     """Full batch-correction history for a job."""
 
     job_id: str
-    rounds: List[BatchRound]
+    rounds: list[BatchRound]
     current_round: int
     correction_applied: bool
 
@@ -59,7 +60,7 @@ class SampleSheetColumn(BaseModel):
 
     name: str
     levels: int
-    values: List[str] = []
+    values: list[str] = []
 
 
 class AnalysisStartRequest(BaseModel):
@@ -70,9 +71,9 @@ class AnalysisStartRequest(BaseModel):
     deterministic comparison.
     """
 
-    group_column: Optional[str] = None
-    case_group: Optional[str] = None
-    control_group: Optional[str] = None
+    group_column: str | None = None
+    case_group: str | None = None
+    control_group: str | None = None
 
 
 class BatchOptionsResponse(BaseModel):

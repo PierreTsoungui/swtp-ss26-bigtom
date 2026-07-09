@@ -9,11 +9,11 @@ Heavy / blocking work (streaming to disk, ZIP extraction, parsing) runs in a
 worker thread so the event loop stays responsive. On any failure the staging
 directory is discarded.
 """
+
 import asyncio
 import json
 import logging
 from pathlib import Path, PurePosixPath
-from typing import Optional
 
 from fastapi import UploadFile
 
@@ -64,6 +64,7 @@ _ROLE_TO_FIELD = {
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+
 async def inspect_upload(files: list[UploadFile]) -> InspectManifest:
     """Stage and classify an upload; return the manifest (raises on fatal error)."""
     if not files:
@@ -92,7 +93,10 @@ async def inspect_upload(files: list[UploadFile]) -> InspectManifest:
 
 # ── Staging (runs in a worker thread) ─────────────────────────────────────────
 
-def _stage_and_build(files: list[UploadFile], session_id: str, session_dir: Path) -> InspectManifest:
+
+def _stage_and_build(
+    files: list[UploadFile], session_id: str, session_dir: Path
+) -> InspectManifest:
     """Stage every uploaded item, then build the manifest.
 
     ZIPs are always extracted — even when mixed with individual files — so a user
@@ -115,14 +119,18 @@ def _stage_and_build(files: list[UploadFile], session_id: str, session_dir: Path
 
         if ext == ".zip":
             has_zip = True
-            total = _check_total(total + _stage_zip_member(upload, session_dir, zip_index, skipped, name))
+            total = _check_total(
+                total + _stage_zip_member(upload, session_dir, zip_index, skipped, name)
+            )
             zip_index += 1
         elif ext in ALLOWED_IDAT_EXTENSIONS or ext in ALLOWED_SHEET_EXTENSIONS:
             if basename in seen:  # flatten to basename; de-duplicate
                 skipped.append(name)
                 continue
             seen.add(basename)
-            total = _check_total(total + _stream_to_file(upload.file, session_dir / basename, MAX_SINGLE_FILE_BYTES))
+            total = _check_total(
+                total + _stream_to_file(upload.file, session_dir / basename, MAX_SINGLE_FILE_BYTES)
+            )
         else:
             skipped.append(name)
 
@@ -130,7 +138,9 @@ def _stage_and_build(files: list[UploadFile], session_id: str, session_dir: Path
     return _build_manifest(session_id, session_dir, source, skipped)
 
 
-def _stage_zip_member(upload: UploadFile, session_dir: Path, index: int, skipped: list[str], name: str) -> int:
+def _stage_zip_member(
+    upload: UploadFile, session_dir: Path, index: int, skipped: list[str], name: str
+) -> int:
     """Persist one uploaded ZIP, extract it safely, drop it. Returns its byte size.
 
     A ZIP that simply contains nothing usable is not fatal here (the upload may
@@ -176,7 +186,10 @@ def _stream_to_file(src, target: Path, max_bytes: int) -> int:
 
 # ── Manifest building ─────────────────────────────────────────────────────────
 
-def _build_manifest(session_id: str, session_dir: Path, source: str, skipped: list[str]) -> InspectManifest:
+
+def _build_manifest(
+    session_id: str, session_dir: Path, source: str, skipped: list[str]
+) -> InspectManifest:
     sheet_files: list[tuple[Path, str]] = []
     idat_files: list[tuple[Path, str]] = []
 
@@ -191,14 +204,18 @@ def _build_manifest(session_id: str, session_dir: Path, source: str, skipped: li
             sheet_files.append((path, rel))
 
     if not sheet_files and not idat_files:
-        raise AppException(ErrorTypes.NO_SUPPORTED_FILES, "No usable files (IDAT/sample sheet) found.")
+        raise AppException(
+            ErrorTypes.NO_SUPPORTED_FILES, "No usable files (IDAT/sample sheet) found."
+        )
 
     candidates, sheet_map, sheet_other = _classify_sheets(sheet_files)
     pairs, pair_map, idat_other = _pair_idats(idat_files)
 
     other_files = sheet_other + idat_other
     other_files += [
-        OtherFile(name=PurePosixPath(n.replace("\\", "/")).name, rel_path=n, reason="unsupported_type")
+        OtherFile(
+            name=PurePosixPath(n.replace("\\", "/")).name, rel_path=n, reason="unsupported_type"
+        )
         for n in skipped
     ]
 
@@ -232,21 +249,23 @@ def _classify_sheets(
             continue
         sheet_id = f"sheet-{len(candidates) + 1}"
         sheet_map[sheet_id] = rel
-        candidates.append(SampleSheetCandidate(
-            id=sheet_id,
-            name=path.name,
-            rel_path=rel,
-            size_bytes=path.stat().st_size,
-            recognized=True,
-            sample_count=sample_count,
-            columns=columns,
-            suggested_mapping=suggestion,
-        ))
+        candidates.append(
+            SampleSheetCandidate(
+                id=sheet_id,
+                name=path.name,
+                rel_path=rel,
+                size_bytes=path.stat().st_size,
+                recognized=True,
+                sample_count=sample_count,
+                columns=columns,
+                suggested_mapping=suggestion,
+            )
+        )
 
     return candidates, sheet_map, other
 
 
-def _describe_sheet(path: Path) -> tuple[bool, Optional[int], list[str], SuggestedMapping]:
+def _describe_sheet(path: Path) -> tuple[bool, int | None, list[str], SuggestedMapping]:
     """Return ``(recognized, sample_count, raw_columns, suggested_mapping)``.
 
     Columns are the sheet's *raw* header names (the dropdown options); the
@@ -261,7 +280,9 @@ def _describe_sheet(path: Path) -> tuple[bool, Optional[int], list[str], Suggest
         return False, None, [], empty
     if not columns:
         return False, None, [], empty
-    suggestion = {_ROLE_TO_FIELD[role]: col for role, col in suggest_column_mapping(columns).items()}
+    suggestion = {
+        _ROLE_TO_FIELD[role]: col for role, col in suggest_column_mapping(columns).items()
+    }
     return True, len(rows), columns, SuggestedMapping(**suggestion)
 
 
@@ -282,7 +303,10 @@ def _pair_idats(
         if entry[channel] is not None:
             other.append(OtherFile(name=path.name, rel_path=rel, reason="duplicate_idat"))
             continue
-        entry[channel] = {"path": rel, "file": FileEntry(name=path.name, rel_path=rel, size_bytes=path.stat().st_size)}
+        entry[channel] = {
+            "path": rel,
+            "file": FileEntry(name=path.name, rel_path=rel, size_bytes=path.stat().st_size),
+        }
 
     pair_models: list[IdatPair] = []
     pair_map: dict[str, dict] = {}
@@ -290,12 +314,14 @@ def _pair_idats(
         entry = pairs[base]
         grn, red = entry["grn"], entry["red"]
         complete = grn is not None and red is not None
-        pair_models.append(IdatPair(
-            pair_id=base,
-            grn=grn["file"] if grn else None,
-            red=red["file"] if red else None,
-            complete=complete,
-        ))
+        pair_models.append(
+            IdatPair(
+                pair_id=base,
+                grn=grn["file"] if grn else None,
+                red=red["file"] if red else None,
+                complete=complete,
+            )
+        )
         pair_map[base] = {
             "grn": grn["path"] if grn else None,
             "red": red["path"] if red else None,
@@ -304,7 +330,7 @@ def _pair_idats(
     return pair_models, pair_map, other
 
 
-def _parse_idat_name(name: str) -> Optional[tuple[str, str]]:
+def _parse_idat_name(name: str) -> tuple[str, str] | None:
     """Split ``<base>_Grn.idat`` / ``<base>_Red.idat`` → ``(base, channel)``."""
     low = name.lower()
     for suffix, channel in (("_grn.idat", "grn"), ("_red.idat", "red")):
@@ -313,7 +339,9 @@ def _parse_idat_name(name: str) -> Optional[tuple[str, str]]:
     return None
 
 
-def _collect_errors(candidates: list[SampleSheetCandidate], pairs: list[IdatPair]) -> list[ManifestError]:
+def _collect_errors(
+    candidates: list[SampleSheetCandidate], pairs: list[IdatPair]
+) -> list[ManifestError]:
     """Genuinely blocking (but non-fatal) conditions surfaced in the manifest.
 
     Having *several* sample sheets is NOT an error: the user simply picks one in
@@ -321,21 +349,28 @@ def _collect_errors(candidates: list[SampleSheetCandidate], pairs: list[IdatPair
     """
     errors: list[ManifestError] = []
     if not candidates:
-        errors.append(ManifestError(
-            code="NO_SAMPLE_SHEET",
-            message="No sample sheet detected — add a valid sample sheet file.",
-        ))
+        errors.append(
+            ManifestError(
+                code="NO_SAMPLE_SHEET",
+                message="No sample sheet detected — add a valid sample sheet file.",
+            )
+        )
     if not any(p.complete for p in pairs):
-        errors.append(ManifestError(
-            code="NO_IDAT_FILES",
-            message="No complete IDAT pair (Grn + Red) found.",
-        ))
+        errors.append(
+            ManifestError(
+                code="NO_IDAT_FILES",
+                message="No complete IDAT pair (Grn + Red) found.",
+            )
+        )
     return errors
 
 
 # ── Internal mapping (consumed by commit / preview) ───────────────────────────
 
-def _persist_internal(session_dir: Path, sheet_map: dict[str, str], pair_map: dict[str, dict]) -> None:
+
+def _persist_internal(
+    session_dir: Path, sheet_map: dict[str, str], pair_map: dict[str, dict]
+) -> None:
     payload = {"sheets": sheet_map, "pairs": pair_map}
     (session_dir / INTERNAL_MANIFEST).write_text(json.dumps(payload), encoding="utf-8")
 
@@ -378,6 +413,7 @@ def build_sheet_preview(session_dir: Path, sheet_id: str, max_rows: int):
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
+
 
 def _map_archive_error(exc: ArchiveError) -> AppException:
     error_type = _ARCHIVE_ERROR_MAP.get(exc.code, ErrorTypes.INVALID_ARCHIVE)
