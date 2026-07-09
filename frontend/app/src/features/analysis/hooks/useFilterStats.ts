@@ -28,7 +28,6 @@ export function useFilterStats(jobId: string | null): UseFilterStatsResult {
       const response = await fetch(`/api/v1/filter/${jobId}/stats`, { method: "GET", signal });
       if (!response.ok) {
         if (response.status === 409) {
-          // Statistics are not ready yet; expected while filtering runs.
           return null;
         }
         throw new Error(`Request failed (${response.status}): ${response.statusText}`);

@@ -47,7 +47,6 @@ export interface UseHeatMapGenerationResult {
  */
 export function useHeatMapGeneration(jobId: string | null): UseHeatMapGenerationResult {
   const [isPolling, setIsPolling] = useState(false);
-  // Bumped on each request so polling restarts cleanly for the new attempt.
   const [pollingKey, setPollingKey] = useState(0);
   const [heatmapImageURL, setHeatmapImageURL] = useState<string | null>(null);
   const [persistentError, setPersistentError] = useState<HeatMapError>(null);
@@ -61,10 +60,6 @@ export function useHeatMapGeneration(jobId: string | null): UseHeatMapGeneration
       ? jobStatus.error
       : null;
 
-  /* eslint-disable react-hooks/set-state-in-effect --
-     These effects synchronize local state with the external polling system: a
-     failed poll is latched into a persistent error, and any error source raises
-     the (dismissable) banner. */
   useEffect(() => {
     if (jobStatus?.status === JobStatusValue.FAILED && jobStatus.error) {
       setPersistentError(jobStatus.error);
@@ -76,7 +71,6 @@ export function useHeatMapGeneration(jobId: string | null): UseHeatMapGeneration
       setShowError(true);
     }
   }, [error, persistentError, backendHeatmapError]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const displayedError: HeatMapError = error ?? persistentError ?? backendHeatmapError ?? null;
 
@@ -99,9 +93,6 @@ export function useHeatMapGeneration(jobId: string | null): UseHeatMapGeneration
     const isFailed =
       jobStatus.phase === JobPhase.HEATMAP && jobStatus.status === JobStatusValue.FAILED;
 
-    // Reacting to the external polling system: stop polling on a terminal state
-    // and, on success, point the viewer at the freshly rendered image.
-    /* eslint-disable react-hooks/set-state-in-effect */
     if (isDone) {
       setIsPolling(false);
       setHeatmapImageURL(`/api/v1/heatmap/${jobId}?t=${Date.now()}`);
@@ -109,8 +100,6 @@ export function useHeatMapGeneration(jobId: string | null): UseHeatMapGeneration
     if (isFailed) {
       setIsPolling(false);
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobStatus?.status, jobStatus?.phase]);
 
   const generate = useCallback(

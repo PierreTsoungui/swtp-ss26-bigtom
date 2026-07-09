@@ -82,17 +82,10 @@ export function useAsyncResource<T, E = string>(
   } = options;
 
   const [data, setData] = useState<T | null>(initialData);
-  // Start in the loading state when a request will run on mount, so consumers
-  // do not flash an empty/idle UI for one render before the effect fires.
   const [isLoading, setIsLoading] = useState(enabled);
   const [error, setError] = useState<E | null>(null);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect --
-       The one canonical data-fetching effect for the whole app: it drives the
-       loading/data/error state from an asynchronous request and resets when the
-       inputs change. Encapsulating it here removes this exact boilerplate (and
-       this disable) from every feature hook. */
     if (!enabled) {
       setData(initialData);
       setError(null);
@@ -124,8 +117,6 @@ export function useAsyncResource<T, E = string>(
       });
 
     return () => controller.abort();
-    /* eslint-enable react-hooks/set-state-in-effect */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   return { data, isLoading, error, setError };

@@ -70,14 +70,7 @@ export function AppHeader({
   isResetting = false,
   onReset,
 }: AppHeaderProps) {
-  // Reset permanently deletes the analysis and all of its data, so it is gated
-  // behind an explicit confirmation dialog.
   const [confirmOpen, setConfirmOpen] = useState(false);
-
-  // Close the dialog once a confirmed reset finishes. On success `onReset`
-  // navigates away (this header stays mounted across routes, so the dialog would
-  // otherwise linger); on failure control returns here and the dialog closes so
-  // the user can try again. The transition true -> false marks completion.
   const wasResetting = useRef(false);
   useEffect(() => {
     if (wasResetting.current && !isResetting) setConfirmOpen(false);
@@ -87,9 +80,6 @@ export function AppHeader({
   return (
     <header
       className={`border-b border-neutral-borderDefault bg-neutral-card px-6 py-4 ${
-        // On the landing page the header doubles as the section navigation, so it
-        // stays pinned to the top while scrolling. Other routes keep the header
-        // in normal flow. z-40 sits below modal overlays (z-50).
         isLandingPage ? "sticky top-0 z-40" : ""
       }`}
     >

@@ -23,16 +23,11 @@ export async function exportSvgAsPdf(
   width: number,
   height: number,
 ): Promise<void> {
-  // Loaded on demand so the ~PDF toolchain never lands in the initial bundle.
   const [{ jsPDF }] = await Promise.all([
     import("jspdf"),
-    // Importing for its side effect: it augments jsPDF with a `.svg()` method.
     import("svg2pdf.js"),
   ]);
 
-  // The page is sized to the plot in pixels (1:1), so no scaling artefacts are
-  // introduced. Orientation follows the aspect ratio to avoid jsPDF swapping the
-  // page dimensions on us.
   const pdf = new jsPDF({
     unit: "px",
     format: [width, height],

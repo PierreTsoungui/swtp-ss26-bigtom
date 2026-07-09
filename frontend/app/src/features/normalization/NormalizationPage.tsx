@@ -38,12 +38,10 @@ export function NormalizationPage() {
   const [pcaMethod, setPcaMethod] = useState<MethodPreview | null>(null);
   const [isNormalising, setIsNormalising] = useState(false);
 
-  // 'raw' first, then the algorithms in canonical order (see METHOD_ORDER).
   const orderedMethods = useMemo(() => orderMethods(data?.methods ?? []), [data]);
 
   const jobStatus: JobStatus | null = useJobPolling(isNormalising ? (job_id ?? null) : null);
 
-  // Once the pipeline parks at batch/waiting, hand off to the batch page.
   useEffect(() => {
     if (shouldNavigateToBatch(jobStatus)) {
       void navigate(`/batch/${job_id}`);

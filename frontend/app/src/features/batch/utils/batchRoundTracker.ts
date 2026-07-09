@@ -40,8 +40,6 @@ export class BatchRoundTracker {
       job.phase === JobPhase.BATCH && job.status === JobStatusValue.WAITING && this.runObserved;
 
     if (finished) {
-      // Consume the completion so the same lingering WAITING is not reported
-      // again on the next poll of the (now idle) job.
       this.runObserved = false;
     }
     return finished;

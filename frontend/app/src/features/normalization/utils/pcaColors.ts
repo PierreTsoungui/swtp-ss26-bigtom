@@ -95,9 +95,7 @@ export function defaultGroupColors(points: PcaPoint[]): Record<string, string> {
   uniqueGroups(points).forEach((group, i) => {
     colors[group] =
       group === NO_GROUP_LABEL
-        ? NO_GROUP_COLOR
-        : // The modulo keeps the index in range; `?? NO_GROUP_COLOR` only satisfies
-          // the type checker (PCA_PALETTE is a non-empty constant, so it never falls back).
+        ? NO_GROUP_COLOR :
           (PCA_PALETTE[i % PCA_PALETTE.length] ?? NO_GROUP_COLOR);
   });
   return colors;

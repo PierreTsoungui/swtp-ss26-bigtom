@@ -34,8 +34,6 @@ export function AnalysisPage() {
   const navigate: NavigateFunction = useNavigate();
   const jobStatus: JobStatus | null = useJobPolling(job_id ?? null);
 
-  // The statistics are requested once filtering has completed and are keyed by
-  // job id, so they load a single time and persist as the pipeline advances.
   const statsJobId = job_id && filterStatsAvailable(jobStatus) ? job_id : null;
   const { filterStats, isLoading: filterStatsLoading } = useFilterStats(statsJobId);
 
@@ -74,7 +72,6 @@ export function AnalysisPage() {
     );
   }
 
-  // Failure before any statistics are available: show a full-screen error.
   if (hasFailed(jobStatus) && !filterStats) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-neutral-background px-6">

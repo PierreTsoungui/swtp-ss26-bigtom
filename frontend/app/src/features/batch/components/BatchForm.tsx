@@ -45,13 +45,8 @@ export function BatchForm({ parameters, onSubmit, isLoading = false, onSkip }: B
   const [covariates, setCovariates] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  // Tracks which action button was pressed so only that button shows a spinner
-  // label while `isLoading`. A stale value is harmless: the label conditions
-  // below only apply it while loading.
   const [clickedButton, setClickedButton] = useState<"batch" | "skip" | null>(null);
 
-  // Comparison defaults are derived from the columns, which are available on
-  // first render, so the state can be initialized lazily without an effect.
   const initialGroups = defaultGroupSelection(columns);
   const [analysisColumn, setAnalysisColumn] = useState<string>(initialGroups.group_column);
   const [caseGroup, setCaseGroup] = useState<string>(initialGroups.case_group);

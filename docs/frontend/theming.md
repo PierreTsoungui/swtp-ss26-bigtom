@@ -54,7 +54,7 @@ Placement conventions verified in code:
 
 ### Routing Overview
 
-The application is callable through `https://localhost:8443/`.
+The application is callable through `https://localhost/`.
 
 Routes are verified in `frontend/app/src/App.tsx`.
 

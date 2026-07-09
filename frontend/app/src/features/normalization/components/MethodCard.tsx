@@ -33,12 +33,8 @@ interface MethodCardProps {
 function MethodCard({ method, isSelected, onSelect, onPcaClick }: MethodCardProps) {
   const { density_url, pca } = method;
 
-  // Stable default group colors for the small preview (the viewer manages its
-  // own interactive palette).
   const previewColors = useMemo(() => (pca?.points ? defaultGroupColors(pca.points) : {}), [pca]);
 
-  // The density plot is a static PNG served by the backend; the matching PDF
-  // lives next to it under the same name (density_<method>.png → .pdf).
   const densitySource: PlotSource | null = density_url
     ? {
         pngUrl: density_url,

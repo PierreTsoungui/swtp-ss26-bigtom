@@ -48,11 +48,6 @@ export function BatchPage() {
     fetchHistory
   } = useBatchCorrection(job_id);
 
-  // Distinguishes a real round completion from the stale BATCH+WAITING status
-  // that lingers from the *previous* round (the race that made round 2+ show no
-  // progress bar). Held in a ref so startRound() takes effect synchronously in
-  // the submit handler; only ever touched inside effects and event handlers, so
-  // it is never read during render.
   const roundTrackerRef = useRef<BatchRoundTracker | null>(null);
   const getRoundTracker = (): BatchRoundTracker => {
     roundTrackerRef.current ??= new BatchRoundTracker();
@@ -62,20 +57,11 @@ export function BatchPage() {
   const jobStatus = useJobPolling(showProgressBar && job_id ? job_id : null, pollingKey);
   const batchRunning = isSubmitting && jobStatus?.status === JobStatusValue.RUNNING;
 
-  // React to polled job-status changes: drive the progress bar, detect a round
-  // completion, and hand off to the results page once analysis is done.
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect --
-       This effect synchronizes UI state with the external polling system: it
-       reflects the latest job status onto the progress bar and triggers a
-       one-time navigation when the pipeline reaches its results stage. */
     if (!jobStatus) {
       return;
     }
 
-    // Feed the tracker every status so it can observe this round running; it
-    // reports completion only for a round it has actually seen run (guards the
-    // stale-WAITING race). Kept before the branches below so it is never skipped.
     const batchFinished = getRoundTracker().observe(jobStatus);
 
     if (isDownstreamRunning(jobStatus)) {
@@ -93,7 +79,6 @@ export function BatchPage() {
       setShowProgressBar(false);
       void fetchHistory();
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, [jobStatus, showProgressBar, navigate, job_id]);
 
   if (!job_id) {
@@ -115,8 +100,6 @@ export function BatchPage() {
   }
 
   const handleSubmit = async (data: BatchFormData) => {
-    // Start a fresh cycle: the previous round's WAITING must not count as done
-    // until we observe THIS run executing.
     getRoundTracker().startRound();
     await runBatch({
       batch_correction: {

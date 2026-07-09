@@ -92,9 +92,6 @@ export function TableContainer() {
       params.append("sort_order", currentSort.sort_order);
     }
 
-    // Build the filter params generically (single source of truth, same as the
-    // table fetch) so the export always matches the on-screen filtered view and
-    // no filter can be forgotten when a new one is added.
     const filters = appliedFilters[activeTab];
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value !== "") {
@@ -102,9 +99,6 @@ export function TableContainer() {
       }
     });
 
-    // The network call lives in a hook module (see exportTableCsv); the
-    // component only assembles the query and reports failures to the user
-    // through the shared error surface (never a native alert).
     try {
       await exportTableCsv(job_id, activeTab, params);
     } catch (error) {

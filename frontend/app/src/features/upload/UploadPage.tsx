@@ -25,7 +25,6 @@ export function UploadPage(): JSX.Element {
   const flow = useUploadFlow((jobId) => void navigate(`/analysis/${jobId}`));
   const [preview, setPreview] = useState<SampleSheetCandidate | null>(null);
 
-  // Discard the staging session if the user leaves without committing.
   useEffect(() => flow.discardOnUnmount, [flow.discardOnUnmount]);
 
   const busy = flow.status === "inspecting" || flow.status === "committing";

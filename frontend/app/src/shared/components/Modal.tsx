@@ -82,7 +82,6 @@ export function Modal({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Keep the latest onClose/dismissible without re-running the lifecycle effect.
   const onCloseRef = useRef(onClose);
   const dismissibleRef = useRef(dismissible);
   useEffect(() => {
@@ -91,14 +90,11 @@ export function Modal({
   }, [onClose, dismissible]);
 
   useEffect(() => {
-    // Capture the focus-restore target now (on open): the explicit ref if given,
-    // else whatever was focused before. Both are stable for the modal's lifetime.
     const restoreTarget =
       restoreFocusRef?.current ?? (document.activeElement as HTMLElement | null);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    // Focus the requested element, then the close button, then the panel.
     (initialFocusRef?.current ?? closeButtonRef.current ?? panelRef.current)?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -137,8 +133,6 @@ export function Modal({
       document.removeEventListener("keydown", handleKeyDown);
       restoreTarget?.focus();
     };
-    // Runs once per open: refs stay stable and onClose is read via onCloseRef.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
