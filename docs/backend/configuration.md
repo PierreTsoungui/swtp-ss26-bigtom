@@ -98,7 +98,7 @@ These variables define the budget and per-step cost estimates. They work togethe
 | `PIPELINE_MEMORY_BUDGET_GB` | `12.0` | GiB | `> 0` (float) | Total memory budget available to the queue. Steps are admitted only if their cumulative estimated peak fits within this ceiling. Must be `≤ R_WORKER_MEM_LIMIT` (§4) so the soft queue engages before the hard container wall. |
 | `PIPELINE_CORE_BUDGET` | `2` | cores | `> 0` (int) | Total CPU core budget for the queue. Mirror `R_WORKER_CPUS` (§4) or set lower to leave headroom for the OS. |
 | `PIPELINE_STEP_MEMORY_GB` | `5.0` | GiB | `> 0` (float) | Per-step memory estimate for all pipeline steps not listed below (filtering, normalization preview, normalization, SVD, batch correction, heatmap). |
-| `PIPELINE_DMR_MEMORY_GB` | `6.0` | GiB | `> 0` (float) | Per-step memory estimate for the DMR step, which is the heaviest step in the pipeline. Derived from the benchmark suite (`benchmarks/`). Update after changing `DMR_CORES` or the dataset size. |
+| `PIPELINE_DMR_MEMORY_GB` | `6.0` | GiB | `> 0` (float) | Per-step memory estimate for the DMR step, which is the heaviest step in the pipeline. Update after changing `DMR_CORES` or the dataset size. |
 | `PIPELINE_DMP_MEMORY_GB` | `4.0` | GiB | `> 0` (float) | Per-step memory estimate for the DMP step. |
 
 A step whose estimated cost exceeds the entire budget is admitted immediately alone (clamped), so an over-sized estimate never deadlocks the queue.
@@ -113,7 +113,7 @@ Intake guards reject an upload before any pipeline work starts, giving the user 
 
 | Variable | Default | Unit | Validation | Effect |
 |---|---|---|---|---|
-| `MAX_SAMPLES_PER_JOB` | `48` | samples | `≥ 0` (int, 0 = unlimited) | Maximum number of samples (IDAT pairs) per job. Uploads exceeding this are rejected at commit with HTTP 400. Memory scales with sample count; tune to the RAM budget (benchmark first). |
+| `MAX_SAMPLES_PER_JOB` | `48` | samples | `≥ 0` (int, 0 = unlimited) | Maximum number of samples (IDAT pairs) per job. Uploads exceeding this are rejected at commit with HTTP 400. Memory scales with sample count; tune to the RAM budget. |
 | `MAX_JOBS_DISK_GB` | `0` | GiB | `≥ 0` (float, 0 = disabled) | Maximum total size of all job directories combined. A new upload is rejected if `JOB_BASE_DIR` already occupies this much disk space. Size to the machine's available disk. `0` disables the check (not recommended in production). |
 | `MIN_FREE_DISK_MB` | `0` | MiB | `≥ 0` (int, 0 = disabled) | Minimum free space required on the storage volume before an upload is accepted. Unlike `MAX_JOBS_DISK_GB`, this checks the filesystem's actual free space, so it also catches disk fill-up from other tenants. `0` disables the check. |
 
