@@ -9,12 +9,12 @@ def setup_logging():
     """Configure root logging from the ``LOG_LEVEL`` environment variable.
 
     Formats records to stdout and quietens noisy third-party loggers. Defaults to
-    DEBUG when ``LOG_LEVEL`` is unset, and falls back to INFO for an unknown level.
+    INFO when ``LOG_LEVEL`` is unset, and falls back to INFO for an unknown level.
     """
     log_format = "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d) -> %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
 
-    env_level = os.getenv("LOG_LEVEL", "DEBUG").upper()
+    env_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, env_level, logging.INFO)
 
     logging.basicConfig(
