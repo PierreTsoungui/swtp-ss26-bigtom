@@ -90,14 +90,12 @@ export function PrivacyPolicyPage() {
 
         <section className="mb-6">
           <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">
-            Storage location and access
+            Storage location
           </h2>
           <p className="leading-7">
             Data is processed and stored exclusively on servers operated by THM in Germany. The
             application is not publicly accessible; it can be reached only from within the THM
-            network (for example via VPN) by authorised members of the university. Each analysis
-            runs in its own isolated working directory, and the data of one analysis is not made
-            accessible to other users through the application.
+            network (for example via VPN) by authorised members of the university.
           </p>
         </section>
 
@@ -153,12 +151,7 @@ export function PrivacyPolicyPage() {
             portability (Art. 20), and the right to object to processing (Art. 21). Because data is
             processed only transiently, is deleted automatically within approximately 24 hours, and
             no user accounts are maintained, these rights can in practice be exercised by resetting
-            the analysis or by refraining from re-uploading the affected data; for any further
-            request, please contact the controller or the data protection officer at{" "}
-            <a href="mailto:datenschutz@thm.de" className={LINK_CLASS}>
-              datenschutz@thm.de
-            </a>
-            .
+            the analysis or by refraining from re-uploading the affected data.
           </p>
           <p className="mt-3 leading-7">
             Data subjects also have the right to lodge a complaint with a supervisory authority. The

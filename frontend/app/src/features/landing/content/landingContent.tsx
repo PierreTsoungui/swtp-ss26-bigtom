@@ -368,11 +368,6 @@ export const faqCategories: FaqCategory[] = [
         answer:
           "When the application is served over HTTPS, data exchanged between your browser and the server is encrypted in transit using TLS. This is transport-layer encryption; the server necessarily processes the data in unencrypted form in order to run the analysis. Whether HTTPS is enforced depends on how your instance is deployed.",
       },
-      {
-        question: "Who has access to my uploaded data?",
-        answer:
-          "Each analysis runs in its own isolated job context, and data belonging to one job is not exposed to other users through the application. Any administrative access to the underlying server infrastructure depends on how and where the platform is deployed and is governed by the policies of the operator.",
-      },
     ],
   },
 ];
