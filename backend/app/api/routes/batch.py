@@ -157,6 +157,15 @@ async def skip_batch_correction(
     """
     job_dir = batch_service.get_job_dir_or_404(job_id)
 
+    # Reject a double submit with a clear 409, consistent with run_batch_correction
+    # (otherwise the state machine only raises a generic "invalid transition").
+    current_job = job_manager.get_job(job_id)
+    if current_job and current_job.status == JobStatusValue.RUNNING.value:
+        raise BatchException(
+            ErrorTypes.BATCH_NOT_ALLOWED,
+            detail="A pipeline is already running for this job.",
+        )
+
     group_column = (payload.group_column or "") if payload else ""
     case_group = (payload.case_group or "") if payload else ""
     control_group = (payload.control_group or "") if payload else ""

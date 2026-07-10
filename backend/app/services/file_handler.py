@@ -253,7 +253,7 @@ def validate_sample_sheet(file: UploadFile) -> tuple[bool, dict]:
 
     # 5. success
     return True, {
-        "message": f"Sample Sheet validiert: {file.filename}",
+        "message": f"Sample sheet validated: {file.filename}",
         "format": ext,
         "size_mb": round(file_size / (1024 * 1024), 2),
     }

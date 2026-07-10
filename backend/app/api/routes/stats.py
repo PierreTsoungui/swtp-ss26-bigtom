@@ -1,4 +1,4 @@
-# app/api/routes/filter.py
+# app/api/routes/stats.py
 """Route for retrieving the filter statistics of a job."""
 
 import json

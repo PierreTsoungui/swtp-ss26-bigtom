@@ -252,36 +252,6 @@ def _parse_too_many_cpgs(stdout: str) -> int | None:
     return None
 
 
-def _parse_heatmap_metadata(stdout: str, job_dir: Path) -> dict:
-    detected_cpgs = 0
-    plotted_samples = 0
-
-    for line in stdout.splitlines():
-        try:
-            data = json.loads(line)
-            if not isinstance(data, dict):
-                continue
-
-            if data.get("status") == "running" and "Beta matrix ready" in data.get("message", ""):
-                msg = data["message"]
-                parts = msg.split()
-                idx_rows = next((i for i, t in enumerate(parts) if t == "rows"), None)
-                idx_cols = next((i for i, t in enumerate(parts) if t == "columns"), None)
-                if idx_rows and parts[idx_rows - 1].isdigit():
-                    detected_cpgs = int(parts[idx_rows - 1])
-                if idx_cols and parts[idx_cols - 1].isdigit():
-                    plotted_samples = int(parts[idx_cols - 1])
-                break
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    return {
-        "detected_cpgs": detected_cpgs,
-        "plotted_samples": plotted_samples,
-        "message": "Heatmap generated successfully. The PNG can be retrieved.",
-    }
-
-
 def _read_samplesheet_columns(job_dir: Path) -> tuple[list[str], dict[int, list[str]], int]:
     """Return a column-oriented view of the sample sheet.
 

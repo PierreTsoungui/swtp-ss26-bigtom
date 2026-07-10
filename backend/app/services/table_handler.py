@@ -126,14 +126,9 @@ def get_table_data(
 ) -> dict:
     """Return one paginated page of a result table with its column metadata.
 
-    Raises:
-        HTTPException: 400 if ``page`` is less than 1.
+    ``page`` is guaranteed to be >= 1 by the route's ``Query(default=1, ge=1)``
+    validation, so no in-function lower-bound check is needed here.
     """
-    if page < 1:
-        raise HTTPException(
-            status_code=400, detail={"error": "INVALID_PAGE", "message": "Page muss >= 1 sein"}
-        )
-
     df = build_dataframe(job_id, table, sort_by, sort_order, filters)
 
     total_rows = len(df)

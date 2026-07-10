@@ -104,7 +104,10 @@ compute_principal_components <- function(beta) {
 #' @param n_samples Number of samples.
 #' @return Named list of integer factor vectors, one per grouping variable.
 select_grouping_variables <- function(samples, n_samples) {
-  candidate_cols <- setdiff(colnames(samples), "Array_ID")
+  # Array_ID and Basename are technical per-sample identifiers (the IDAT key),
+  # never a biological grouping. Exclude them explicitly, consistent with the
+  # heatmap annotation-column selection in the backend.
+  candidate_cols <- setdiff(colnames(samples), c("Array_ID", "Basename"))
   var_factors <- list()
   for (col in candidate_cols) {
     values <- as.character(samples[[col]])

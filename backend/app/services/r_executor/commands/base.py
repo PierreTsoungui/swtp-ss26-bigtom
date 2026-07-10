@@ -31,6 +31,9 @@ class RCommand(ABC):
     # of assuming a single global limit.
     timeout_seconds: int = 600
 
+    # The R worker's container name, used as the `docker exec` target. It must
+    # equal the r_worker service's pinned `container_name` in docker-compose.yml
+    # (a fixed name, so it does not depend on the compose project / directory name).
     R_WORKER_CONTAINER = "swtp-ss26-bigtom-r_worker-1"
 
     # ── Admission-control weights (see app.core.resource_governor) ──

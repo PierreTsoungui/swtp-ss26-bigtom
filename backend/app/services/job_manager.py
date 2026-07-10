@@ -237,8 +237,14 @@ def transition_job(
     if current_step is not None:
         job.current_step = current_step
     if new_status == JobStatusValue.FAILED:
-        if error is not None:
-            job.error = error
+        # Always attach a coherent problem body on failure: the provided one, or a
+        # generic default. Never leave a stale error from an earlier state (matches
+        # the RFC 9457 ``{"detail": ...}`` shape the frontend reads).
+        job.error = (
+            error
+            if error is not None
+            else {"detail": "The job failed without a specific error message."}
+        )
     else:
         job.error = None
 
