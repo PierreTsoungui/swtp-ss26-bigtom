@@ -8,7 +8,7 @@ data is generated. Common sources include:
 - scanner or reagent lot
 
 If they are not addressed, batch effects can hide real biological findings or
-create false positives — samples may cluster by _when/where_ they were processed
+create false positives. Samples may cluster by _when/where_ they were processed
 instead of by their biology.
 
 ## Interpreting the SVD Heatmap
@@ -28,8 +28,8 @@ variation) and tests each metadata variable against each component, showing the
 Apply batch correction only when the SVD heatmap shows real evidence of a
 technical effect. In the form you select:
 
-- the **batch variable** — the technical factor to remove, and
-- the **covariates** — your biological variable(s) to protect, so the correction
+- the **batch variable**: the technical factor to remove, and
+- the **covariates**: your biological variable(s) to protect, so the correction
   does not strip out the signal you care about.
 
 Correction is then performed with `limma::removeBatchEffect`. You can run it

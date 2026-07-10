@@ -13,7 +13,7 @@ Technical variation creeps in from:
 
 Without normalization, this technical variation can be mistaken for biology. To
 help you choose, the platform shows two previews per method: a **density plot**
-(the distribution of beta values — well-normalized samples overlap closely) and
+(the distribution of beta values; well-normalized samples overlap closely) and
 an interactive **PCA plot** (samples should group by biological condition, not by
 technical factors).
 
@@ -42,8 +42,8 @@ types. Useful when probe-design effects are prominent.
 ### Functional Normalization (FunNorm)
 
 Uses the array's internal control probes to model and remove technical variation.
-It is well suited to datasets with large global differences — for example cancer
-vs. normal tissue, large cohorts, or multi-batch studies.
+It is well suited to datasets with large global differences (for example cancer
+vs. normal tissue, large cohorts, or multi-batch studies).
 
 ### Quantile Normalization
 

@@ -101,7 +101,7 @@ function HeatMap({ filters, rowCount }: HeatMapProps) {
               {rowCount != null && (
                 <>
                   {" "}
-                  — <strong>{rowCount}</strong> CpG{rowCount === 1 ? "" : "s"} selected
+                  ; <strong>{rowCount}</strong> CpG{rowCount === 1 ? "" : "s"} selected
                 </>
               )}
               .

@@ -7,8 +7,8 @@ reduce statistical power, and can lead to false conclusions.
 Filtering removes low-quality probes and samples so they cannot distort the
 statistical analysis (DMP/DMR) or the heatmap: filtered probes are excluded from
 the results, and filtered samples are dropped before normalization. This improves
-the reliability of everything downstream. Every filter below is **optional and off
-by default** — enable the ones that fit your study design.
+the reliability of everything downstream. Every filter below is **optional**.
+
 
 ### Detection P-Value Filter
 
@@ -47,7 +47,7 @@ Some probes sit on top of a known genetic variant (a Single Nucleotide
 Polymorphism, SNP). There, a signal difference can come from DNA _sequence_
 differences between individuals rather than from _methylation_. This filter
 removes probes affected by SNPs whose minor allele frequency (MAF) is at or above
-the chosen cutoff, so the results reflect epigenetic — not genetic — variation.
+the chosen cutoff, so the results reflect epigenetic and not genetic variation.
 
 - The MAF cutoff ranges from `0.0` to `0.5`; a lower cutoff removes more probes.
 

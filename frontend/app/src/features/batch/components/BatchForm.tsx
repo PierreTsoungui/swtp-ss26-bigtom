@@ -109,7 +109,7 @@ export function BatchForm({ parameters, onSubmit, isLoading = false, onSkip }: B
       {/* Batch variable select fields */}
       <div className="space-y-2">
         <label className="block text-sm font-semibold text-neutral-textPrimary">
-          Batch variable — technical factor to remove <span className="text-danger">*</span>
+          Batch variable (technical factor to remove) <span className="text-danger">*</span>
         </label>
         <p className="text-sm text-neutral-textSecondary">
           Its effect is removed from the data (e.g. chip / Sentrix_ID, plate). You decide which
@@ -137,11 +137,11 @@ export function BatchForm({ parameters, onSubmit, isLoading = false, onSkip }: B
       {/* Covariates multi-select inputs */}
       <div className="space-y-2">
         <label className="block text-sm font-semibold text-neutral-textPrimary">
-          Covariates — biological signal to protect (optional)
+          Covariates: biological signals to protect (optional)
         </label>
         <p className="text-sm text-neutral-textSecondary">
-          Preserved, never removed — typically your comparison group (the column may have any name).
-          Multiple selections allowed.
+          These signals are preserved and never removed. This is typically your comparison group, 
+          regardless of the column name. Multiple selections are allowed.
         </p>
 
         <Autocomplete
@@ -177,9 +177,10 @@ export function BatchForm({ parameters, onSubmit, isLoading = false, onSkip }: B
           "& .MuiAlert-icon": { color: colors.info.DEFAULT },
         }}
       >
-        The batch variable and covariates play opposite roles: the batch variable is
-        <strong> removed</strong>, covariates are <strong>protected</strong>. A column cannot be
-        both. The tool does not judge whether a choice makes sense — use the SVD plot to decide.
+        The batch variable and covariates play opposite roles: the batch variable is 
+        <strong> removed</strong>, covariates are <strong>protected</strong>. A column cannot 
+        be used for both. Since the tool does not validate whether a choice is scientifically sound, 
+        please use the SVD plot to decide.
       </Alert>
 
       {/* Differential group comparison section */}

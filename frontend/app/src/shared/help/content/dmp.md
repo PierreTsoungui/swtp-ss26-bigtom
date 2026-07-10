@@ -10,9 +10,9 @@ For every CpG, the analysis provides:
 
 - the **p-value** and the **adjusted p-value** (corrected for multiple testing)
 - the group means (case and control)
-- **Delta Beta (Δβ)** — the methylation difference, computed as case minus
+- **Delta Beta (Δβ)**: the methylation difference, computed as case minus
   control, on the 0–1 beta scale (so `0.2` means a 20 percentage-point change)
-- **log fold change** — the log2 ratio of the group means
+- **log fold change**: the log2 ratio of the group means
 
 ### How to read the results
 
