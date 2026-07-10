@@ -26,10 +26,10 @@ export function PrivacyPolicyPage() {
         <p className="mb-6 text-sm text-neutral-textSecondary">Last updated: 5 July 2026</p>
 
         <p className="mb-8 leading-7 text-neutral-textSecondary">
-          This notice describes how personal data is processed specifically within the
-          MethylAnalyzer application. The application was developed by the student project group
-          BigTom and is operated and hosted by the Technische Hochschule Mittelhessen (THM) on its
-          own infrastructure. This notice supplements THM&apos;s general data protection
+          This notice describes how data, which may include personal data, is processed
+          specifically within the MethylAnalyzer application. The application was developed by the
+          student project group BigTom and is operated and hosted by the Technische Hochschule
+          Mittelhessen (THM) on its own infrastructure. This notice supplements THM&apos;s general data protection
           information, which applies in addition and is available at{" "}
           <a
             href="https://www.thm.de/datenschutz/datenschutz.html"
@@ -46,11 +46,10 @@ export function PrivacyPolicyPage() {
           <h2 className="mb-2 text-xl font-semibold text-neutral-textPrimary">Controller</h2>
           <p className="leading-7">
             The controller for the operation of this application within the meaning of Art. 4 No. 7
-            GDPR is the Technische Hochschule Mittelhessen (THM), Wiesenstraße 14, 35390 Gießen,
-            Germany, legally represented by its President, Prof. Dr. Matthias Willems, which hosts
-            and operates the application on its own servers. The BigTom project group developed the
-            software but does not operate it and is not the controller. You can reach the THM data
-            protection officer at{" "}
+            GDPR is the Technische Hochschule Mittelhessen (THM). The application runs entirely on
+            THM&apos;s own infrastructure. The BigTom project group developed the software but does
+            not operate it and is not the controller. You can reach the THM data protection officer
+            at{" "}
             <a href="mailto:datenschutz@thm.de" className={LINK_CLASS}>
               datenschutz@thm.de
             </a>
@@ -66,13 +65,14 @@ export function PrivacyPolicyPage() {
           <p className="leading-7">
             The application processes only the data that you actively upload for an analysis, namely
             IDAT files and a sample sheet, together with the intermediate and result files derived
-            from them during processing. This data may contain information about biological samples
-            that allows conclusions to be drawn about individuals and may therefore constitute
-            special categories of personal data (health data) within the meaning of Art. 9 GDPR. In
-            addition, technically necessary connection data (such as the IP address) is processed
-            transiently to deliver the application and to maintain its operational security. The
-            application does not use tracking or advertising cookies and does not create user
-            profiles.
+            from them during processing. This data does not necessarily relate to individuals and may
+            simply be technical test data. Depending on its origin, however, it may also contain
+            personal data and, where it allows conclusions to be drawn about individuals, may
+            constitute special categories of personal data (health data) within the meaning of Art.
+            9 GDPR. In addition, technically necessary connection data (such as the IP address) is
+            processed transiently to deliver the application and to maintain its operational
+            security. The application does not use tracking or advertising cookies and does not
+            create user profiles.
           </p>
         </section>
 
