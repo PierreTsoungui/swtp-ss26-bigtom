@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [1.3.0] - 2026-07-09
+## [1.3.0] - 2026-07-10
 
 ### Added
 - **Sample Sheet Basename Column**: The canonical internal sample sheet now always includes a `Basename` column (IDAT file path prefix). The column is injected at commit time by the samplesheet normalizer and forwarded to all downstream R scripts, enabling reliable IDAT file discovery regardless of the original upload structure.
