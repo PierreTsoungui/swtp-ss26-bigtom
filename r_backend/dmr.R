@@ -220,6 +220,16 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   emit_progress(15, "Loading and validating methylation beta matrix")
   beta <- load_beta_matrix(beta_path)
   beta <- clamp_beta(beta)
+  # Restrict to the probes that passed the probe-level QC filters (init_filter.R):
+  # filtered_data.rds keeps all probes for normalization, so the selection is
+  # enforced here, on the beta matrix that feeds region discovery.
+  n_before_filter <- nrow(beta)
+  beta <- restrict_to_passed_probes(beta, job_dir)
+  if (nrow(beta) < n_before_filter) {
+    emit_progress(15, sprintf(
+      "Probe QC filter applied: %d of %d probes retained", nrow(beta), n_before_filter
+    ))
+  }
 
   emit_progress(35, "Loading and aligning sample sheet metadata")
   if (!file.exists(sample_sheet_path)) {

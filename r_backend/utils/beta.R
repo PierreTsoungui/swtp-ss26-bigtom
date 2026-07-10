@@ -145,3 +145,52 @@ impute_row_means <- function(beta, drop_all_na = TRUE) {
   }
   beta
 }
+
+#' Name of the artifact carrying the probe-level filter selection.
+#'
+#' Written by \code{init_filter.R} (a character vector of the CpG ids that passed
+#' every enabled probe-level filter) and read back here to restrict the analysis
+#' beta matrix.
+PASSED_PROBES_FILE <- "passed_probes.rds"
+
+#' Restrict a beta matrix to the probes that passed the probe-level QC filters.
+#'
+#' \code{init_filter.R} records the CpGs that survive the probe-level filters
+#' (detection p-value, bead count, non-CpG, SNP, multi-hit, sex chromosomes) in
+#' \code{passed_probes.rds}. Normalization needs the raw two-channel data, so
+#' \code{filtered_data.rds} deliberately keeps ALL probes; the probe selection is
+#' therefore enforced here, on the probe-indexed beta matrix, right before the
+#' differential analysis (\code{dmp.R} / \code{dmr.R}) consumes it. This is the
+#' single point that turns the reported filter counts into an actually filtered
+#' analysis input, independent of how \code{beta.rds} was produced (uncorrected
+#' extraction or batch-corrected matrix).
+#'
+#' Defensive by design — it never aborts the pipeline:
+#' \itemize{
+#'   \item a missing / unreadable / empty selection leaves the matrix unchanged,
+#'         so a job produced before this artifact existed still runs;
+#'   \item a selection that shares no probe id with the matrix (which would only
+#'         happen on an id-scheme mismatch) is ignored with a warning, rather than
+#'         emptying the matrix and failing the analysis.
+#' }
+#'
+#' @param beta A numeric beta matrix (probes x samples).
+#' @param job_dir Job directory that may contain \code{passed_probes.rds}.
+#' @return The beta matrix restricted to the rows whose probe id passed filtering
+#'   (matrix column order preserved; \code{drop = FALSE}).
+restrict_to_passed_probes <- function(beta, job_dir) {
+  path <- file.path(job_dir, PASSED_PROBES_FILE)
+  if (!file.exists(path)) {
+    return(beta)
+  }
+  passed <- tryCatch(as.character(readRDS(path)), error = function(e) NULL)
+  if (is.null(passed) || length(passed) == 0L) {
+    return(beta)
+  }
+  keep <- rownames(beta) %in% passed
+  if (!any(keep)) {
+    warning("passed_probes.rds shares no probe id with the beta matrix; skipping the probe filter.")
+    return(beta)
+  }
+  beta[keep, , drop = FALSE]
+}

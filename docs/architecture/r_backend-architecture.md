@@ -266,7 +266,7 @@ Ordering notes:
 
 - **DMR runs before DMP** so that each DMP row can be annotated with the id of the region (`DMR_ID`) it falls into.
 - The **beta source** for both differential steps is `beta.rds`, which is either the extracted normalized beta or the batch-corrected matrix ([§4.4](#44-beta-matrix-handoff)).
-- `init_filter.R` intentionally saves an **`RGChannelSet`** (not a probe-subset object): normalization needs the raw two-channel data to model background and dye bias.
+- `init_filter.R` intentionally saves an **`RGChannelSet`** (not a probe-subset object): normalization needs the raw two-channel data to model background and dye bias. The probe-level selection is therefore carried separately in **`passed_probes.rds`** and enforced on the beta matrix inside `dmp.R` / `dmr.R` (via `utils/beta.R::restrict_to_passed_probes`), so the reported filter counts match the probes actually analysed.
 
 ---
 
@@ -279,7 +279,8 @@ Every file lives in the single per-job directory. "Producer" is the script/step 
 | IDAT files (`*_Grn.idat`, `*_Red.idat`) | upload | `init_filter.R` | binary (two channels/sample) |
 | `SampleSheet.csv` | upload | `init_filter.R`, `normalization_preview.R`, `batch_svd.R`, `dmp.R`, `dmr.R`, `heatmap.R` | Illumina `[Data]` CSV |
 | `filter_settings.json` | backend (frontend config) | `init_filter.R` | JSON (absent: all filters disabled) |
-| `filtered_data.rds` | `init_filter.R` | `normalize.R`, `normalization_preview.R` | `RGChannelSet` |
+| `filtered_data.rds` | `init_filter.R` | `normalize.R`, `normalization_preview.R` | `RGChannelSet` (all probes) |
+| `passed_probes.rds` | `init_filter.R` | `dmp.R`, `dmr.R` | character vector of CpG ids that passed the probe-level filters |
 | `array_type.txt` | `init_filter.R` | `dmp.R`, `dmr.R` | text (`450K`/`EPICv1`/`EPICv2`) |
 | `filter_stats.json` | `init_filter.R` | backend => frontend | JSON (per-step counts) |
 | `qc_report.json` | `init_filter.R` | frontend | JSON (beta distribution/correlation) |
@@ -303,9 +304,9 @@ Each script's own roxygen-style header (`@section Usage/Output/…`) is the auth
 ### 8.1 `init_filter.R` — Filtering & QC
 
 - **In:** IDAT files + sample sheet + `filter_settings.json` (absent: every filter disabled).
-- **Out:** `filtered_data.rds` (`RGChannelSet`), `filter_stats.json`, `qc_report.json`, `array_type.txt`.
-- **Steps:** read/validate sheet => build IDAT targets => load raw `RGChannelSet` => **detect & persist array type** => sample-level QC (detection-failure rate, optional PCA outlier removal) => probe-level filters (detection p-value, bead/detection-rate, non-CpG, SNP, multi-hit, sex chromosomes — reported as counts) => light biological QC => persist.
-- **Why an `RGChannelSet` is saved:** normalization requires the raw channel data; a probe-subset object would break it.
+- **Out:** `filtered_data.rds` (`RGChannelSet`), `passed_probes.rds`, `filter_stats.json`, `qc_report.json`, `array_type.txt`.
+- **Steps:** read/validate sheet => build IDAT targets => load raw `RGChannelSet` => **detect & persist array type** => sample-level QC (detection-failure rate, optional PCA outlier removal) => probe-level filters (detection p-value, bead/detection-rate, non-CpG, SNP, multi-hit, sex chromosomes) => light biological QC => persist.
+- **Why an `RGChannelSet` is saved:** normalization requires the raw channel data; a probe-subset object would break it. The probe-level selection is therefore persisted as the ids in `passed_probes.rds`; `dmp.R` / `dmr.R` restrict their beta matrix to those ids, so an enabled probe filter actually removes those probes from the DMP/DMR/heatmap results (not only from the reported counts).
 
 ### 8.2 `normalize.R` — Normalization
 
@@ -334,15 +335,15 @@ Each script's own roxygen-style header (`@section Usage/Output/…`) is the auth
 
 ### 8.6 `dmr.R` — Differentially Methylated Regions
 
-- **In:** sample sheet + `job_dir` + `beta.rds` (+ tuning args); array type from `array_type.txt`.
+- **In:** sample sheet + `job_dir` + `beta.rds` (+ tuning args); array type from `array_type.txt`; the probe selection from `passed_probes.rds`.
 - **Out:** `dmr_results.csv` / `.rds` (`ID, N_DMPS, CHR, START, STOP, WIDTH, P_VALUE, MEANDIFF`).
-- **Method:** ChAMP's **Bumphunter** (`champ.DMR`), preceded by a fast cluster pre-check. `adjPvalDmr` is passed as `1.0` so **all** regions are returned; significance is applied later as a table filter (TAB-01). Runs before `dmp.R`. The bootstrap step is parallel (see [§3.2](#32-permitted-exception-dmr-bootstrap-parallelism)).
+- **Method:** ChAMP's **Bumphunter** (`champ.DMR`), preceded by a fast cluster pre-check. The beta matrix is first restricted to the probes that passed the probe-level filters (`restrict_to_passed_probes`). `adjPvalDmr` is passed as `1.0` so **all** regions are returned; significance is applied later as a table filter (TAB-01). Runs before `dmp.R`. The bootstrap step is parallel (see [§3.2](#32-permitted-exception-dmr-bootstrap-parallelism)).
 
 ### 8.7 `dmp.R` — Differentially Methylated Positions
 
-- **In:** sample sheet + `job_dir` + `beta.rds` (+ args); array type from `array_type.txt`.
+- **In:** sample sheet + `job_dir` + `beta.rds` (+ args); array type from `array_type.txt`; the probe selection from `passed_probes.rds`.
 - **Out:** `dmp_results.csv` / `.rds` (schema in [§7](#7-job-directory-artifacts)).
-- **Method:** ChAMP's `champ.DMP` with `adjPVal = 1` (all probes returned; significance is a downstream filter). **Delta Beta is computed deterministically** as `mean(case) - mean(control)` from the beta matrix, so its sign is well-defined regardless of ChAMP's internal contrast direction (TAB-02). Beta cleaning: load => clamp to `[0,1]` => drop non-finite/invariant probes. Each DMP is linked to its region via `DMR_ID`.
+- **Method:** ChAMP's `champ.DMP` with `adjPVal = 1` (all *tested* probes returned; significance is a downstream filter). **Delta Beta is computed deterministically** as `mean(case) - mean(control)` from the beta matrix, so its sign is well-defined regardless of ChAMP's internal contrast direction (TAB-02). Beta cleaning: load => clamp to `[0,1]` => restrict to `passed_probes.rds` => drop non-finite/invariant probes. Each DMP is linked to its region via `DMR_ID`.
 
 ### 8.8 `heatmap.R` — Result heatmap
 
