@@ -6,7 +6,7 @@
 
 > This document is the authoritative, hand-maintained contract for the REST API. FastAPI also generates a live **OpenAPI/Swagger UI at `:8000/docs`** from the code — use it as the up-to-date, machine-readable source; use this document for the intended behaviour, error semantics, and examples.
 >
-> Related documents (referenced instead of duplicated): the full `phase`/`status` value set and the state machine live in [job-lifecycle.md](./job-lifecycle.md); the end-to-end table/heatmap filter mapping in [filter-mapping.md](../contracts/filter-mapping.md); the canonical sample sheet and role mapping in [samplesheet-spec.md](../contracts/samplesheet-spec.md); the on-disk artifacts each endpoint reads in [job-directory-layout.md](../contracts/job-directory-layout.md); the progress/streaming semantics in [pipeline-progress.md](./pipeline-progress.md); the overall design in [backend-architecture.md](./backend-architecture.md).
+> Related documents (referenced instead of duplicated): the full `phase`/`status` value set and the state machine live in [job-lifecycle.md](../architecture/job-lifecycle.md); the end-to-end table/heatmap filter mapping in [filter-mapping.md](../contracts/filter-mapping.md); the canonical sample sheet and role mapping in [samplesheet-spec.md](../contracts/samplesheet-spec.md); the on-disk artifacts each endpoint reads in [job-directory-layout.md](../contracts/job-directory-layout.md); the progress/streaming semantics in [pipeline-progress.md](../architecture/pipeline-progress.md); the overall design in [backend-architecture.md](../architecture/backend-architecture.md).
 
 ---
 
@@ -84,7 +84,7 @@ Returned when the `job_id` does not exist (unknown, or the in-memory session was
 
 ### G-409: Invalid State Transition
 
-Returned when the requested action conflicts with the job's current phase/status (e.g. starting a step while the job is already `running`). Raised by the state machine — see [job-lifecycle.md](./job-lifecycle.md).
+Returned when the requested action conflicts with the job's current phase/status (e.g. starting a step while the job is already `running`). Raised by the state machine — see [job-lifecycle.md](../architecture/job-lifecycle.md).
 
 ```json
 {
@@ -369,7 +369,7 @@ Returns the current pipeline state. Polled by the frontend at a fixed interval.
 
 **`phase` values:** `uploaded` · `filtering` · `normalization_preview` · `normalization` · `svd` · `batch` · `analysis` · `results` · `heatmap`
 
-> Values are the exact lowercase enum values emitted by the backend. The complete state machine (allowed transitions, terminal states, who triggers each transition) is specified in [job-lifecycle.md](./job-lifecycle.md); progress semantics in [pipeline-progress.md](./pipeline-progress.md).
+> Values are the exact lowercase enum values emitted by the backend. The complete state machine (allowed transitions, terminal states, who triggers each transition) is specified in [job-lifecycle.md](../architecture/job-lifecycle.md); progress semantics in [pipeline-progress.md](../architecture/pipeline-progress.md).
 
 #### Error Responses
 
@@ -911,7 +911,7 @@ Returns the generated heatmap as an image.
 
 Cancels any running analysis (terminating the active R subprocess) and **permanently deletes** the job and all its data. The operation is idempotent and concurrency-safe; the success response is only returned once the data has actually been removed from disk. After a reset the client should navigate back to upload to start a new job.
 
-> Effect on data retention (deletion, GDPR) and on running R subprocesses is detailed in [security.md](../backend/security.md) and [job-lifecycle.md](./job-lifecycle.md).
+> Effect on data retention (deletion, GDPR) and on running R subprocesses is detailed in [security.md](../backend/security.md) and [job-lifecycle.md](../architecture/job-lifecycle.md).
 
 - **URL:** `/api/v1/reset/{job_id}` · **Method:** `POST`
 - **Request Body:** None.

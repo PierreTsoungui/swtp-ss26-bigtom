@@ -205,7 +205,7 @@ The important boundary is against `utils/`: a hook may contain network calls; a 
 
 **Long-running jobs (polling).** The analysis pipeline runs asynchronously on the backend (fire-and-forget). The frontend starts a job, then **polls** its status until a terminal state is reached, driven by a dedicated hook (e.g. `useJobPolling`). The status/progress payload and its terminal states are defined by [`pipeline-progress.md`](./pipeline-progress.md); polling logic must stop on the terminal states defined there and surface progress to the UI.
 
-**Error handling.** The application root wraps its routes in a shared `ErrorBoundary` so an unexpected render error degrades to a controlled fallback rather than a blank page. API errors are returned by the backend as RFC-9457 `problem+json` ([`api-contract.md`](./api-contract.md)); hooks parse that shape defensively and expose a user-readable message rather than a raw response. Shared error types and helpers live in `shared/errors/`.
+**Error handling.** The application root wraps its routes in a shared `ErrorBoundary` so an unexpected render error degrades to a controlled fallback rather than a blank page. API errors are returned by the backend as RFC-9457 `problem+json` ([`api-contract.md`](../api/api-contract.md)); hooks parse that shape defensively and expose a user-readable message rather than a raw response. Shared error types and helpers live in `shared/errors/`.
 
 ---
 

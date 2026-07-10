@@ -128,7 +128,7 @@ Each router is a **thin HTTP adapter**. It validates the request (Pydantic + gua
 | `reset.py` | `POST /reset/{job_id}` | Cancel a running job and delete it. |
 | `table.py` | `GET /table/{job_id}/{table}`, `…/export` | Paginated, filterable DMP/DMR result tables and CSV export. |
 
-`main.py` additionally exposes `GET /` (identity) and `GET /health` (liveness/readiness probe). The complete request/response contract, including the RFC 9457 error format, is specified in [api-contract.md](./api-contract.md).
+`main.py` additionally exposes `GET /` (identity) and `GET /health` (liveness/readiness probe). The complete request/response contract, including the RFC 9457 error format, is specified in [api-contract.md](../api/api-contract.md).
 
 ### 5.2 Services — `app/services/`
 
@@ -177,7 +177,7 @@ Cross-cutting concerns with no dependency on routes or services:
 
 - `config` — environment-driven configuration, validated at import (fail-fast). See [configuration.md](../backend/configuration.md).
 - `error_types` / `exceptions` — the RFC 9457 problem model, `AppException`, and the FastAPI handler ([§6.6](#66-error-model)).
-- `logging_config` — structured logging setup; see [logging-backend.md](./logging-backend.md).
+- `logging_config` — structured logging setup; see [logging-backend.md](../backend/logging-backend.md).
 - `resource_governor` — the admission-control queue that bounds concurrent R memory/CPU usage ([§6.5](#65-resource-governance--intake-guards)).
 - `atomic_io` — crash-safe JSON persistence (temp file + `os.replace`), used for job artifacts that must never be left half-written.
 - `upload_limits` — the single source of truth for upload size/count/allow-list limits.
@@ -226,11 +226,10 @@ Because every R step runs inside the single R-worker container, unbounded concur
 - **Admission control** (`core/resource_governor`) — a weighted queue that admits an R step only once its estimated memory and CPU-core need fits the remaining budget; otherwise the step *queues* until capacity frees up (graceful slow-down instead of a crash).
 - **Intake guards** (`services/intake_guards`) — reject a job at upload time if it would exceed the per-job sample cap or the total job-disk budget, giving the user a clear early error instead of a mid-pipeline failure.
 
-Both are sized from environment configuration ([configuration.md](../backend/configuration.md)); the hard container `mem_limit` is the last-resort backstop. The measurement methodology and budgets are documented in [performance-benchmark-concept.md](../performance-benchmark-concept.md).
-
+Both are sized from environment configuration ([configuration.md](../backend/configuration.md)); the hard container `mem_limit` is the last-resort backstop. 
 ### 6.6 Error model
 
-All API errors are **RFC 9457 Problem Details**. Domain code raises `AppException` (or its subclasses such as `InvalidTransitionError`); a single FastAPI handler renders them to the correct status code and `application/problem+json` body. Routes therefore do not assemble error responses by hand. The error catalogue and examples are part of [api-contract.md](./api-contract.md).
+All API errors are **RFC 9457 Problem Details**. Domain code raises `AppException` (or its subclasses such as `InvalidTransitionError`); a single FastAPI handler renders them to the correct status code and `application/problem+json` body. Routes therefore do not assemble error responses by hand. The error catalogue and examples are part of [api-contract.md](../api/api-contract.md).
 
 ### 6.7 Configuration
 
@@ -238,7 +237,7 @@ Every tunable is read from an environment variable with a validated default at i
 
 ### 6.8 Logging
 
-Logging is structured (printf-style, `key=value`), configured centrally, and level-controlled by environment. Conventions and the rationale are in [logging-backend.md](./logging-backend.md).
+Logging is structured (printf-style, `key=value`), configured centrally, and level-controlled by environment. Conventions and the rationale are in [logging-backend.md](../backend/logging-backend.md).
 
 ### 6.9 Data & storage contracts
 
@@ -260,7 +259,7 @@ Two lifespan-managed background loops delete expired `jobs/<id>/` and `staging/<
 
 ## 7. Reference Flow: Upload => Preview
 
-The representative flow below shows the uniform pattern; every other pipeline entry point (`/normalize`, `/batch`, `/heatmap`) has the same shape. Only the architectural steps are shown — the wire-level contract is in [api-contract.md](./api-contract.md).
+The representative flow below shows the uniform pattern; every other pipeline entry point (`/normalize`, `/batch`, `/heatmap`) has the same shape. Only the architectural steps are shown — the wire-level contract is in [api-contract.md](../api/api-contract.md).
 
 ```text
 POST /upload/inspect         => classify a staged folder/ZIP (staging session), return the manifest
@@ -307,7 +306,7 @@ The architecture is designed so common changes follow an existing template rathe
 - **State change.** Only through `transition_job` / `set_progress`. Never mutate `JobStatus` directly.
 - **Background work.** Only through `pipeline_task`. Never create the `cancel_event` or register the task in a service or route.
 - **Configuration.** Add the variable to `core/config` with a validated default and document it in [configuration.md](../backend/configuration.md); mirror it in `.env.example` / `docker-compose.yml`.
-- **Logging.** Structured `key=value`, per [logging-backend.md](./logging-backend.md). No f-strings in log calls, no `print`.
+- **Logging.** Structured `key=value`, per [logging-backend.md](../backend/logging-backend.md). No f-strings in log calls, no `print`.
 
 ---
 
