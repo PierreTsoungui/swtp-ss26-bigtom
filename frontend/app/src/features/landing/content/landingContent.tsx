@@ -16,6 +16,12 @@ import type { DictionaryItem, FaqCategory, InformationCard } from "../types";
  * Keeping this copy in one module (separate from the presentational section
  * components) means content changes never require touching layout code, and the
  * components stay small and easy to test with lightweight fixtures.
+ *
+ * Note on duplication: a few concepts (DMP, DMR, Delta-Beta, batch effect, PCA,
+ * SVD) intentionally appear in both `biologyDictionary` and `faqCategories`. The
+ * glossary gives a one-line definition; the FAQ gives contextual, task-oriented
+ * guidance. They are kept separate on purpose, but any change to the underlying
+ * science must be reflected in both places.
  */
 
 /**
@@ -49,7 +55,7 @@ export const biologyDictionary: DictionaryItem[] = [
   {
     term: "Beta-value",
     definition:
-      "A measure of methylation at a single CpG site, defined as the methylated signal divided by the total signal. It ranges from 0 (fully unmethylated) to 1 (fully methylated) and is the scale on which most results are reported.",
+      "A measure of methylation at a single CpG site, defined as the methylated signal divided by the total signal (methylated plus unmethylated, plus a small offset that stabilises probes with very weak signal). It ranges from 0 (fully unmethylated) to 1 (fully methylated) and is the scale on which most results are reported.",
   },
   {
     term: "detP (Detection p-value)",
@@ -79,7 +85,7 @@ export const biologyDictionary: DictionaryItem[] = [
   {
     term: "XY (Sex Chromosome Probes)",
     definition:
-      "Probes located on the X and Y chromosomes. They are frequently removed so that systematic methylation differences between the sexes, such as those arising from X-chromosome inactivation, do not dominate a comparison focused on other biological factors.",
+      "Probes located on the X and Y chromosomes. Removing them prevents systematic methylation differences between the sexes, such as those arising from X-chromosome inactivation, from dominating a comparison focused on other biological factors. Because this is not always desirable, the XY filter is optional and off by default.",
   },
   {
     term: "SampleQuality",
@@ -89,7 +95,7 @@ export const biologyDictionary: DictionaryItem[] = [
   {
     term: "Normalization",
     definition:
-      "A set of computational corrections that reduce technical differences between samples, such as dye bias between channels and effects of the two probe chemistries, so that the remaining variation more faithfully reflects biology. Available methods here include Noob, Quantile, SWAN and Functional normalization.",
+      "A set of computational corrections that reduce technical differences between samples—such as dye bias between colour channels or systematic differences between the two probe chemistries—so that the remaining variation more faithfully reflects biology. Several established methods are available here (Noob, Quantile, SWAN and Functional normalization); they target overlapping but not identical sources of technical variation, which is why the platform lets you compare them.",
   },
   {
     term: "Batch Effect",
@@ -142,7 +148,7 @@ export const workflowSteps: InformationCard[] = [
   {
     title: "Initial Filtering",
     description:
-      "Remove low-quality probes and samples according to established technical and biological criteria (detP, BeadCount, SNP, NonCpG, MultiHit, XY, and SampleQuality) to ensure reliable downstream analysis. Missing or unpaired IDAT files are flagged before the analysis begins.",
+      "Remove low-quality probes and samples using up to seven configurable criteria (detP, BeadCount, SNP, NonCpG, MultiHit, and—optionally—XY and SampleQuality) to ensure reliable downstream analysis. The sex-chromosome (XY) filter is off by default. Missing or unpaired IDAT files are flagged before the analysis begins.",
     icon: <FactCheckIcon fontSize="large" />,
   },
   {
@@ -175,37 +181,37 @@ export const beginnerTopics: InformationCard[] = [
     title: "What DNA methylation is",
     description:
       "DNA methylation is a chemical mark, the addition of a methyl group to cytosine bases, that cells use to regulate which genes are active without changing the genetic code itself. Methylation patterns differ between tissues, developmental stages and disease states, which makes them informative for research into gene regulation, development and conditions such as cancer. This platform measures methylation at hundreds of thousands of defined positions across the genome using Illumina arrays.",
-    icon: <ScienceIcon />,
+    icon: <ScienceIcon fontSize="large" />,
   },
   {
     title: "The data you provide",
     description:
       "Two kinds of input are required. The raw measurements arrive as IDAT files, with two files per sample, one for each colour channel of the array. A Sample Sheet, supplied as CSV or Excel, lists the samples, links each one to its IDAT files, and records which experimental group every sample belongs to. The group labels in the Sample Sheet determine which comparison the analysis performs.",
-    icon: <UploadFileIcon />,
+    icon: <UploadFileIcon fontSize="large" />,
   },
   {
     title: "Quality control and filtering",
     description:
       "Not every measurement on an array is trustworthy. The filtering step automatically removes probes and samples affected by known technical problems, such as weak signal relative to background, too few replicate beads, overlap with common genetic variants, and cross-reactive probes. Removing these measurements before analysis prevents unreliable data from producing false results, and the criteria applied are standard practice in the field.",
-    icon: <FilterAltIcon />,
+    icon: <FilterAltIcon fontSize="large" />,
   },
   {
     title: "Normalization",
     description:
       "Even after filtering, samples carry technical differences that have nothing to do with biology, for instance because the array combines two different probe chemistries. Normalization adjusts the data to reduce these differences so that samples become directly comparable. The platform lets you compare several established methods using diagnostic plots and then choose one, or proceed without normalization if you prefer.",
-    icon: <InsightsIcon />,
+    icon: <InsightsIcon fontSize="large" />,
   },
   {
     title: "Batch effect correction",
     description:
       "When samples are processed in separate groups, on different days or on different arrays, systematic technical differences known as batch effects can arise. If such effects coincide with the biological groups, they can be mistaken for genuine findings. Using SVD visualizations you can check whether batch effects are present and, if necessary, apply a correction that removes the technical variation while protecting the biological differences you intend to study. This step is optional.",
-    icon: <CleaningServicesIcon />,
+    icon: <CleaningServicesIcon fontSize="large" />,
   },
   {
     title: "Statistical analysis and results",
     description:
       "Finally, the platform compares methylation between your groups and reports the positions and regions that differ significantly. Results are presented as interactive tables of differentially methylated positions (individual CpG sites) and differentially methylated regions (clusters of neighbouring sites), each accompanied by an effect size and a measure of statistical significance. You can filter, sort and export these tables and generate visualizations such as heatmaps to explore and communicate the findings.",
-    icon: <BiotechIcon />,
+    icon: <BiotechIcon fontSize="large" />,
   },
 ];
 
@@ -250,7 +256,7 @@ export const faqCategories: FaqCategory[] = [
       {
         question: "What does the filtering step do and which probes are removed?",
         answer:
-          "Filtering removes probes and samples whose measurements are unlikely to be reliable, so that later statistics are not distorted by technical noise. Seven criteria are applied: detection p-value (signal versus background), bead count (measurement replication), overlap with known SNPs, non-CpG probes, cross-reactive (multi-hit) probes, probes on the X and Y chromosomes, and an overall per-sample quality assessment. Each criterion targets a specific, well-characterised source of unreliability on Illumina arrays.",
+          "Filtering removes probes and samples whose measurements are unlikely to be reliable, so that later statistics are not distorted by technical noise. Up to seven configurable criteria are available: detection p-value (signal versus background), bead count (measurement replication), overlap with known SNPs, non-CpG probes, cross-reactive (multi-hit) probes, probes on the X and Y chromosomes, and an overall per-sample quality assessment. The sex-chromosome (XY) filter is disabled by default, because removing X and Y probes is not always desirable; you can enable or disable individual criteria to suit your study. Each criterion targets a specific, well-characterised source of unreliability on Illumina arrays.",
       },
       {
         question: "What is normalization and why is it necessary?",
