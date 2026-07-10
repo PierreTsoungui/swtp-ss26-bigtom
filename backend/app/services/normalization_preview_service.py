@@ -1,4 +1,6 @@
 # app/services/normalization_preview_service.py
+"""Normalization-preview pipeline: run the R preview and collect its artifacts."""
+
 import asyncio
 import json
 import logging
@@ -6,7 +8,8 @@ from pathlib import Path
 
 from app.services import job_manager
 from app.services.job_manager import JobPhase, JobStatusValue
-from app.services.r_executor import run_r_script, NormalizationPreviewCommand
+from app.services.pipeline_outcome import StepOutcome, handle_step_result, progress_fields
+from app.services.r_executor import NormalizationPreviewCommand, run_r_script
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +25,11 @@ def _scan_preview_artifacts(job_path: Path) -> dict[str, dict]:
     artifacts: dict[str, dict] = {}
 
     for png_file in sorted(job_path.glob("density_*.png")):
-        method = png_file.stem[len("density_"):]
+        method = png_file.stem[len("density_") :]
         artifacts.setdefault(method, {"density": None, "pca": None})["density"] = png_file.name
 
     for json_file in sorted(job_path.glob("pca_*.json")):
-        method = json_file.stem[len("pca_"):]
+        method = json_file.stem[len("pca_") :]
         artifacts.setdefault(method, {"density": None, "pca": None})["pca"] = json_file.name
 
     return artifacts
@@ -38,8 +41,7 @@ async def run_normalization_preview(
     sample_sheet: str,
     cancel_event: asyncio.Event,
 ) -> None:
-    """
-    Runs normalization_preview.R and persists preview_plots.json.
+    """Run normalization_preview.R and persist preview_plots.json.
 
     The cancel_event is injected by the caller (it shares the job's pipeline
     cancel_event) rather than looked up from the registry — this keeps the
@@ -53,11 +55,8 @@ async def run_normalization_preview(
 
     async def on_progress(data: dict) -> None:
         if data.get("type") == "progress":
-            job_manager.set_progress(
-                job_id,
-                percent=data.get("percent", data.get("progress_percent", 0)),
-                message=data.get("message", data.get("current_step", "")),
-            )
+            percent, message = progress_fields(data)
+            job_manager.set_progress(job_id, percent=percent, message=message)
 
     result = await run_r_script(
         command=NormalizationPreviewCommand(
@@ -70,96 +69,83 @@ async def run_normalization_preview(
         on_progress=on_progress,
     )
 
-    if result.is_cancelled:
-        logger.info("Normalization preview cancelled: job_id=%s", job_id)
-        return
-
-    if result.is_timeout:
-        logger.error("Normalization preview timed out: job_id=%s", job_id)
-        job_manager.transition_job(
+    if (
+        handle_step_result(
             job_id,
-            new_phase=JobPhase.NORMALIZATION_PREVIEW,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler: R-Skript hat das Zeitlimit überschritten.",
-            error={"detail": "Normalization preview timeout."},
+            result,
+            phase=JobPhase.NORMALIZATION_PREVIEW,
+            fallback="The R script exited with an error.",
+            timeout_step="Error: the R script exceeded its time limit.",
+            timeout_detail="Normalization preview timeout.",
+            failure_step="Error during the normalization preview.",
+            cancel_log=f"Normalization preview cancelled: job_id={job_id}",
         )
+        is not StepOutcome.SUCCESS
+    ):
         return
 
-    if not result.is_success:
-        logger.error(
-            "Normalization preview failed: job_id=%s returncode=%s stderr=%s",
-            job_id, result.returncode, result.stderr[:500],
-        )
-        job_manager.transition_job(
-            job_id,
-            new_phase=JobPhase.NORMALIZATION_PREVIEW,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler während der Normalisierungs-Preview.",
-            error={"detail": result.stderr or "R-Skript fehlgeschlagen."},
-        )
-        return
-
-    # ── Plot-Erkennung: Dateisystem-Scan (primäre Strategie) ─────────────────
-    # normalization_preview.R schreibt pro Methode zwei Artefakte:
-    #   density_<method>.png  – server-gerenderter Dichteplot (statisch)
-    #   pca_<method>.json     – PCA-Punkte für den interaktiven Frontend-Plotter
-    # Beide werden hier eingesammelt, sodass das Frontend pro Methode den
-    # Density-Plot anzeigen und die PCA dynamisch rendern kann.
+    # ── Plot detection: filesystem scan (primary strategy) ───────────────────
+    # normalization_preview.R writes two artifacts per method:
+    #   density_<method>.png  – server-rendered density plot (static)
+    #   pca_<method>.json     – PCA points for the interactive frontend plotter
+    # Both are collected here so the frontend can show the density plot per
+    # method and render the PCA dynamically.
     job_path = Path(job_dir)
     preview_plots = _scan_preview_artifacts(job_path)
 
     logger.info(
-        "Preview-Scan abgeschlossen: job_id=%s methoden=%s",
+        "Preview scan finished: job_id=%s methods=%s",
         job_id,
         {m: {k: v for k, v in arts.items() if v} for m, arts in preview_plots.items()},
     )
 
     if not preview_plots:
         logger.error(
-            "Keine Preview-Artefakte im Job-Verzeichnis: job_id=%s job_dir=%s",
-            job_id, job_dir,
+            "No preview artifacts in the job directory: job_id=%s job_dir=%s",
+            job_id,
+            job_dir,
         )
         job_manager.transition_job(
             job_id,
             new_phase=JobPhase.NORMALIZATION_PREVIEW,
             new_status=JobStatusValue.FAILED,
-            current_step="Fehler: Keine Plots im Job-Verzeichnis gefunden.",
-            error={"detail": f"Keine Preview-Dateien in {job_dir} gefunden."},
+            current_step="Error: no plots found in the job directory.",
+            error={"detail": f"No preview files found in {job_dir}."},
         )
         return
 
-    # ── preview_plots.json persistieren ──────────────────────────────────────
+    # ── Persist preview_plots.json ───────────────────────────────────────────
     plots_path = job_path / "preview_plots.json"
     try:
         with open(plots_path, "w", encoding="utf-8") as f:
             json.dump(preview_plots, f, indent=2)
         logger.info(
-            "preview_plots.json gespeichert: job_id=%s anzahl_plots=%d",
+            "preview_plots.json saved: job_id=%s plot_count=%d",
             job_id,
             sum(len(v) for v in preview_plots.values()),
         )
     except Exception:
-        logger.exception("Fehler beim Speichern von preview_plots.json: job_id=%s", job_id)
+        logger.exception("Error saving preview_plots.json: job_id=%s", job_id)
         job_manager.transition_job(
             job_id,
             new_phase=JobPhase.NORMALIZATION_PREVIEW,
             new_status=JobStatusValue.FAILED,
-            current_step="Fehler beim Speichern der Preview-Plots.",
-            error={"detail": "preview_plots.json konnte nicht gespeichert werden."},
+            current_step="Error while saving the preview plots.",
+            error={"detail": "preview_plots.json could not be saved."},
         )
         return
 
-    # ── Phasenübergänge ───────────────────────────────────────────────────────
+    # ── Phase transitions ────────────────────────────────────────────────────
     job_manager.transition_job(
         job_id,
         new_phase=JobPhase.NORMALIZATION_PREVIEW,
         new_status=JobStatusValue.COMPLETED,
         progress_percent=100,
-        current_step="Normalisierungs-Preview abgeschlossen.",
+        current_step="Normalization preview completed.",
     )
     job_manager.transition_job(
         job_id,
         new_phase=JobPhase.NORMALIZATION,
         new_status=JobStatusValue.WAITING,
-        current_step="Warte auf Auswahl der Normalisierungsmethode...",
+        current_step="Waiting for the normalization method selection...",
     )

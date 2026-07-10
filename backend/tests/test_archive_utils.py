@@ -3,7 +3,7 @@
 These pin the defences that matter: zip-slip, zip-bomb (ratio/size/count),
 symlink and junk filtering, and the extension whitelist.
 """
-import io
+
 import sys
 import zipfile
 from pathlib import Path
@@ -25,11 +25,14 @@ def _make_zip(tmp_path: Path, entries: dict[str, bytes], name: str = "in.zip") -
 
 
 def test_extracts_only_whitelisted_files(tmp_path):
-    zip_path = _make_zip(tmp_path, {
-        "Demo/SampleSheet.csv": b"[Data]\nSample_Name\nHeLa\n",
-        "Demo/x_Grn.idat": b"\x00" * 200,
-        "Demo/readme.txt": b"hello",
-    })
+    zip_path = _make_zip(
+        tmp_path,
+        {
+            "Demo/SampleSheet.csv": b"[Data]\nSample_Name\nHeLa\n",
+            "Demo/x_Grn.idat": b"\x00" * 200,
+            "Demo/readme.txt": b"hello",
+        },
+    )
     dest = tmp_path / "out"
     dest.mkdir()
 
@@ -78,12 +81,15 @@ def test_corrupt_zip_raises_invalid(tmp_path):
 
 
 def test_macosx_and_dotfiles_are_dropped(tmp_path):
-    zip_path = _make_zip(tmp_path, {
-        "__MACOSX/._SampleSheet.csv": b"junk",
-        ".DS_Store": b"junk",
-        "Demo/.hidden.csv": b"junk",
-        "Demo/SampleSheet.csv": b"[Data]\nSample_Name\nHeLa\n",
-    })
+    zip_path = _make_zip(
+        tmp_path,
+        {
+            "__MACOSX/._SampleSheet.csv": b"junk",
+            ".DS_Store": b"junk",
+            "Demo/.hidden.csv": b"junk",
+            "Demo/SampleSheet.csv": b"[Data]\nSample_Name\nHeLa\n",
+        },
+    )
     dest = tmp_path / "out"
     dest.mkdir()
 

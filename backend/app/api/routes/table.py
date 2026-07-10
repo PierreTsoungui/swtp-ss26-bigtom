@@ -1,8 +1,11 @@
 # app/api/routes/table.py
+"""Routes for reading and exporting the paginated DMP/DMR result tables."""
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
+
 from app.services.table_filter import normalize_filters
-from app.services.table_handler import get_table_data, export_table_csv
+from app.services.table_handler import export_table_csv, get_table_data
 
 router = APIRouter()
 
@@ -16,6 +19,7 @@ def get_table(
     sort_order: str | None = None,
     page: int = Query(default=1, ge=1),
 ):
+    """Return one paginated, filtered and sorted page of a result table."""
     filters = normalize_filters(dict(request.query_params))
     return get_table_data(
         job_id=job_id,
@@ -35,7 +39,8 @@ def export_table(
     sort_by: str | None = None,
     sort_order: str | None = None,
 ):
-    filters     = normalize_filters(dict(request.query_params))
+    """Export the filtered, sorted result table as a downloadable CSV file."""
+    filters = normalize_filters(dict(request.query_params))
     csv_content = export_table_csv(
         job_id=job_id,
         table=table,

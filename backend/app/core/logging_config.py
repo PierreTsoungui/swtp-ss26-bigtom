@@ -1,13 +1,20 @@
+"""Application-wide logging configuration."""
+
 import logging
 import os
 import sys
 
+
 def setup_logging():
+    """Configure root logging from the ``LOG_LEVEL`` environment variable.
+
+    Formats records to stdout and quietens noisy third-party loggers. Defaults to
+    INFO when ``LOG_LEVEL`` is unset, and falls back to INFO for an unknown level.
+    """
     log_format = "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d) -> %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
 
-    # Dynamisches Log-Level aus .env / Umgebungsvariable (Default: INFO für Production)
-    env_level = os.getenv("LOG_LEVEL", "DEBUG").upper()
+    env_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_level = getattr(logging, env_level, logging.INFO)
 
     logging.basicConfig(
@@ -15,8 +22,8 @@ def setup_logging():
         format=log_format,
         datefmt=date_format,
         handlers=[logging.StreamHandler(sys.stdout)],
-        force=True
+        force=True,
     )
-    
-    # Rauschen von geschwätzigen Drittanbieter-Bibliotheken minimieren
+
+    # Reduce the noise from chatty third-party libraries.
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

@@ -19,10 +19,10 @@ describe("workflowSteps utility", () => {
       "Batch",
       "Results",
     ]);
-    
+
     // Check sequential ID constraints
     expect(workflowSteps.map((step) => step.id)).toEqual([1, 2, 3, 4, 5]);
-    
+
     // Ensure that obsolete pipeline states are no longer part of the metadata array
     expect(workflowSteps.map((step) => step.label)).not.toEqual(
       expect.arrayContaining(["Validation", "Analysis", "Quality Control", "Export"]),
@@ -36,8 +36,8 @@ describe("workflowSteps utility", () => {
     expect(getWorkflowStepForPath("/normalization/job-123")?.label).toBe("Normalization");
     expect(getWorkflowStepForPath("/batch/job-123")?.label).toBe("Batch");
     expect(getWorkflowStepForPath("/results/job-123")?.label).toBe("Results");
-    
+
     // Unmapped standalone routes must return undefined fallback statuses
-    expect(getWorkflowStepForPath("/datenschutz")).toBeUndefined();
+    expect(getWorkflowStepForPath("/privacy")).toBeUndefined();
   });
 });

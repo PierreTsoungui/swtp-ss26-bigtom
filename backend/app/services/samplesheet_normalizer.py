@@ -22,11 +22,11 @@ variants, we convert *once*, here, at upload time. Everything downstream then
 reads a single canonical CSV. This module is the single source of truth for that
 conversion; nothing else should parse a raw upload.
 """
+
 import csv
 import io
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -41,12 +41,27 @@ DATA_MARKER = "[Data]"
 # the biological grouping for DMP/DMR. When a sheet uses names the alias table
 # below does not know, the user maps these roles explicitly (see
 # ``normalize_sample_sheet(..., column_mapping=...)``).
-CANONICAL_ROLES: Tuple[str, ...] = (
+CANONICAL_ROLES: tuple[str, ...] = (
     "Sentrix_ID",
     "Sentrix_Position",
     "Sample_Group",
     "Sample_Name",
 )
+
+# The reserved column that every canonical sheet carries as the single,
+# authoritative IDAT file-location contract. The files on disk are
+# ``<Basename>_Grn.idat`` / ``<Basename>_Red.idat``, and the R backend reads
+# ONLY this column to locate them (``"Basename" %in% colnames(sheet)``); minfi
+# then names each loaded sample ``basename(Basename)``.
+#
+# Different cohorts encode the file prefix differently — a ``Sentrix_ID`` +
+# ``Sentrix_Position`` pair (the classic chip layout), or an opaque per-sample
+# id in an explicit ``Basename`` column (e.g. TCGA ``<uuid>_noid`` exports). We
+# resolve whichever convention the source sheet uses ONCE, here at upload time
+# (see :func:`_resolve_linkage_keys`), and write the result into this one column.
+# Downstream therefore never needs to know how the prefix was derived, and a new
+# convention (e.g. a ``Filename`` column) is a single branch in the resolver.
+BASENAME_COLUMN = "Basename"
 
 # Delimiters we try to detect in CSV uploads, most-specific first.
 _CSV_DELIMITERS = (";", "\t", ",")
@@ -75,10 +90,19 @@ _HEADER_ALIASES = {
 }
 
 
+def _normalize_key(name: str) -> str:
+    """Normalize a header for alias/role lookup: trim, lowercase, drop spaces/underscores.
+
+    So ``"Sentrix Barcode"``, ``"sentrix_barcode"`` and ``"SentrixBarcode"`` all
+    collapse to the same lookup key.
+    """
+    return name.strip().lower().replace(" ", "").replace("_", "")
+
+
 def normalize_sample_sheet(
     content: bytes,
     filename: str,
-    column_mapping: Optional[Dict[str, str]] = None,
+    column_mapping: dict[str, str] | None = None,
 ) -> str:
     """Convert a raw uploaded sample sheet into the canonical CSV text.
 
@@ -101,20 +125,46 @@ def normalize_sample_sheet(
     When omitted, the legacy Illumina alias detection is applied instead — this
     keeps the deprecated single-shot upload and already-canonical sheets working.
 
-    Raises ``ValueError`` (with a human-readable, German message) on any
+    Raises ``ValueError`` with a human-readable error message on any
     structural problem so the upload layer can surface it as a 400.
     """
     raw_headers, rows = read_sample_sheet_table(content, filename)
+    return build_canonical_csv(raw_headers, rows, column_mapping)
+
+
+def build_canonical_csv(
+    raw_headers: list[str],
+    rows: list[list[str]],
+    column_mapping: dict[str, str] | None = None,
+) -> str:
+    """Render already-parsed ``(raw_headers, rows)`` as the canonical CSV text.
+
+    This is the back-half of :func:`normalize_sample_sheet`, split out so callers
+    that have already read (and possibly filtered) the raw table — e.g. the commit
+    step, which drops rows that do not correspond to an uploaded IDAT pair — can
+    reuse the exact same header canonicalization without re-reading the source.
+    """
+    # Derive the IDAT file-location contract from the RAW sheet FIRST, before any
+    # role renaming can consume its source column (e.g. a user mapping the
+    # Sample_Name role onto the sheet's Basename column). The result is installed
+    # into the reserved Basename column below, independent of the role mapping.
+    linkage = _resolve_linkage_keys(raw_headers, rows, column_mapping)
 
     if column_mapping:
         headers = _apply_explicit_mapping(raw_headers, column_mapping)
     else:
         headers = _canonicalize_headers(raw_headers)
 
+    # Regardless of path, normalize a Basename-like column to the exact canonical
+    # name so the R backend recognizes the alternative IDAT-naming convention.
+    headers = _canonicalize_basename(headers)
+
+    headers, rows = _install_basename_contract(headers, rows, linkage)
+
     return _write_canonical_csv(headers, rows)
 
 
-def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], List[List[str]]]:
+def read_sample_sheet_table(content: bytes, filename: str) -> tuple[list[str], list[list[str]]]:
     """Read a sheet's data section into ``(raw_headers, rows)`` without renaming.
 
     This is the shared front-half of the normalization: it reads the source
@@ -131,29 +181,29 @@ def read_sample_sheet_table(content: bytes, filename: str) -> Tuple[List[str], L
         grid = _read_csv_grid(content)
     else:
         # validate_sample_sheet gates this, but never trust the caller.
-        raise ValueError(f"Nicht unterstütztes SampleSheet-Format: '{ext}'")
+        raise ValueError(f"Unsupported sample sheet format: '{ext}'")
 
     header_idx = _locate_header_row(grid)
     raw_headers = grid[header_idx]
-    raw_rows = grid[header_idx + 1:]
+    raw_rows = grid[header_idx + 1 :]
 
     # Keep only columns that actually have a name; trailing empty cells are a
     # common artefact of Excel exports (a fixed grid width padded with blanks).
     keep = [i for i, name in enumerate(raw_headers) if name.strip()]
     if not keep:
-        raise ValueError("SampleSheet enthält keine benannten Spalten.")
+        raise ValueError("The sample sheet contains no named columns.")
 
     headers = [raw_headers[i].strip() for i in keep]
     rows = [_select_and_pad(row, keep) for row in raw_rows]
     rows = [row for row in rows if any(cell.strip() for cell in row)]
 
     if not rows:
-        raise ValueError("SampleSheet enthält keine Datenzeilen.")
+        raise ValueError("The sample sheet contains no data rows.")
 
     return headers, rows
 
 
-def suggest_column_mapping(raw_headers: List[str]) -> Dict[str, str]:
+def suggest_column_mapping(raw_headers: list[str]) -> dict[str, str]:
     """Best-effort role → raw-column guess used to pre-fill the role dropdowns.
 
     Reuses the Illumina alias table: every raw header that resolves to one of the
@@ -161,18 +211,132 @@ def suggest_column_mapping(raw_headers: List[str]) -> Dict[str, str]:
     explicit ``Sentrix_ID`` beats a later ``SentrixBarcode_A``). Roles without a
     confident match are simply absent — the user picks those manually.
     """
-    suggestion: Dict[str, str] = {}
+    suggestion: dict[str, str] = {}
     for name in raw_headers:
-        key = name.strip().lower().replace(" ", "").replace("_", "")
-        role = _HEADER_ALIASES.get(key)
+        role = _HEADER_ALIASES.get(_normalize_key(name))
         if role in CANONICAL_ROLES and role not in suggestion:
             suggestion[role] = name.strip()
     return suggestion
 
 
+def find_basename_column(headers: list[str]) -> str | None:
+    """Return the raw header that denotes the IDAT ``Basename``, or ``None``.
+
+    Detection is tolerant to case and spacing/underscores (``Basename``,
+    ``basename`` and ``Base Name`` all match), mirroring the alias handling used
+    for the other columns. The first match wins. The returned value is the
+    (whitespace-trimmed) raw header, so callers can look it up in the raw table.
+    """
+    for name in headers:
+        if _normalize_key(name) == _normalize_key(BASENAME_COLUMN):
+            return name.strip()
+    return None
+
+
+# ── IDAT file-location contract ────────────────────────────────────────────────
+
+
+def _resolve_linkage_keys(
+    raw_headers: list[str],
+    rows: list[list[str]],
+    column_mapping: dict[str, str] | None,
+) -> list[str] | None:
+    """Derive the per-row IDAT file-location prefix from the raw sheet.
+
+    Returns one prefix per row — the value written into the reserved
+    :data:`BASENAME_COLUMN` — or ``None`` when the sheet carries none of the
+    supported linkage conventions (in which case no contract column is written
+    and the R backend resolves/reports it on its own).
+
+    The conventions are tried in priority order; the FIRST one a sheet satisfies
+    wins. This is the single place in the whole pipeline that knows how IDAT files
+    are located, so supporting another convention later (e.g. a ``Filename``
+    column) means adding one branch here — no R or downstream change is required.
+    """
+    # 1. An explicit Basename column is authoritative when present (e.g. TCGA
+    #    ``<uuid>_noid`` exports whose Sentrix columns are placeholders).
+    basename_col = find_basename_column(raw_headers)
+    if basename_col is not None:
+        idx = raw_headers.index(basename_col)
+        return [_cell(row, idx) for row in rows]
+
+    # 2. The classic chip layout: ``<Sentrix_ID>_<Sentrix_Position>``.
+    id_col, pos_col = _resolve_sentrix_columns(raw_headers, column_mapping)
+    if id_col is not None and pos_col is not None:
+        i, p = raw_headers.index(id_col), raw_headers.index(pos_col)
+        keys = []
+        for row in rows:
+            chip, pos = _cell(row, i), _cell(row, p)
+            keys.append(f"{chip}_{pos}" if chip and pos else "")
+        return keys
+
+    # (Future conventions — e.g. a ``Filename`` column — slot in here.)
+    return None
+
+
+def _resolve_sentrix_columns(
+    raw_headers: list[str], column_mapping: dict[str, str] | None
+) -> tuple[str | None, str | None]:
+    """Return the raw ``(Sentrix_ID, Sentrix_Position)`` column names, or ``(None, None)``.
+
+    Uses the explicit user mapping when given, otherwise the Illumina alias table,
+    mirroring how :func:`build_canonical_csv` renames these columns — so the value
+    written into the contract column always matches the ``Sentrix_ID`` /
+    ``Sentrix_Position`` columns that end up in the canonical sheet.
+    """
+    if column_mapping:
+        id_col = column_mapping.get("Sentrix_ID")
+        pos_col = column_mapping.get("Sentrix_Position")
+    else:
+        suggested = suggest_column_mapping(raw_headers)
+        id_col = suggested.get("Sentrix_ID")
+        pos_col = suggested.get("Sentrix_Position")
+    if id_col in raw_headers and pos_col in raw_headers:
+        return id_col, pos_col
+    return None, None
+
+
+def _install_basename_contract(
+    headers: list[str], rows: list[list[str]], linkage: list[str] | None
+) -> tuple[list[str], list[list[str]]]:
+    """Guarantee a single reserved ``Basename`` column holding the linkage keys.
+
+    Applied AFTER the role mapping, so mapping a role onto the source Basename
+    column can never strip the file-location contract: the column is (re)written
+    here from the linkage computed off the raw sheet. A no-op when the linkage
+    could not be derived (``None``).
+    """
+    if linkage is None:
+        return headers, rows
+
+    if BASENAME_COLUMN in headers:
+        idx = headers.index(BASENAME_COLUMN)
+        rows = [_with_value(row, idx, linkage[r]) for r, row in enumerate(rows)]
+        return headers, rows
+
+    headers = headers + [BASENAME_COLUMN]
+    rows = [row + [linkage[r]] for r, row in enumerate(rows)]
+    return headers, rows
+
+
+def _cell(row: list[str], idx: int) -> str:
+    """Whitespace-trimmed value at ``idx``, or ``""`` when the row is short."""
+    return row[idx].strip() if idx < len(row) else ""
+
+
+def _with_value(row: list[str], idx: int, value: str) -> list[str]:
+    """Return a copy of ``row`` with ``row[idx] = value`` (padding when short)."""
+    row = list(row)
+    while len(row) <= idx:
+        row.append("")
+    row[idx] = value
+    return row
+
+
 # ── Reading the various source formats into a string grid ──────────────────────
 
-def _read_excel_grid(content: bytes, ext: str) -> List[List[str]]:
+
+def _read_excel_grid(content: bytes, ext: str) -> list[list[str]]:
     """Read the first worksheet into a grid of strings.
 
     ``dtype=object`` + ``header=None`` keeps the raw cell layout intact (so the
@@ -186,16 +350,16 @@ def _read_excel_grid(content: bytes, ext: str) -> List[List[str]]:
         )
     except ImportError as exc:
         # xlrd is optional; give an actionable message instead of a stack trace.
-        raise ValueError(
-            f"Excel-Datei ('{ext}') kann nicht gelesen werden: {exc}"
-        ) from exc
+        raise ValueError(f"Excel file ('{ext}') cannot be read: {exc}") from exc
     except Exception as exc:
-        raise ValueError(f"Excel-Datei konnte nicht gelesen werden: {exc}") from exc
+        # Narrow in effect: pandas/openpyxl/xlrd raise a variety of types for a
+        # malformed workbook; normalize them to one actionable ValueError.
+        raise ValueError(f"Excel file could not be read: {exc}") from exc
 
     return [[_cell_to_str(cell) for cell in row] for row in df.itertuples(index=False)]
 
 
-def _read_csv_grid(content: bytes) -> List[List[str]]:
+def _read_csv_grid(content: bytes) -> list[list[str]]:
     """Decode and parse a CSV upload into a grid of strings."""
     text = content.decode("utf-8-sig", errors="replace")
     lines = text.splitlines()
@@ -204,7 +368,7 @@ def _read_csv_grid(content: bytes) -> List[List[str]]:
     return [[cell.strip() for cell in row] for row in reader]
 
 
-def _detect_delimiter(lines: List[str]) -> str:
+def _detect_delimiter(lines: list[str]) -> str:
     """Pick the delimiter from the first table-like line.
 
     Lines without any candidate delimiter are skipped, so a bare ``[Data]``
@@ -215,7 +379,7 @@ def _detect_delimiter(lines: List[str]) -> str:
         if not line.strip():
             continue
         counts = {d: line.count(d) for d in _CSV_DELIMITERS}
-        best = max(counts, key=counts.get)
+        best = max(counts, key=lambda d: counts[d])
         if counts[best] > 0:
             return best
     return ","
@@ -238,7 +402,8 @@ def _cell_to_str(value) -> str:
 
 # ── Structural normalization ───────────────────────────────────────────────────
 
-def _locate_header_row(grid: List[List[str]]) -> int:
+
+def _locate_header_row(grid: list[list[str]]) -> int:
     """Return the index of the column-header row.
 
     If a ``[Data]`` marker is present (Illumina format), the header is the next
@@ -246,35 +411,34 @@ def _locate_header_row(grid: List[List[str]]) -> int:
     (sheets that ship the data table directly, e.g. the 450K demo sheet).
     """
     if not grid:
-        raise ValueError("SampleSheet ist leer.")
+        raise ValueError("The sample sheet is empty.")
 
     for i, row in enumerate(grid):
         if any(cell.strip().lower() == DATA_MARKER.lower() for cell in row):
             for j in range(i + 1, len(grid)):
                 if any(cell.strip() for cell in grid[j]):
                     return j
-            raise ValueError("SampleSheet enthält [Data], aber keine Tabelle danach.")
+            raise ValueError("The sample sheet contains [Data] but no table after it.")
 
     for i, row in enumerate(grid):
         if any(cell.strip() for cell in row):
             return i
 
-    raise ValueError("SampleSheet enthält keine verwertbaren Zeilen.")
+    raise ValueError("The sample sheet contains no usable rows.")
 
 
-def _canonicalize_headers(headers: List[str]) -> List[str]:
+def _canonicalize_headers(headers: list[str]) -> list[str]:
     """Map known Illumina aliases onto the canonical column names.
 
     A column is only renamed if its canonical target is not already present, so a
     sheet carrying both ``Sentrix_ID`` and ``SentrixBarcode_A`` never collapses
     into two columns with the same name.
     """
-    result: List[str] = []
+    result: list[str] = []
     seen = set()
     for name in headers:
         cleaned = name.strip()
-        key = cleaned.lower().replace(" ", "").replace("_", "")
-        canonical = _HEADER_ALIASES.get(key, cleaned)
+        canonical = _HEADER_ALIASES.get(_normalize_key(name), cleaned)
         if canonical in seen and canonical != cleaned:
             canonical = cleaned  # avoid creating a duplicate canonical column
         result.append(canonical)
@@ -282,7 +446,29 @@ def _canonicalize_headers(headers: List[str]) -> List[str]:
     return result
 
 
-def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> List[str]:
+def _canonicalize_basename(headers: list[str]) -> list[str]:
+    """Rename a Basename-like column to the exact canonical ``Basename``.
+
+    The R backend recognizes the alternative IDAT-naming convention by the literal
+    column name, so a column spelled ``basename`` / ``Base Name`` must be
+    normalized. This is a no-op when a canonical ``Basename`` is already present
+    or none is found; only the first match is renamed.
+    """
+    if BASENAME_COLUMN in headers:
+        return headers
+
+    result: list[str] = []
+    renamed = False
+    for name in headers:
+        if not renamed and _normalize_key(name) == _normalize_key(BASENAME_COLUMN):
+            result.append(BASENAME_COLUMN)
+            renamed = True
+        else:
+            result.append(name)
+    return result
+
+
+def _apply_explicit_mapping(raw_headers: list[str], mapping: dict[str, str]) -> list[str]:
     """Rename the user-mapped columns to their canonical role names.
 
     ``mapping`` is ``role -> raw column name`` (e.g. ``{"Sentrix_ID": "Chip"}``).
@@ -294,12 +480,12 @@ def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> 
     """
     missing = sorted({raw for raw in mapping.values() if raw not in raw_headers})
     if missing:
-        raise ValueError(f"Zugeordnete Spalte(n) nicht im SampleSheet vorhanden: {missing}")
+        raise ValueError(f"Mapped column(s) not present in the sample sheet: {missing}")
 
     raw_to_role = {raw: role for role, raw in mapping.items()}
     targets = set(mapping.keys())
 
-    result: List[str] = []
+    result: list[str] = []
     assigned: set[str] = set()
     for name in raw_headers:
         role = raw_to_role.get(name)
@@ -313,12 +499,12 @@ def _apply_explicit_mapping(raw_headers: List[str], mapping: Dict[str, str]) -> 
     return result
 
 
-def _select_and_pad(row: List[str], keep: List[int]) -> List[str]:
+def _select_and_pad(row: list[str], keep: list[int]) -> list[str]:
     """Project a data row onto the kept column indices, padding short rows."""
     return [row[i] if i < len(row) else "" for i in keep]
 
 
-def _write_canonical_csv(headers: List[str], rows: List[List[str]]) -> str:
+def _write_canonical_csv(headers: list[str], rows: list[list[str]]) -> str:
     """Serialize headers + rows as the canonical ``[Data]`` CSV text."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")

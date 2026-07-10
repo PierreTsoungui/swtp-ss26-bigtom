@@ -1,16 +1,16 @@
 import json
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
-from pathlib import Path
-import sys
-import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from datetime import datetime, timedelta
+
 from app.main import app
 from app.services import batch_service, job_manager
-from app.core.error_types import ErrorTypes
-from datetime import datetime, timedelta
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -25,7 +25,7 @@ def mock_job(tmp_path, monkeypatch):
     job_id = "test-job-123"
     job_dir = tmp_path / job_id
     job_dir.mkdir()
-    
+
     # Create a proper batch_history.json with correct structure
     history_path = job_dir / "batch_history.json"
     initial_history = {
@@ -36,17 +36,18 @@ def mock_job(tmp_path, monkeypatch):
                 "type": "initial",
                 "svd_plot": f"/api/v1/batch/{job_id}/svd-plot/0",
                 "settings_used": None,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
         ],
         "current_round": 0,
-        "correction_applied": False
+        "correction_applied": False,
     }
     with open(history_path, "w", encoding="utf-8") as f:
         json.dump(initial_history, f, indent=2)
 
     # Create a mock job in job_manager
     from app.models.job import JobStatus
+
     mock_job_obj = JobStatus(
         job_id=job_id,
         status="running",
@@ -55,7 +56,7 @@ def mock_job(tmp_path, monkeypatch):
         current_step="Test job",
         temp_dir=str(job_dir),
         created_at=datetime.now(),
-        expires_at=datetime.now() + timedelta(hours=24)
+        expires_at=datetime.now() + timedelta(hours=24),
     )
     job_manager.jobs[job_id] = mock_job_obj
 
@@ -64,6 +65,7 @@ def mock_job(tmp_path, monkeypatch):
         if jid == job_id:
             return mock_job_obj
         return None
+
     monkeypatch.setattr(job_manager, "get_job", mock_get_job)
 
     return job_id, job_dir
@@ -95,13 +97,14 @@ def mock_job_for_batch(mock_job, monkeypatch):
 
 # ── GET: HISTORY TESTS ──────────────────────────────────────────────────────
 
+
 def test_get_batch_history_success(mock_job):
     """Test successful history retrieval."""
     job_id, _ = mock_job
-    
+
     response = client.get(f"/api/v1/batch/{job_id}/history")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["job_id"] == job_id
     assert data["current_round"] == 0
@@ -117,13 +120,14 @@ def test_get_batch_history_job_not_found(mock_job):
 
 # ── GET: SVD PLOT TESTS ─────────────────────────────────────────────────────
 
+
 def test_get_svd_plot_success(mock_job):
     """Test successful SVD plot retrieval."""
     job_id, job_dir = mock_job
-    
+
     plot_file = job_dir / "svd_plot_0.png"
     plot_file.write_bytes(b"fake_png_binary_data")
-    
+
     response = client.get(f"/api/v1/batch/{job_id}/svd-plot/0")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
@@ -148,6 +152,7 @@ def test_get_svd_plot_not_found(mock_job):
 
 # ── GET: BATCH OPTIONS TESTS ────────────────────────────────────────────────
 
+
 def test_get_batch_options_success(mock_job):
     """Test successful retrieval of batch options."""
     job_id, job_dir = mock_job
@@ -160,10 +165,10 @@ def test_get_batch_options_success(mock_job):
         "Sample_C,Cellline,Chip_1,Plate_1\n"
     )
     (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
-    
+
     response = client.get(f"/api/v1/batch/{job_id}/batch-options")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["job_id"] == job_id
     assert "Slide" in data["available_columns"]
@@ -182,7 +187,7 @@ def test_get_batch_options_all_filtered(mock_job):
         "Sample_03,Studie_2026,BC_993\n"
     )
     (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
-    
+
     response = client.get(f"/api/v1/batch/{job_id}/batch-options")
     assert response.status_code == 200
     assert response.json()["available_columns"] == []
@@ -190,17 +195,13 @@ def test_get_batch_options_all_filtered(mock_job):
 
 # ── POST: BATCH RUN TESTS ───────────────────────────────────────────────────
 
+
 def test_run_batch_correction_success(mock_job_for_batch):
     """Test successful batch correction run."""
     job_id, _ = mock_job_for_batch
 
-    payload = {
-        "batch_correction": {
-            "batch_variable": "Slide",
-            "covariates": ["Sample_Group"]
-        }
-    }
-    
+    payload = {"batch_correction": {"batch_variable": "Slide", "covariates": ["Sample_Group"]}}
+
     response = client.post(f"/api/v1/batch/{job_id}", json=payload)
     assert response.status_code in [202, 409]
 
@@ -211,14 +212,9 @@ def test_run_batch_invalid_variable(mock_job):
 
     csv_content = "[Data],,\nSlide,Sample_Group\nChip1,A\nChip2,B\nChip1,A"
     (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
-    
-    payload = {
-        "batch_correction": {
-            "batch_variable": "Invalid_Variable",
-            "covariates": []
-        }
-    }
-    
+
+    payload = {"batch_correction": {"batch_variable": "Invalid_Variable", "covariates": []}}
+
     response = client.post(f"/api/v1/batch/{job_id}", json=payload)
     assert response.status_code in [400, 404, 409]
 
@@ -226,48 +222,42 @@ def test_run_batch_invalid_variable(mock_job):
 def test_run_batch_covariate_equals_batch(mock_job):
     """Test batch correction when covariate equals batch variable."""
     job_id, job_dir = mock_job
-    
+
     csv_content = "[Data],,\nSlide,Sample_Group\nChip1,A\nChip2,B\nChip1,A"
     (job_dir / "SampleSheet.csv").write_text(csv_content, encoding="utf-8")
-    
+
     payload = {
-        "batch_correction": {
-            "batch_variable": "Slide",
-            "covariates": ["Slide", "Sample_Group"]
-        }
+        "batch_correction": {"batch_variable": "Slide", "covariates": ["Slide", "Sample_Group"]}
     }
-    
+
     response = client.post(f"/api/v1/batch/{job_id}", json=payload)
     assert response.status_code in [400, 409]
 
 
 # ── POST: SKIP TESTS ────────────────────────────────────────────────────────
 
+
 def test_skip_batch_correction(mock_job_for_batch):
     """Test skipping batch correction."""
     job_id, _ = mock_job_for_batch
-    
+
     response = client.post(f"/api/v1/batch/{job_id}/skip")
     assert response.status_code in [202, 409]
 
 
 # ── ADDITIONAL: Test batch correction failure cases ────────────────────────
 
+
 def test_run_batch_without_samplesheet(mock_job):
     """Test batch correction when sample sheet is missing."""
     job_id, job_dir = mock_job
-    
+
     # Remove the sample sheet
     sheet_path = job_dir / "SampleSheet.csv"
     if sheet_path.exists():
         sheet_path.unlink()
 
-    payload = {
-        "batch_correction": {
-            "batch_variable": "Slide",
-            "covariates": []
-        }
-    }
+    payload = {"batch_correction": {"batch_variable": "Slide", "covariates": []}}
 
     response = client.post(f"/api/v1/batch/{job_id}", json=payload)
     assert response.status_code in [400, 404, 409]

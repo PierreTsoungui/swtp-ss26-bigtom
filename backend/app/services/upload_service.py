@@ -4,27 +4,28 @@
 The upload route stays a thin HTTP adapter; everything that is business logic
 (saving files with rollback, sequencing the first pipeline phase) lives here.
 """
+
 import asyncio
 import json
 import logging
 import os
 from pathlib import Path
-from typing import List
 
 from fastapi import UploadFile
 
 from app.core.error_types import AppException, ErrorTypes
 from app.models.filter import FilterSettings
-from app.services import job_manager
+from app.services import intake_guards, job_manager
 from app.services.file_handler import (
+    clean_job_files,
+    save_filter_settings,
     save_idat_files,
     save_sample_sheet,
-    save_filter_settings,
-    clean_job_files,
 )
 from app.services.job_manager import JobPhase, JobStatusValue
 from app.services.normalization_preview_service import run_normalization_preview
-from app.services.r_executor import run_r_script, FilteringCommand
+from app.services.pipeline_outcome import StepOutcome, handle_step_result, progress_fields
+from app.services.r_executor import FilteringCommand, run_r_script
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 def persist_upload_files(
     job_id: str,
     job_dir: Path,
-    idat_files: List[UploadFile],
+    idat_files: list[UploadFile],
     sample_sheet: UploadFile,
     filter_settings: FilterSettings,
     instance: str,
@@ -43,6 +44,16 @@ def persist_upload_files(
     ``AppException`` is raised (rendered as an RFC-9457 problem by the global
     handler). ``instance`` is the request path, included in the error body.
     """
+    # Intake guards first — reject an oversized cohort / full disk before writing
+    # anything, rolling back the (empty) job dir the route already created. Each
+    # sample is a Grn+Red IDAT pair, so sample count = len(idat_files) // 2.
+    try:
+        intake_guards.enforce_storage_limit(instance)
+        intake_guards.enforce_sample_limit(len(idat_files) // 2, instance)
+    except AppException:
+        clean_job_files(job_id)
+        raise
+
     try:
         save_idat_files(idat_files, job_dir)
         save_sample_sheet(sample_sheet, job_dir)
@@ -50,11 +61,17 @@ def persist_upload_files(
     except ValueError as exc:
         clean_job_files(job_id)
         raise AppException(ErrorTypes.INVALID_UPLOAD, str(exc), instance) from exc
-    except Exception as exc:
+    except AppException:
+        # Already a structured error — roll back but preserve its type/status
+        # instead of masking it as a generic SAVE_FAILED.
         clean_job_files(job_id)
-        raise AppException(
-            ErrorTypes.SAVE_FAILED, f"Fehler beim Speichern: {exc}", instance
-        ) from exc
+        raise
+    except Exception as exc:
+        # Broad on purpose: this is the upload's rollback boundary, so any other
+        # failure must still clean up the half-written job dir. It re-raises as a
+        # structured 500 — it never swallows the error.
+        clean_job_files(job_id)
+        raise AppException(ErrorTypes.SAVE_FAILED, f"Error while saving: {exc}", instance) from exc
 
 
 async def run_upload_pipeline(
@@ -64,7 +81,7 @@ async def run_upload_pipeline(
     filter_settings: FilterSettings,
     cancel_event: asyncio.Event,
 ) -> None:
-    """Filtering followed by the normalization preview, as one pipeline phase.
+    """Run filtering followed by the normalization preview, as one pipeline phase.
 
     The ``cancel_event`` is injected by ``pipeline_task.run_job_pipeline`` — this
     coroutine never creates or registers it (see r-executor.md §6).
@@ -74,16 +91,13 @@ async def run_upload_pipeline(
         new_phase=JobPhase.FILTERING,
         new_status=JobStatusValue.RUNNING,
         progress_percent=0,
-        current_step="Starte Filterung der Rohdaten...",
+        current_step="Starting raw data filtering...",
     )
 
     async def on_progress(data: dict) -> None:
         if data.get("type") == "progress":
-            job_manager.set_progress(
-                job_id,
-                percent=data.get("percent", data.get("progress_percent", 0)),
-                message=data.get("message", data.get("current_step", "")),
-            )
+            percent, message = progress_fields(data)
+            job_manager.set_progress(job_id, percent=percent, message=message)
 
     result = await run_r_script(
         command=FilteringCommand(
@@ -97,32 +111,21 @@ async def run_upload_pipeline(
         on_progress=on_progress,
     )
 
-    # Cancellation is a clean outcome: reset_service owns deletion, do not
-    # write a terminal state here.
-    if result.is_cancelled:
-        logger.info("Job execution cancelled cleanly via reset: job_id=%s", job_id)
-        return
-
-    if result.is_timeout:
-        logger.error("Job execution timed out: job_id=%s", job_id)
-        job_manager.transition_job(
+    # Cancellation is a clean outcome: reset_service owns deletion, so no terminal
+    # state is written here (handle_step_result performs no transition on cancel).
+    if (
+        handle_step_result(
             job_id,
-            new_phase=JobPhase.FILTERING,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler: Das R-Skript hat das Zeitlimit überschritten.",
-            error={"detail": "R script execution timeout."},
+            result,
+            phase=JobPhase.FILTERING,
+            fallback="The R script was aborted.",
+            timeout_step="Error: the R script exceeded its time limit.",
+            timeout_detail="R script execution timeout.",
+            failure_step="Error during filtering.",
+            cancel_log=f"Job execution cancelled cleanly via reset: job_id={job_id}",
         )
-        return
-
-    if not result.is_success:
-        logger.error("Filtering script failed: job_id=%s returncode=%s", job_id, result.returncode)
-        job_manager.transition_job(
-            job_id,
-            new_phase=JobPhase.FILTERING,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler während der Filterung.",
-            error={"detail": result.extra.get("r_error") or result.stderr or "R-Skript abgebrochen."},
-        )
+        is not StepOutcome.SUCCESS
+    ):
         return
 
     # init_filter.R must emit filter_stats.json; its absence means a silent failure.
@@ -132,7 +135,7 @@ async def run_upload_pipeline(
             job_id,
             new_phase=JobPhase.FILTERING,
             new_status=JobStatusValue.FAILED,
-            current_step="Fehler: filter_stats.json wurde nicht erzeugt.",
+            current_step="Error: filter_stats.json was not produced.",
             error={"detail": "filter_stats.json missing."},
         )
         return
@@ -142,14 +145,14 @@ async def run_upload_pipeline(
         new_phase=JobPhase.FILTERING,
         new_status=JobStatusValue.COMPLETED,
         progress_percent=100,
-        current_step="Filterung abgeschlossen.",
+        current_step="Filtering completed.",
     )
     job_manager.transition_job(
         job_id,
         new_phase=JobPhase.NORMALIZATION_PREVIEW,
         new_status=JobStatusValue.RUNNING,
         progress_percent=0,
-        current_step="Starte Normalisierungs-Preview...",
+        current_step="Starting the normalization preview...",
     )
 
     # The same cancel_event flows into the preview step, so a reset during the

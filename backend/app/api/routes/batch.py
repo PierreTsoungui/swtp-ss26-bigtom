@@ -1,16 +1,21 @@
 # app/api/routes/batch.py
+"""Routes for batch correction, SVD plots and the downstream analysis run."""
+
 from fastapi import APIRouter, Body, Query, Request, status
 from fastapi.responses import FileResponse
 
 from app.core.error_types import BatchException, ErrorTypes
 from app.models.batch import (
-    BatchHistoryResponse, BatchRunResponse,
-    BatchSkipResponse, BatchSettingsPayload,
-    BatchOptionsResponse, SampleSheetPreviewResponse,
     AnalysisStartRequest,
+    BatchHistoryResponse,
+    BatchOptionsResponse,
+    BatchRunResponse,
+    BatchSettingsPayload,
+    BatchSkipResponse,
+    SampleSheetPreviewResponse,
 )
 from app.services import batch_service, job_manager
-from app.services.job_manager import transition_job, JobPhase, JobStatusValue
+from app.services.job_manager import JobPhase, JobStatusValue, transition_job
 from app.services.pipeline_task import start_job_pipeline
 
 router = APIRouter()
@@ -18,7 +23,8 @@ router = APIRouter()
 
 @router.get("/{job_id}/history", response_model=BatchHistoryResponse)
 def get_batch_history(job_id: str):
-    job_dir      = batch_service.get_job_dir_or_404(job_id)
+    """Return the batch-correction history (rounds and current state) for a job."""
+    job_dir = batch_service.get_job_dir_or_404(job_id)
     history_data = batch_service.load_history(job_dir, job_id)
     return history_data
 
@@ -31,13 +37,13 @@ def get_svd_plot(job_id: str, round_id: int, format: str = Query("png", pattern=
     ``format=pdf`` is the vector figure for publication, sent as a download.
     """
     job_dir = batch_service.get_job_dir_or_404(job_id)
-    is_pdf  = format == "pdf"
+    is_pdf = format == "pdf"
     plot_file = job_dir / f"svd_plot_{round_id}.{'pdf' if is_pdf else 'png'}"
 
     if not plot_file.exists():
         raise BatchException(
             ErrorTypes.PLOT_NOT_FOUND,
-            detail=f"SVD-Plot für Runde {round_id} nicht gefunden.",
+            detail=f"SVD plot for round {round_id} not found.",
         )
 
     if is_pdf:
@@ -63,7 +69,8 @@ async def run_batch_correction(
     payload: BatchSettingsPayload,
     request: Request,
 ):
-    job_dir  = batch_service.get_job_dir_or_404(job_id)
+    """Validate the batch settings and start a batch-correction run in the background."""
+    job_dir = batch_service.get_job_dir_or_404(job_id)
     settings = payload.batch_correction
 
     # Permissive by design: any column that groups the samples may be the batch
@@ -76,7 +83,7 @@ async def run_batch_correction(
     if settings.batch_variable not in available_cols:
         raise BatchException(
             ErrorTypes.INVALID_BATCH_VARIABLE,
-            detail=f"Spalte '{settings.batch_variable}' ist nicht als Variable im SampleSheet verfügbar.",
+            detail=f"Column '{settings.batch_variable}' is not available as a variable in the sample sheet.",
             provided=settings.batch_variable,
             available=available_cols,
         )
@@ -85,7 +92,7 @@ async def run_batch_correction(
     if invalid_covariates:
         raise BatchException(
             ErrorTypes.INVALID_COVARIATE,
-            detail=f"Ungültige Kovariate(n): {', '.join(invalid_covariates)}.",
+            detail=f"Invalid covariate(s): {', '.join(invalid_covariates)}.",
             provided=invalid_covariates,
             available=available_cols,
         )
@@ -93,7 +100,7 @@ async def run_batch_correction(
     if settings.batch_variable in settings.covariates:
         raise BatchException(
             ErrorTypes.COVARIATE_EQUALS_BATCH,
-            detail="Die Batch-Variable darf nicht gleichzeitig als Kovariate verwendet werden.",
+            detail="The batch variable must not also be used as a covariate.",
             provided_batch_variable=settings.batch_variable,
             provided_covariates=settings.covariates,
         )
@@ -102,11 +109,11 @@ async def run_batch_correction(
     if current_job and current_job.status == JobStatusValue.RUNNING.value:
         raise BatchException(
             ErrorTypes.BATCH_NOT_ALLOWED,
-            detail="Eine Pipeline läuft bereits für diesen Job.",
+            detail="A pipeline is already running for this job.",
         )
 
     history_data = batch_service.load_history(job_dir, job_id)
-    next_round   = batch_service.next_correction_round(history_data)
+    next_round = batch_service.next_correction_round(history_data)
 
     try:
         transition_job(
@@ -114,13 +121,13 @@ async def run_batch_correction(
             new_phase=JobPhase.BATCH,
             new_status=JobStatusValue.RUNNING,
             progress_percent=0,
-            current_step="Starte Batch-Korrektur...",
+            current_step="Starting batch correction...",
         )
     except Exception as e:
         raise BatchException(
             ErrorTypes.INVALID_STATE_TRANSITION,
             detail=str(e),
-        )
+        ) from e
 
     settings_dict = settings.model_dump()
 
@@ -134,7 +141,9 @@ async def run_batch_correction(
     return {"job_id": job_id, "status": JobStatusValue.RUNNING.value, "round": next_round}
 
 
-@router.post("/{job_id}/skip", status_code=status.HTTP_202_ACCEPTED, response_model=BatchSkipResponse)
+@router.post(
+    "/{job_id}/skip", status_code=status.HTTP_202_ACCEPTED, response_model=BatchSkipResponse
+)
 async def skip_batch_correction(
     job_id: str,
     payload: AnalysisStartRequest | None = Body(default=None),
@@ -148,8 +157,17 @@ async def skip_batch_correction(
     """
     job_dir = batch_service.get_job_dir_or_404(job_id)
 
-    group_column  = (payload.group_column or "") if payload else ""
-    case_group    = (payload.case_group or "") if payload else ""
+    # Reject a double submit with a clear 409, consistent with run_batch_correction
+    # (otherwise the state machine only raises a generic "invalid transition").
+    current_job = job_manager.get_job(job_id)
+    if current_job and current_job.status == JobStatusValue.RUNNING.value:
+        raise BatchException(
+            ErrorTypes.BATCH_NOT_ALLOWED,
+            detail="A pipeline is already running for this job.",
+        )
+
+    group_column = (payload.group_column or "") if payload else ""
+    case_group = (payload.case_group or "") if payload else ""
     control_group = (payload.control_group or "") if payload else ""
     if group_column:
         batch_service.validate_group_selection(job_dir, group_column, case_group, control_group)
@@ -158,9 +176,9 @@ async def skip_batch_correction(
     # the corrected data; otherwise the uncorrected normalized data.
     has_correction = (job_dir / "corrected_data.rds").exists()
     step = (
-        "Starte Downstream-Analyse mit batch-korrigierten Daten..."
+        "Starting downstream analysis with batch-corrected data..."
         if has_correction
-        else "Batch-Korrektur übersprungen. Starte Downstream-Analyse..."
+        else "Batch correction skipped. Starting downstream analysis..."
     )
 
     transition_job(
@@ -189,6 +207,7 @@ async def skip_batch_correction(
 
 @router.get("/{job_id}/batch-options", response_model=BatchOptionsResponse)
 def get_batch_options(job_id: str):
+    """Return the sample-sheet columns eligible as batch variable or covariate."""
     job_dir = batch_service.get_job_dir_or_404(job_id)
     columns = batch_service.get_eligible_columns(job_dir)
     return {

@@ -4,15 +4,16 @@ Raw methylation array data always contains measurements that are technically
 unreliable or biologically uninformative. Left in the dataset, they add noise,
 reduce statistical power, and can lead to false conclusions.
 
-Filtering removes low-quality probes and samples **before** normalization and
-statistical testing, which improves the reliability of everything downstream.
-Every filter below is **optional and off by default** — enable the ones that fit
-your study design.
+Filtering removes low-quality probes and samples so they cannot distort the
+statistical analysis (DMP/DMR) or the heatmap: filtered probes are excluded from
+the results, and filtered samples are dropped before normalization. This improves
+the reliability of everything downstream. Every filter below is **optional**.
+
 
 ### Detection P-Value Filter
 
 The detection p-value tests whether a probe's signal can be told apart from
-background noise. A *low* value means the measurement is trustworthy; a *high*
+background noise. A _low_ value means the measurement is trustworthy; a _high_
 value means it is indistinguishable from noise. A probe is removed if its
 detection p-value exceeds the cutoff in any sample.
 
@@ -43,10 +44,10 @@ them trims the dataset down to the biologically meaningful CpG signal.
 ### SNP Filter
 
 Some probes sit on top of a known genetic variant (a Single Nucleotide
-Polymorphism, SNP). There, a signal difference can come from DNA *sequence*
-differences between individuals rather than from *methylation*. This filter
+Polymorphism, SNP). There, a signal difference can come from DNA _sequence_
+differences between individuals rather than from _methylation_. This filter
 removes probes affected by SNPs whose minor allele frequency (MAF) is at or above
-the chosen cutoff, so the results reflect epigenetic — not genetic — variation.
+the chosen cutoff, so the results reflect epigenetic and not genetic variation.
 
 - The MAF cutoff ranges from `0.0` to `0.5`; a lower cutoff removes more probes.
 
@@ -61,10 +62,10 @@ interpretation.
 
 This filter removes probes on the **X** and **Y** chromosomes.
 
-- *Recommended* when male and female samples are analysed together and sex is not
+- _Recommended_ when male and female samples are analysed together and sex is not
   the question — otherwise the strong sex-linked methylation differences can
   dominate the analysis and mask disease- or treatment-related signals.
-- *Not recommended* when you are specifically studying sex differences or
+- _Not recommended_ when you are specifically studying sex differences or
   X-/Y-linked regulation.
 
 ### Sample Quality Filter

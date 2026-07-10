@@ -11,11 +11,14 @@ Security: ``session_id`` always comes from the client on commit/preview/delete,
 so it is strictly validated as a UUID and the resolved directory must stay
 inside ``STAGING_BASE_DIR`` — a session id can never be used for path traversal.
 """
+
+import contextlib
 import logging
+import os
 import shutil
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.config import STAGING_BASE_DIR, STAGING_RETENTION_HOURS
@@ -45,35 +48,51 @@ def _resolve_session_dir(session_id: str) -> Path:
     try:
         uuid.UUID(session_id)
     except (ValueError, AttributeError, TypeError):
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Ungültige Session-ID: {session_id!r}")
+        raise AppException(
+            ErrorTypes.SESSION_NOT_FOUND, f"Invalid session id: {session_id!r}"
+        ) from None
 
     base = _base_dir()
     session_dir = (base / session_id).resolve()
     if not session_dir.is_relative_to(base):
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, "Ungültige Session-ID.")
+        raise AppException(ErrorTypes.SESSION_NOT_FOUND, "Invalid session id.")
     return session_dir
 
 
 def _is_expired(session_dir: Path) -> bool:
-    age_seconds = time.time() - session_dir.stat().st_mtime
-    return age_seconds > STAGING_RETENTION_HOURS * 3600
+    try:
+        age_seconds = time.time() - session_dir.stat().st_mtime
+        return age_seconds > STAGING_RETENTION_HOURS * 3600
+    except OSError:
+        return True  # concurrent cleanup already removed the directory
 
 
 def require_session(session_id: str) -> Path:
-    """Return the session directory, or raise NOT_FOUND / EXPIRED."""
+    """Return the session directory, or raise NOT_FOUND / EXPIRED.
+
+    Every successful call touches the directory mtime so that the TTL window
+    slides forward with each user interaction (rolling expiry).  A user who is
+    actively reviewing the inspect result never loses the session mid-workflow;
+    only truly abandoned sessions expire after STAGING_RETENTION_HOURS of
+    inactivity.
+    """
     session_dir = _resolve_session_dir(session_id)
     if not session_dir.is_dir():
-        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Upload-Session nicht gefunden: {session_id}")
+        raise AppException(ErrorTypes.SESSION_NOT_FOUND, f"Upload session not found: {session_id}")
     if _is_expired(session_dir):
         delete_session(session_id)
-        raise AppException(ErrorTypes.SESSION_EXPIRED, "Die Upload-Session ist abgelaufen.")
+        raise AppException(ErrorTypes.SESSION_EXPIRED, "The upload session has expired.")
+    # Concurrent cleanup may have already removed the directory; suppress the
+    # OSError — the next call will return NOT_FOUND via the is_dir() check above.
+    with contextlib.suppress(OSError):
+        os.utime(session_dir, None)  # rolling TTL: reset expiry on every access
     return session_dir
 
 
 def expires_at(session_dir: Path) -> str:
     """ISO-8601 expiry timestamp for a session directory (UTC)."""
     expiry = session_dir.stat().st_mtime + STAGING_RETENTION_HOURS * 3600
-    return datetime.fromtimestamp(expiry, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(expiry, tz=UTC).isoformat()
 
 
 def delete_session(session_id: str) -> None:

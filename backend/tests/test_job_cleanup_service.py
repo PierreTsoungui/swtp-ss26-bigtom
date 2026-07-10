@@ -149,9 +149,8 @@ def test_cleanup_loop_continues_after_unexpected_error(monkeypatch, caplog):
         AsyncMock(side_effect=stop_after_first_iteration),
     )
 
-    with caplog.at_level("ERROR"):
-        with pytest.raises(asyncio.CancelledError):
-            asyncio.run(run_job_cleanup_loop(interval_seconds=1))
+    with caplog.at_level("ERROR"), pytest.raises(asyncio.CancelledError):
+        asyncio.run(run_job_cleanup_loop(interval_seconds=1))
 
     assert cleanup_calls == 1
     assert "Unexpected error during job cleanup" in caplog.text
@@ -170,8 +169,13 @@ def test_lifespan_starts_cleanup_task(monkeypatch):
         started = asyncio.Event()
         keep_running = asyncio.Event()
 
-        async def fake_cleanup_loop():
-            """Simulate a continuously running cleanup service."""
+        async def fake_cleanup_loop(*args, **kwargs):
+            """Simulate a continuously running cleanup loop.
+
+            Accepts arbitrary arguments because ``lifespan`` starts the loop once
+            for the job directory and again (with keyword arguments) for the
+            staging directory.
+            """
             started.set()
             await keep_running.wait()
 

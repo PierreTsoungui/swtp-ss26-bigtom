@@ -102,10 +102,12 @@ test_that("compute_principal_components subsamples matrices above MAX_PROBES_FOR
 
 test_that("select_grouping_variables keeps grouping columns and drops the rest", {
   # Generalized behaviour: a biological column (Sample_Group) IS a grouping
-  # variable; constants, per-sample-unique ids and Array_ID are excluded.
+  # variable; constants, per-sample-unique ids and the technical identifiers
+  # Array_ID and Basename are excluded.
   skip_if_not_loaded()
   df <- data.frame(
     Array_ID = c("a1", "a2", "a3", "a4"), # always excluded
+    Basename = c("s1", "s1", "s2", "s2"), # technical id -> always excluded
     Sample_Group = c("A", "A", "B", "B"), # 2 distinct  -> kept
     Batch = c("b1", "b1", "b2", "b2"), # 2 distinct  -> kept
     Constant = c("x", "x", "x", "x"), # 1 distinct  -> dropped
@@ -117,6 +119,7 @@ test_that("select_grouping_variables keeps grouping columns and drops the rest",
 
   expect_setequal(names(sgv), c("Sample_Group", "Batch"))
   expect_false("Array_ID" %in% names(sgv))
+  expect_false("Basename" %in% names(sgv))
   expect_true(is.integer(sgv$Sample_Group))
 })
 

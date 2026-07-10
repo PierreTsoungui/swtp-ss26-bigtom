@@ -1,17 +1,18 @@
 # app/services/normalize_service.py
+"""Normalization pipeline: run normalize.R (or copy raw) then the round-0 SVD."""
+
 import asyncio
 import logging
 import os
 import shutil
-from pathlib import Path
 
-from app.services.job_manager import transition_job, set_progress, JobPhase, JobStatusValue
-from app.services.r_executor import run_r_script, NormalizationCommand, BatchInitCommand
-from app.services.batch_service import find_sample_sheet_name
+from app.services.job_manager import JobPhase, JobStatusValue, set_progress, transition_job
+from app.services.job_paths import JOBS_DIR
+from app.services.pipeline_outcome import StepOutcome, handle_step_result, progress_fields
+from app.services.r_executor import BatchInitCommand, NormalizationCommand, run_r_script
+from app.services.samplesheet_parser import find_sample_sheet_name
 
 logger = logging.getLogger(__name__)
-
-JOBS_DIR = Path("jobs").resolve()
 
 
 async def run_normalization_pipeline(
@@ -21,21 +22,20 @@ async def run_normalization_pipeline(
     cancel_event: asyncio.Event,
 ) -> None:
     """
-    Orchestriert Normalisierung + SVD-Plot (Runde 0).
+    Orchestrates normalization + SVD plot (round 0).
 
-    Wird ausschließlich über pipeline_task.run_job_pipeline() gestartet.
-    Kein cancel_event erzeugen, kein unregister hier.
-    transition_job zu NORMALIZATION+RUNNING erfolgt bereits in der Route.
+    Started exclusively through pipeline_task.run_job_pipeline(). Do not create a
+    cancel_event and do not unregister here; the transition to
+    NORMALIZATION+RUNNING already happens in the route.
     """
     job_dir = str(JOBS_DIR / job_dir_id)
 
-    # ── Schritt 1: Normalisierung ─────────────────────────────────────────────
-    # FIX: _run_normalization_step liefert jetzt explizit zurück, ob dieser
-    # Lauf erfolgreich war, statt dass der Aufrufer danach den globalen
-    # Job-Status errät (job.status == FAILED). Letzteres war false-positiv-
-    # anfällig: ein FAILED-Status, der aus einem ganz anderen Kontext stammt
-    # (Race, vorheriger Lauf), hätte den SVD-Schritt fälschlich überspringen
-    # können, selbst wenn Schritt 1 gerade frisch erfolgreich durchlief.
+    # ── Step 1: normalization ─────────────────────────────────────────────────
+    # _run_normalization_step reports explicitly whether this run succeeded,
+    # instead of the caller inferring it from the global job status afterwards.
+    # The latter was false-positive prone: a FAILED status originating from an
+    # unrelated context (a race, a previous run) could wrongly skip the SVD step
+    # even when step 1 had just completed successfully.
     step_succeeded = await _run_normalization_step(job_id, job_dir, method, cancel_event)
 
     if cancel_event.is_set():
@@ -43,11 +43,11 @@ async def run_normalization_pipeline(
         return
 
     if not step_succeeded:
-        # _run_normalization_step hat bereits die passende FAILED-Transition
-        # gesetzt — hier nur noch abbrechen, kein erneutes transition_job nötig.
+        # _run_normalization_step already set the matching FAILED transition —
+        # just stop here, no further transition needed.
         return
 
-    # ── Schritt 2: SVD-Plot Runde 0 ───────────────────────────────────────────
+    # ── Step 2: SVD plot, round 0 ─────────────────────────────────────────────
     await _run_svd_step(job_id, job_dir, cancel_event)
 
 
@@ -57,24 +57,19 @@ async def _run_normalization_step(
     method: str,
     cancel_event: asyncio.Event,
 ) -> bool:
-    """
-    Führt normalize.R aus oder kopiert bei method='raw' die Rohdaten.
+    """Run normalize.R, or copy the raw data when method == 'raw'.
 
-    Rückgabewert: True, wenn die Phase erfolgreich auf NORMALIZATION+COMPLETED
-    transitioniert wurde. False bei Cancellation, Timeout oder Fehler — die
-    passende Transition (FAILED, oder gar keine bei Cancellation) wurde dann
-    bereits innerhalb dieser Funktion gesetzt.
+    Returns True when the phase transitioned to NORMALIZATION+COMPLETED. Returns
+    False on cancellation, timeout or failure — the matching transition (FAILED,
+    or none on cancellation) has then already been set within this function.
     """
     if method == "raw":
         return await _copy_raw_data(job_id, job_dir)
 
     async def on_progress(data: dict) -> None:
         if data.get("type") == "progress":
-            set_progress(
-                job_id,
-                percent=data.get("percent", data.get("progress_percent", 0)),
-                message=data.get("message", data.get("current_step", "")),
-            )
+            percent, message = progress_fields(data)
+            set_progress(job_id, percent=percent, message=message)
 
     result = await run_r_script(
         command=NormalizationCommand(
@@ -88,28 +83,19 @@ async def _run_normalization_step(
         on_progress=on_progress,
     )
 
-    if result.is_cancelled:
-        logger.info("Normalization R-script cancelled: job_id=%s", job_id)
-        return False
-
-    if result.is_timeout:
-        transition_job(
+    if (
+        handle_step_result(
             job_id,
-            new_phase=JobPhase.NORMALIZATION,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler: normalize.R hat das Zeitlimit überschritten.",
-            error={"detail": "Normalization timeout."},
+            result,
+            phase=JobPhase.NORMALIZATION,
+            fallback="normalize.R exited with an error.",
+            timeout_step="Error: normalize.R exceeded its time limit.",
+            timeout_detail="Normalization timeout.",
+            failure_step="Error during normalization.",
+            cancel_log=f"Normalization R script cancelled: job_id={job_id}",
         )
-        return False
-
-    if not result.is_success:
-        transition_job(
-            job_id,
-            new_phase=JobPhase.NORMALIZATION,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler während der Normalisierung.",
-            error={"detail": result.stderr or "normalize.R mit Fehlercode beendet."},
-        )
+        is not StepOutcome.SUCCESS
+    ):
         return False
 
     transition_job(
@@ -117,16 +103,16 @@ async def _run_normalization_step(
         new_phase=JobPhase.NORMALIZATION,
         new_status=JobStatusValue.COMPLETED,
         progress_percent=100,
-        current_step="Normalisierung abgeschlossen.",
+        current_step="Normalization completed.",
     )
     return True
 
 
 async def _copy_raw_data(job_id: str, job_dir: str) -> bool:
-    """Sonderfall method='raw': filtered_data.rds → normalized_data.rds."""
-    set_progress(job_id, percent=0, message="Kopiere gefilterte Rohdaten...")
+    """Provide raw data unchanged (method == 'raw'): copy filtered → normalized."""
+    set_progress(job_id, percent=0, message="Copying the filtered raw data...")
 
-    filtered   = os.path.join(job_dir, "filtered_data.rds")
+    filtered = os.path.join(job_dir, "filtered_data.rds")
     normalized = os.path.join(job_dir, "normalized_data.rds")
 
     if not os.path.exists(filtered):
@@ -134,20 +120,20 @@ async def _copy_raw_data(job_id: str, job_dir: str) -> bool:
             job_id,
             new_phase=JobPhase.NORMALIZATION,
             new_status=JobStatusValue.FAILED,
-            current_step="Fehler: filtered_data.rds nicht gefunden.",
-            error={"detail": f"filtered_data.rds nicht gefunden in {job_dir}"},
+            current_step="Error: filtered_data.rds not found.",
+            error={"detail": f"filtered_data.rds not found in {job_dir}"},
         )
         return False
 
     shutil.copyfile(filtered, normalized)
-    set_progress(job_id, percent=100, message="Rohdaten bereitgestellt.")
+    set_progress(job_id, percent=100, message="Raw data provided.")
 
     transition_job(
         job_id,
         new_phase=JobPhase.NORMALIZATION,
         new_status=JobStatusValue.COMPLETED,
         progress_percent=100,
-        current_step="Normalisierung abgeschlossen.",
+        current_step="Normalization completed.",
     )
     return True
 
@@ -157,22 +143,22 @@ async def _run_svd_step(
     job_dir: str,
     cancel_event: asyncio.Event,
 ) -> None:
-    """Erzeugt SVD-Plot Runde 0 nach erfolgreicher Normalisierung."""
-
+    """Generate the round-0 SVD plot after a successful normalization."""
     transition_job(
         job_id,
         new_phase=JobPhase.SVD,
         new_status=JobStatusValue.RUNNING,
         progress_percent=0,
-        current_step="Starte SVD-Plot-Generierung (Runde 0)...",
+        current_step="Starting SVD plot generation (round 0)...",
     )
 
     async def on_progress(data: dict) -> None:
         if data.get("type") == "progress":
+            percent, message = progress_fields(data)
             set_progress(
                 job_id,
-                percent=data.get("percent", data.get("progress_percent", 0)),
-                message=f"SVD (Runde 0): {data.get('message', data.get('current_step', ''))}",
+                percent=percent,
+                message=f"SVD (round 0): {message}",
             )
 
     try:
@@ -194,28 +180,19 @@ async def _run_svd_step(
         on_progress=on_progress,
     )
 
-    if result.is_cancelled:
-        logger.info("SVD plot cancelled: job_id=%s", job_id)
-        return
-
-    if result.is_timeout:
-        transition_job(
+    if (
+        handle_step_result(
             job_id,
-            new_phase=JobPhase.SVD,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler: batch_svd.R hat das Zeitlimit überschritten.",
-            error={"detail": "SVD plot timeout."},
+            result,
+            phase=JobPhase.SVD,
+            fallback="batch_svd.R exited with an error.",
+            timeout_step="Error: batch_svd.R exceeded its time limit.",
+            timeout_detail="SVD plot timeout.",
+            failure_step="Error during SVD plot generation (round 0).",
+            cancel_log=f"SVD plot cancelled: job_id={job_id}",
         )
-        return
-
-    if not result.is_success:
-        transition_job(
-            job_id,
-            new_phase=JobPhase.SVD,
-            new_status=JobStatusValue.FAILED,
-            current_step="Fehler bei SVD-Plot-Generierung (Runde 0).",
-            error={"detail": result.stderr or "batch_svd.R mit Fehlercode beendet."},
-        )
+        is not StepOutcome.SUCCESS
+    ):
         return
 
     transition_job(
@@ -223,11 +200,11 @@ async def _run_svd_step(
         new_phase=JobPhase.SVD,
         new_status=JobStatusValue.COMPLETED,
         progress_percent=100,
-        current_step="SVD-Plot (Runde 0) erfolgreich generiert.",
+        current_step="SVD plot (round 0) generated successfully.",
     )
     transition_job(
         job_id,
         new_phase=JobPhase.BATCH,
         new_status=JobStatusValue.WAITING,
-        current_step="Bereit für Batch-Effekt-Korrektur.",
+        current_step="Ready for batch effect correction.",
     )

@@ -1,5 +1,7 @@
 FROM rocker/r-ver:4.4.3
 
+RUN addgroup --system ruser && adduser --system --ingroup ruser ruser
+
 # System-Abhängigkeiten für Bioconductor- und Tidyverse-Pakete
 RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
@@ -53,7 +55,7 @@ RUN R -e "BiocManager::install('ChAMP', dependencies=TRUE, ask=FALSE)"
 # Visualisierung und kllassische Datenverarbeitung nachladen (remotes hier direkt mit rein)
 RUN R -e "BiocManager::install('ComplexHeatmap', ask=FALSE)"
 RUN R -e "install.packages(c( \
-    'data.table','readxl','logger','progressr','tidyverse','RhpcBLASctl', 'remotes' \
+    'data.table','readxl','logger','progressr','tidyverse','RhpcBLASctl', 'remotes', 'testthat' \
     ), repos='https://cloud.r-project.org')"
 
 # ChAMP & ChAMPdata direkt aus dem Entwickler-Repository auf GitHub ziehen
@@ -62,6 +64,11 @@ RUN R -e "remotes::install_github('YuanTian1991/ChAMPdata', upgrade='never')" \
     && R -e "remotes::install_github('YuanTian1991/ChAMP', upgrade='never')"
 
 WORKDIR /app
+COPY . .
+
+RUN chown -R ruser:ruser /app
+
+USER ruser
 
 # Automatischer Funktionstest JETZT ganz am Ende (prüft die gepatchte GitHub-Version!).
 # Schlägt der Build fehl, wenn auch nur ein Plattform-Paket fehlt — so kann das

@@ -11,21 +11,21 @@
  * @throws Error when the request fails (non-2xx response or network error).
  */
 export async function downloadPlot(url: string, filename: string): Promise<void> {
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Download failed (HTTP ${response.status})`);
-    }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Download failed (HTTP ${response.status})`);
+  }
 
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    try {
-        const anchor = document.createElement("a");
-        anchor.href = objectUrl;
-        anchor.download = filename;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-    } finally {
-        URL.revokeObjectURL(objectUrl);
-    }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }

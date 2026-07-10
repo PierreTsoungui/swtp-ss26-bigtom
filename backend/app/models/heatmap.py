@@ -1,18 +1,21 @@
 # app/models/heatmap.py
+"""Pydantic schemas for the heatmap API (grouping, options and run response)."""
 
-from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ── Request Models ─────────────────────────────────────────────────────────────
 
+
 class GroupingPayload(BaseModel):
-    primary:   str
-    secondary: Optional[str] = None
+    """Primary and optional secondary sample-sheet columns for the annotation."""
+
+    primary: str
+    secondary: str | None = None
 
 
 class HeatmapRequest(BaseModel):
-    """
+    """Request body for a heatmap run.
+
     The heatmap reuses the *exact same* filters as the DMP table view. The
     frontend sends the currently applied table filters as a flat map of
     ``{filter_key: value}`` (same keys as the table, e.g. ``chr``, ``gene``,
@@ -21,35 +24,43 @@ class HeatmapRequest(BaseModel):
     exactly the rows visible in the table — see
     ``docs/architecture/heatmap-konzept.md``.
     """
-    filters:  Dict[str, str] = Field(default_factory=dict)
+
+    filters: dict[str, str] = Field(default_factory=dict)
     grouping: GroupingPayload
 
 
 # ── Response Models ────────────────────────────────────────────────────────────
 
+
 class HeatmapMetadata(BaseModel):
-    detected_cpgs:   int
+    """Summary of a rendered heatmap (CpG and sample counts, status message)."""
+
+    detected_cpgs: int
     plotted_samples: int
-    message:         str
+    message: str
 
 
 class HeatmapRunResponse(BaseModel):
-    job_id:           str
-    phase:            str = "heatmap"
-    status:           str
+    """Response returned when a heatmap run is accepted."""
+
+    job_id: str
+    phase: str = "heatmap"
+    status: str
     heatmap_metadata: HeatmapMetadata
 
 
 class AnnotationColumn(BaseModel):
     """A sample-sheet column offered as a heatmap annotation (primary/secondary)."""
-    name:       str
-    type:       str   # "categorical" | "continuous" | "identifier"
+
+    name: str
+    type: str  # "categorical" | "continuous" | "identifier"
     n_distinct: int
 
 
 class HeatmapOptionsResponse(BaseModel):
-    job_id:            str
-    available_columns: List[AnnotationColumn]
+    """Sample-sheet columns available as heatmap annotations for a job."""
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: str
+    available_columns: list[AnnotationColumn]

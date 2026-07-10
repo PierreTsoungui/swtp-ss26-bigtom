@@ -1,26 +1,37 @@
 # app/api/routes/upload.py
+"""Routes for uploading data (legacy single-shot and folder/ZIP inspect/commit)."""
+
 import json
 import uuid
-from typing import List
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request, Form, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from pydantic import ValidationError
 
 from app.core.error_types import ErrorTypes, problem_detail
 from app.models.filter import FilterSettings
 from app.models.upload import (
-    UploadResponse,
-    InspectManifest,
     CommitRequest,
+    InspectManifest,
     SheetPreview,
+    UploadResponse,
 )
 from app.services import (
     job_manager,
     pipeline_task,
-    upload_service,
-    upload_inspect_service,
-    upload_commit_service,
     staging_manager,
+    upload_commit_service,
+    upload_inspect_service,
+    upload_service,
 )
 from app.services.file_handler import (
     ensure_upload_dir,
@@ -36,8 +47,9 @@ router = APIRouter()
 # Folder / ZIP upload: inspect → commit  (UPL-01)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @router.post("/upload/inspect", response_model=InspectManifest, status_code=201)
-async def inspect_upload(files: List[UploadFile] = File(...)):
+async def inspect_upload(files: list[UploadFile] = File(...)):
     """Stage a folder/ZIP/file selection and return the classified manifest.
 
     Heavy work (extraction, scanning) runs in a worker thread inside the service.
@@ -71,7 +83,11 @@ async def commit_upload(
         pipeline_task.run_job_pipeline,
         job_id,
         lambda cancel_event: upload_service.run_upload_pipeline(
-            job_id, str(job_dir), "SampleSheet.csv", payload.filter_settings, cancel_event,
+            job_id,
+            str(job_dir),
+            "SampleSheet.csv",
+            payload.filter_settings,
+            cancel_event,
         ),
     )
 
@@ -92,11 +108,12 @@ async def discard_upload(session_id: str):
 # Legacy single-shot upload (deprecated, replaced by inspect/commit)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @router.post("/upload", response_model=UploadResponse, status_code=201, deprecated=True)
 async def upload_files(
     request: Request,
     background_tasks: BackgroundTasks,
-    idat_files: List[UploadFile] = File(...),
+    idat_files: list[UploadFile] = File(...),
     sample_sheet: UploadFile = File(...),
     filter_settings: str = Form(None),
 ):
@@ -132,7 +149,11 @@ async def upload_files(
         pipeline_task.run_job_pipeline,
         job_id,
         lambda cancel_event: upload_service.run_upload_pipeline(
-            job_id, str(job_dir), "SampleSheet.csv", filter_settings_model, cancel_event,
+            job_id,
+            str(job_dir),
+            "SampleSheet.csv",
+            filter_settings_model,
+            cancel_event,
         ),
     )
 
@@ -145,6 +166,7 @@ async def upload_files(
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _validate_files(validator, payload, request: Request) -> None:
     """Run a file_handler validator and translate a failure into an HTTP error."""
     ok, result = validator(payload)
@@ -153,13 +175,16 @@ def _validate_files(validator, payload, request: Request) -> None:
     raise HTTPException(
         status_code=result["status"],
         detail={
-            "type":     result["type"],
-            "title":    result["title"],
-            "status":   result["status"],
-            "detail":   result["message"],
+            "type": result["type"],
+            "title": result["title"],
+            "status": result["status"],
+            "detail": result["message"],
             "instance": request.url.path,
-            **{k: v for k, v in result.items()
-               if k not in ["error", "message", "type", "title", "status"]},
+            **{
+                k: v
+                for k, v in result.items()
+                if k not in ["error", "message", "type", "title", "status"]
+            },
         },
     )
 
@@ -180,19 +205,19 @@ def _parse_filter_settings(raw: str, request: Request) -> FilterSettings:
             status_code=ErrorTypes.INVALID_FILTER_JSON.status,
             detail=problem_detail(
                 ErrorTypes.INVALID_FILTER_JSON,
-                f"Fehler beim Parsen von filter_settings: {exc}",
+                f"Failed to parse filter_settings: {exc}",
                 request.url.path,
             ),
-        )
+        ) from exc
     except KeyError:
         raise HTTPException(
             status_code=400,
             detail=problem_detail(
                 ErrorTypes.INVALID_FILTER_JSON,
-                'filter_settings fehlt im Request-Body. Erwartet: {"filter_settings": {...}}',
+                'filter_settings is missing from the request body. Expected: {"filter_settings": {...}}',
                 request.url.path,
             ),
-        )
+        ) from None
 
     try:
         return FilterSettings.model_validate(parsed)
@@ -200,4 +225,4 @@ def _parse_filter_settings(raw: str, request: Request) -> FilterSettings:
         raise HTTPException(
             status_code=400,
             detail=problem_detail(ErrorTypes.INVALID_FILTER_PARAM, str(exc), request.url.path),
-        )
+        ) from exc

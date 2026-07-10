@@ -370,6 +370,26 @@ test_that("validate_sample_sheet rejects duplicate identifiers in every layout",
   )), "Duplicate")
 })
 
+test_that("validate_sample_sheet dedups on Basename when Sentrix columns also exist", {
+  # A Basename dataset may carry placeholder Sentrix columns that repeat across
+  # rows. The Basename is what names the files, so it (not the Sentrix combo)
+  # decides uniqueness — matching prepare_targets(). Distinct Basenames pass even
+  # when the Sentrix combo is identical; duplicate Basenames fail.
+  skip_if_not_loaded()
+  expect_not_fatal(validate_sample_sheet(data.frame(
+    Basename = c("uuid1_noid", "uuid2_noid"),
+    Sample_Name = c("A", "B"),
+    Sentrix_ID = c("TEST1", "TEST1"), Sentrix_Position = c("A01", "A01"),
+    stringsAsFactors = FALSE
+  )))
+  expect_fatal(validate_sample_sheet(data.frame(
+    Basename = c("dup_noid", "dup_noid"),
+    Sample_Name = c("A", "B"),
+    Sentrix_ID = c("TEST1", "TEST2"), Sentrix_Position = c("A01", "A02"),
+    stringsAsFactors = FALSE
+  )), "Duplicate")
+})
+
 # ── prepare_targets() ─────────────────────────────────────────────────────────
 
 #' Create a job directory populated with fake (empty) IDAT files.
@@ -462,6 +482,56 @@ test_that("prepare_targets aborts when neither Basename nor Sentrix columns exis
     "Basename"
   )
 })
+
+# ── assert_uniform_array_type() (mixed-platform detection) ────────────────────
+
+#' Write a minimal valid IDAT header carrying a given nSNPsRead probe count.
+#' See utils/arraytype.R::idat_probe_count for the byte layout (value at offset 26).
+write_fake_idat_header <- function(path, n_probes) {
+  con <- file(path, "wb")
+  on.exit(close(con))
+  writeChar("IDAT", con, nchars = 4L, eos = NULL)
+  writeBin(as.integer(c(3L, 0L)), con, size = 4L, endian = "little")  # int64 version
+  writeBin(1L, con, size = 4L, endian = "little")                     # nFields = 1
+  writeBin(1000L, con, size = 2L, endian = "little")                  # field code
+  writeBin(as.integer(c(26L, 0L)), con, size = 4L, endian = "little") # int64 offset
+  writeBin(as.integer(n_probes), con, size = 4L, endian = "little")   # payload
+}
+
+#' Build a targets data frame whose Basename column points at freshly written
+#' fake IDAT headers with the given per-sample probe counts.
+make_array_targets <- function(counts) {
+  d <- tempfile("job_arr_")
+  dir.create(d)
+  basenames <- file.path(d, sprintf("s%d", seq_along(counts)))
+  for (i in seq_along(counts)) {
+    write_fake_idat_header(paste0(basenames[i], "_Grn.idat"), counts[i])
+    file.create(paste0(basenames[i], "_Red.idat"))
+  }
+  list(dir = d, targets = data.frame(
+    Sample_Name = sprintf("Sample_%d", seq_along(counts)),
+    Basename = basenames, stringsAsFactors = FALSE
+  ))
+}
+
+test_that("assert_uniform_array_type passes when every IDAT has the same probe count", {
+  skip_if_not_loaded()
+  f <- make_array_targets(c(622399L, 622399L, 622399L))
+  on.exit(unlink(f$dir, recursive = TRUE))
+  expect_true(assert_uniform_array_type(f$targets))
+})
+
+test_that("assert_uniform_array_type aborts on a mixed-platform upload, naming the samples", {
+  skip_if_not_loaded()
+  f <- make_array_targets(c(55300L, 622399L)) # two different array types
+  on.exit(unlink(f$dir, recursive = TRUE))
+  cnd <- tryCatch(assert_uniform_array_type(f$targets), initfilter_fatal = function(c) c)
+  expect_false(is.null(cnd))
+  expect_match(conditionMessage(cnd), "different array types", ignore.case = TRUE)
+  expect_match(conditionMessage(cnd), "Sample_1")  # the affected labels are listed
+  expect_match(conditionMessage(cnd), "55300")
+})
+
 
 # ── Pure probe filters ────────────────────────────────────────────────────────
 

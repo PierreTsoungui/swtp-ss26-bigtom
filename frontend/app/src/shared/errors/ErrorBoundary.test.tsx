@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState, type ReactElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { AppLayout } from "../layout/AppLayout";
 import { ErrorBoundary } from "./ErrorBoundary";
 
@@ -24,8 +24,12 @@ function ErrorBoundaryLayoutHarness() {
 }
 
 describe("ErrorBoundary", () => {
+  // React (and the boundary's logger) write the caught error to the console;
+  // capture the spy so we can both silence it and assert it was called.
+  let consoleErrorSpy: MockInstance;
+
   beforeEach(() => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -49,7 +53,7 @@ describe("ErrorBoundary", () => {
 
     expect(screen.getByRole("heading", { name: "Something went wrong" })).toBeInTheDocument();
     expect(screen.queryByText("Test error")).not.toBeInTheDocument();
-    expect(console.error).toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
   it("allows the user to return to the landing page", () => {

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Button } from "@shared/components/Button.tsx";
 
 /**
  * Props for the UploadDropzone component.
@@ -87,27 +88,22 @@ function UploadDropzone({ onFiles, disabled = false, compact = false }: UploadDr
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => fileInput.current?.click()}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-text hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-        >
+        <Button variant="primary" disabled={disabled} onClick={() => fileInput.current?.click()}>
           Select files / ZIP
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
           disabled={disabled}
           onClick={() => folderInput.current?.click()}
-          className="rounded-lg border-2 border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary hover:text-primary-text disabled:cursor-not-allowed disabled:opacity-60"
         >
           Select folder
-        </button>
+        </Button>
       </div>
 
       {rejected > 0 && (
         <p className="mt-3 text-xs text-warning-badgeText">
-          {rejected} file{rejected === 1 ? "" : "s"} ignored — only folder, ZIP, IDAT, CSV and XLSX are allowed.
+          {rejected} file{rejected === 1 ? "" : "s"} ignored — only folder, ZIP, IDAT, CSV and XLSX
+          are allowed.
         </p>
       )}
 
@@ -127,7 +123,7 @@ function UploadDropzone({ onFiles, disabled = false, compact = false }: UploadDr
         type="file"
         hidden
         // Folder selection: non-standard but widely supported attributes.
-        {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+        {...{ webkitdirectory: "", directory: "" }}
         onChange={(e) => {
           emitFolder(e.target.files);
           e.target.value = "";

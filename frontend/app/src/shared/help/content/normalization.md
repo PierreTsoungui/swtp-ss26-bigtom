@@ -13,7 +13,7 @@ Technical variation creeps in from:
 
 Without normalization, this technical variation can be mistaken for biology. To
 help you choose, the platform shows two previews per method: a **density plot**
-(the distribution of beta values — well-normalized samples overlap closely) and
+(the distribution of beta values; well-normalized samples overlap closely) and
 an interactive **PCA plot** (samples should group by biological condition, not by
 technical factors).
 
@@ -29,21 +29,21 @@ reliable default.
 
 ### NOOB
 
-*Normal-exponential out-of-band* correction estimates background and dye bias
+_Normal-exponential out-of-band_ correction estimates background and dye bias
 using out-of-band signal. It is widely used and is a safe default for most
 datasets.
 
 ### SWAN
 
-*Subset-quantile Within-Array Normalization* reduces the systematic offset
+_Subset-quantile Within-Array Normalization_ reduces the systematic offset
 between Type I and Type II probe designs, improving comparability across probe
 types. Useful when probe-design effects are prominent.
 
 ### Functional Normalization (FunNorm)
 
 Uses the array's internal control probes to model and remove technical variation.
-It is well suited to datasets with large global differences — for example cancer
-vs. normal tissue, large cohorts, or multi-batch studies.
+It is well suited to datasets with large global differences (for example cancer
+vs. normal tissue, large cohorts, or multi-batch studies).
 
 ### Quantile Normalization
 

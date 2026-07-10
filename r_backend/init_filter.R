@@ -21,7 +21,14 @@
 #'   \item \code{filtered_data.rds} — the sample-filtered \code{RGChannelSet}.
 #'         It is intentionally an \code{RGChannelSet} (not a probe-subset object)
 #'         because the downstream normalization step (\code{normalize.R})
-#'         requires the raw channel data to model background and dye bias.
+#'         requires the raw channel data to model background and dye bias. The
+#'         probe-level selection is therefore not applied to this object but is
+#'         carried in \code{passed_probes.rds} and enforced on the beta matrix
+#'         before the differential analysis (see \code{dmp.R} / \code{dmr.R}).
+#'   \item \code{passed_probes.rds} — character vector of the CpG ids that passed
+#'         every enabled probe-level filter. \code{dmp.R} / \code{dmr.R} restrict
+#'         their beta matrix to these ids, so the reported filter counts match the
+#'         probes that are actually analysed.
 #'   \item \code{filter_stats.json} — per-step counts consumed by the frontend.
 #'   \item \code{qc_report.json} — beta distribution / correlation summary.
 #' }
@@ -269,11 +276,14 @@ validate_sample_sheet <- function(sheet) {
     ))
   }
 
-  # Duplicate detection on the most specific identifier available.
-  ids <- if (has_standard) {
-    paste0(sheet$Sentrix_ID, "_", sheet$Sentrix_Position)
-  } else if (has_basename) {
+  # Duplicate detection on the identifier that actually locates the IDAT files.
+  # Basename takes precedence when present, matching prepare_targets(): a sheet
+  # may legitimately carry both a Basename column and (placeholder) Sentrix
+  # columns, and the Basename is what names the files on disk.
+  ids <- if (has_basename) {
     basename(as.character(sheet$Basename))
+  } else if (has_standard) {
+    paste0(sheet$Sentrix_ID, "_", sheet$Sentrix_Position)
   } else {
     as.character(sheet$Sample_ID)
   }
@@ -362,6 +372,44 @@ prepare_targets <- function(sheet, job_dir) {
   }
 
   sheet
+}
+
+
+#' Verify every sample's IDAT comes from the same array platform.
+#'
+#' minfi's \code{read.metharray.exp} cannot combine IDAT files of different array
+#' types — their bead-address counts differ — and fails with an opaque error that
+#' surfaces to the user as "the files may be corrupted". Reading the cheap
+#' per-file probe count (\code{idat_probe_count}) up front lets us reject a mixed
+#' upload with a precise, actionable message that names the affected samples.
+#'
+#' @param targets Sample sheet with an absolute \code{Basename} column (as
+#'   returned by \code{prepare_targets}).
+#' @return Invisibly \code{TRUE}; emits a fatal error when array types are mixed.
+assert_uniform_array_type <- function(targets) {
+  grn_files <- paste0(targets$Basename, "_Grn.idat")
+  counts <- vapply(grn_files, idat_probe_count, integer(1L), USE.NAMES = FALSE)
+
+  labels <- if ("Sample_Name" %in% colnames(targets)) {
+    as.character(targets$Sample_Name)
+  } else {
+    basename(as.character(targets$Basename))
+  }
+
+  known <- !is.na(counts)
+  distinct <- sort(unique(counts[known]))
+  if (length(distinct) > 1L) {
+    groups <- vapply(distinct, function(cnt) {
+      sprintf("%d probes (%s)", cnt, paste(labels[known & counts == cnt], collapse = ", "))
+    }, character(1L))
+    emit_error(paste0(
+      "The uploaded IDAT files come from different array types and cannot be ",
+      "analyzed together. Every sample must be from the same platform (450K, ",
+      "EPIC, or EPICv2). Detected: ", paste(groups, collapse = " vs. "), "."
+    ))
+  }
+
+  invisible(TRUE)
 }
 
 
@@ -602,14 +650,16 @@ filter_sample_quality <- function(rgset, cfg_sq, det_p = NULL) {
 #' Run the complete filtering pipeline.
 #'
 #' Applies sample-level QC to the \code{RGChannelSet}, then computes the
-#' probe-level filter statistics. The returned \code{RGChannelSet} is
-#' sample-filtered only — probe selections are reported in the statistics and
-#' applied downstream after normalization (see the script header).
+#' probe-level filter selection. The returned \code{RGChannelSet} is
+#' sample-filtered only; the surviving probe ids are returned separately
+#' (\code{passed_probes}) and persisted by the caller so the differential
+#' analysis can restrict its beta matrix to them (see the script header).
 #'
 #' @param rgset Raw \code{RGChannelSet} (all samples).
 #' @param job_dir Job directory (for the multi-hit probe list).
 #' @param cfg Parsed filter configuration.
-#' @return List with \code{filtered_rgset} and \code{filter_stats}.
+#' @return List with \code{filtered_rgset}, \code{filter_stats} and
+#'   \code{passed_probes} (the ids of the probes that passed every enabled filter).
 run_filtering <- function(rgset, job_dir, cfg) {
   emit_progress(22, "Computing detection p-values...")
   det_p <- tryCatch(detectionP(rgset), error = function(e) NULL)
@@ -722,7 +772,7 @@ run_filtering <- function(rgset, job_dir, cfg) {
   filter_stats$total_end <- length(probe_keep)
   filter_stats$total_removed <- total_start - length(probe_keep)
 
-  list(filtered_rgset = rgset, filter_stats = filter_stats)
+  list(filtered_rgset = rgset, filter_stats = filter_stats, passed_probes = probe_keep)
 }
 
 
@@ -835,6 +885,10 @@ main <- function(sample_sheet_path, job_dir) {
   )
   emit_progress(9, paste("Basename example:", targets$Basename[1]))
 
+  # Fail fast on a mixed-platform upload: minfi cannot combine IDATs of different
+  # array types and would otherwise abort with an opaque "corrupted files" error.
+  assert_uniform_array_type(targets)
+
   # Load IDAT files into a raw RGChannelSet.
   emit_progress(10, "Loading IDAT files")
   raw_data <- tryCatch(
@@ -860,6 +914,7 @@ main <- function(sample_sheet_path, job_dir) {
   )
   filtered_rgset <- result$filtered_rgset
   filter_stats <- result$filter_stats
+  passed_probes <- result$passed_probes
 
   # Biological QC (non-fatal).
   run_biological_qc(filtered_rgset, job_dir)
@@ -867,6 +922,11 @@ main <- function(sample_sheet_path, job_dir) {
   # Persist results.
   emit_progress(96, "Saving results")
   saveRDS(filtered_rgset, file.path(job_dir, "filtered_data.rds"))
+  # Persist the probe-level selection separately: filtered_data.rds must keep all
+  # probes for normalization, so dmp.R / dmr.R restrict their beta matrix to these
+  # ids (see utils/beta.R::restrict_to_passed_probes) so the reported filter counts
+  # match the probes actually analysed.
+  saveRDS(passed_probes, file.path(job_dir, "passed_probes.rds"))
   write(
     toJSON(filter_stats, auto_unbox = TRUE, pretty = TRUE),
     file.path(job_dir, "filter_stats.json")

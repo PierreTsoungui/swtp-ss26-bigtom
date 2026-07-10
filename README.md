@@ -1,8 +1,8 @@
 # MethylAnalyzer
 
-MethylAnalyzer is a web-based DNA methylation analysis platform for Illumina IDAT data. The repository combines a React/TypeScript frontend, a FastAPI backend, and an R-based processing component for filtering, normalization, batch-effect handling, downstream analysis, result tables, exports, and heatmap generation.
+MethylAnalyzer is a web-based DNA methylation analysis platform for Illumina IDAT data (EPICv2, EPICv1, 450K). The repository combines a React/TypeScript frontend served over HTTPS via nginx, a FastAPI backend, and an R-based processing engine for filtering, normalization, batch-effect correction, DMP/DMR analysis, result tables, exports, and heatmap generation.
 
-The project is also known by the repository/team name BigTom. The application name used in this README is MethylAnalyzer.
+The project is also known by the repository and team name BigTom.
 
 ## Table of Contents
 
@@ -13,6 +13,7 @@ The project is also known by the repository/team name BigTom. The application na
 - [System Architecture](#system-architecture)
 - [Repository Structure](#repository-structure)
 - [Prerequisites](#prerequisites)
+- [TLS Certificate Setup](#tls-certificate-setup)
 - [Quick Start with Docker](#quick-start-with-docker)
 - [Detailed Docker Setup and Operation](#detailed-docker-setup-and-operation)
 - [Local Development Setup](#local-development-setup)
@@ -30,9 +31,9 @@ The project is also known by the repository/team name BigTom. The application na
 
 ## Project Overview
 
-MethylAnalyzer lets users upload paired Green/Red IDAT files with a compatible Sample Sheet, run methylation analysis steps, monitor job progress, and inspect generated outputs through the browser. It is designed for local Docker Compose operation and for Compose-based deployments where operators provide the required biological input data and manage host storage.
+MethylAnalyzer lets users upload paired Green/Red IDAT files with a Sample Sheet, run a full methylation analysis pipeline, monitor job progress, and inspect generated outputs through the browser. The application is designed for containerized operation via Docker Compose and targets biologists without programming or R experience.
 
-The current implementation is under active development. The README documents functionality that exists in this repository; it does not describe a hardened production platform, a durable database-backed job system, or an automated CI/CD deployment pipeline.
+The stack runs fully within Docker and requires no local R or Python installation for end users. Operators provide biological input data and manage host storage; the application handles all analysis steps internally.
 
 ## Purpose and Target Users
 
@@ -44,75 +45,90 @@ This repository is intended for:
 
 ## Main Features
 
-- Browser-based upload of `.idat` files and Sample Sheets.
-- Backend validation for IDAT file extension, basic binary plausibility, file count pairing, duplicate filenames, Sample Sheet format, and upload size limits.
-- Configurable filtering settings submitted as part of the upload request.
-- Background R execution for filtering and normalization preview generation.
-- Job status polling through the FastAPI backend.
-- Filtering statistics endpoint after filtering has completed.
-- Normalization preview metadata and preview PNG delivery.
-- Normalization selection with supported API methods `noob`, `quantile`, `swan`, `funnorm`, and `raw`.
-- Batch correction endpoints, SVD plot retrieval, batch history, and skip-to-downstream workflow.
-- DMP/DMR result table endpoints with pagination, sorting, filtering, and CSV export.
-- Heatmap options, heatmap generation, and heatmap PNG retrieval.
-- Automatic cleanup of expired job directories.
+- Browser-based upload of `.idat` files and Sample Sheets (folder, ZIP, or individual files via drag-and-drop).
+- Two-phase upload with a staging inspection step before the job is committed.
+- Configurable quality filtering with live progress and filter statistics.
+- Normalization preview: density plots (PNG/PDF) and an interactive PCA plotter (JSON-based, client-side rendering, PNG/PDF export).
+- SVD-based batch-effect detection with an interactive heatmap visualization.
+- Optional ComBat batch correction with round tracking; repeatable until the user is satisfied.
+- Automated DMP and DMR analysis (limma and Bumphunter).
+- Paginated, filterable, and sortable DMP/DMR result tables with CSV export.
+- Heatmap generation (PNG/PDF) from the currently filtered table subset.
+- HTTPS by default: TLS terminates at the nginx frontend container.
+- Security-hardened Docker Compose setup: Docker Socket Proxy, read-only container filesystems, capability drops, resource limits.
+- Automatic cleanup of expired job and staging directories.
+- Playwright end-to-end test suite.
 
 ## Biological Analysis Workflow
 
-The implemented workflow is:
+The implemented pipeline follows this sequence:
 
-1. Upload paired Green/Red IDAT files and a Sample Sheet through the frontend or `POST /api/v1/upload`.
-2. Validate uploaded data in the backend.
-3. Store uploaded job files under the configured job directory.
-4. Run `init_filter.R` in the R worker to perform quality filtering and write filtering outputs such as `filtered_data.rds` and `filter_stats.json`.
-5. Generate normalization preview plots through `normalization_preview.R`.
-6. Poll job status and retrieve filtering statistics and normalization preview metadata.
-7. Start normalization with `POST /api/v1/normalize/{job_id}`.
-8. Generate an initial SVD plot after normalization.
-9. Run batch correction or skip it and continue to downstream analysis.
-10. Run DMR and DMP analysis scripts as part of the downstream workflow.
-11. Display and export DMP/DMR result tables.
-12. Generate and retrieve heatmaps from DMP output.
-13. Remove expired job directories through the backend cleanup service.
+```
+UPLOAD -> FILTERING -> NORMALIZATION_PREVIEW -> NORMALIZATION -> SVD -> BATCH -> ANALYSIS -> RESULTS -> HEATMAP
+```
+
+1. Upload paired IDAT files and a Sample Sheet. Map Sample Sheet columns to canonical roles. Configure quality filters.
+2. Execute quality filtering (`init_filter.R`); view filter statistics.
+3. Generate normalization previews (`normalization_preview.R`): density plots and PCA data for five methods in parallel.
+4. Select and confirm a normalization method (`normalize.R`).
+5. Review the SVD plot for batch effects (`batch_svd.R`).
+6. Optionally run ComBat batch correction (`batch_correct.R`); repeat until satisfied, then proceed.
+7. Run DMP and DMR analysis automatically (`dmp.R`, `dmr.R`).
+8. Inspect and filter DMP/DMR result tables; export as CSV.
+9. Generate a heatmap from the filtered table (`heatmap.R`).
+10. Reset the session: all server-side data is deleted immediately.
 
 Important limitations:
 
-- Job state is stored in backend memory. Restarting the backend loses in-memory job status even if files still exist in `jobs/`.
-- The backend R executor uses Docker commands to run scripts in the `r_worker` container.
-- Some frontend batch/SVD code still references `http://localhost:8000`, which matters for non-local deployments.
-- Integration workflows require valid biological test data and prepared job state; they are not guaranteed to run from an empty checkout.
-
-Aktuell ist der Upload ausschließlich über **https://localhost:3000/upload** verfügbar.
+- Job state is held in backend memory. Restarting the backend loses in-memory job status even if files still exist under `jobs/`.
+- The `@slow` end-to-end tests require real IDAT data and take 10 to 20 minutes per run.
 
 ```mermaid
 flowchart LR
-    User[User / Browser] --> Frontend[React frontend via nginx]
-    Frontend -->|/api proxy or direct local API calls| Backend[FastAPI backend]
-    Backend --> Jobs[(Job files under jobs/)]
-    Backend -->|docker exec| RWorker[R worker container]
+    User[User / Browser] -->|"HTTPS :8443"| Frontend[nginx frontend]
+    Frontend -->|HTTP internal| Backend[FastAPI backend]
+    Backend --> Jobs[(./jobs)]
+    Backend -->|TCP internal| Proxy[docker-socket-proxy]
+    Proxy -->|docker exec| RWorker[R worker]
     RWorker --> Jobs
-    Backend --> Frontend
 ```
 
-Docker Compose defines three services:
+## System Architecture
 
-| Service | Purpose | Host port | Container port |
-| --- | --- | --- | --- |
-| `frontend` | Builds the React app and serves it through nginx | `3000` | `80` |
-| `backend` | FastAPI API and background job orchestration | `8000` | `8000` |
-| `r_worker` | R runtime and analysis scripts | none | none |
+Docker Compose defines four services connected by three isolated networks.
 
-The backend mounts:
+### Services
 
-- `./jobs:/app/jobs`
-- `./r_backend:/app/r_backend`
-- `/var/run/docker.sock:/var/run/docker.sock`
+| Service | Purpose | Host ports |
+|---|---|---|
+| `frontend` | Builds the React SPA and serves it through nginx with TLS termination | 8080 (HTTP, redirects to HTTPS), 8443 (HTTPS) |
+| `backend` | FastAPI REST API, job orchestration, resource governor, cleanup | 8000 |
+| `r_worker` | R analysis engine: filtering, normalization, batch correction, DMP, DMR, heatmap | none |
+| `docker-socket-proxy` | Security proxy that exposes only `CONTAINERS`, `EXEC`, and `POST` endpoints to the backend | none (internal) |
 
-The R worker mounts:
+### Networks
 
-- `./r_backend:/app/r_backend`
-- `./data:/app/data`
-- `./jobs:/app/jobs`
+| Network | Services | Notes |
+|---|---|---|
+| `frontend-net` | frontend, backend | Main bridge; accessible from the host |
+| `proxy-net` | backend, docker-socket-proxy | Internal bridge; no external access |
+| `isolated` | r_worker | Internal bridge; no internet access |
+
+The backend connects to Docker through the socket proxy at `tcp://docker-socket-proxy:2375`. The raw Docker socket is not mounted in any application container.
+
+### Container Mounts
+
+| Container | Host path | Container path |
+|---|---|---|
+| frontend | `./certs/bigtom-local.pem` | `/etc/nginx/certs/bigtom-local.pem` (read-only) |
+| frontend | `./certs/bigtom-local-key.pem` | `/etc/nginx/certs/bigtom-local-key.pem` (read-only) |
+| backend | `./jobs` | `/app/jobs` |
+| backend | `./r_backend` | `/app/r_backend` |
+| r_worker | `./r_backend` | `/app/r_backend` |
+| r_worker | `./data` | `/app/data` |
+| r_worker | `./jobs` | `/app/jobs` |
+
+Frontend and backend containers run with read-only root filesystems; writable areas are `tmpfs` mounts.
 
 ## Repository Structure
 
@@ -127,20 +143,30 @@ The R worker mounts:
 │   ├── tests/
 │   ├── Dockerfile
 │   └── requirements.txt
+├── certs/              # gitignored; TLS certificate files go here (see below)
+├── data/               # mounted into r_worker as /app/data
+├── docs/
+│   ├── architecture/
+│   ├── assets/
+│   └── testing/
+├── e2e/
+│   ├── playwright.config.ts
+│   └── tests/
 ├── frontend/
 │   ├── app/
 │   │   ├── src/
 │   │   ├── package.json
 │   │   └── vite.config.ts
-│   ├── Dockerfile
-│   └── nginx.conf
+│   └── Dockerfile
+├── jobs/               # gitignored; bind-mounted job storage
+├── nginx/
+│   ├── nginx.conf
+│   └── proxy_params
 ├── r_backend/
-│   ├── tests/
 │   ├── utils/
+│   ├── tests/
 │   ├── Dockerfile
 │   └── *.R
-├── data/
-├── jobs/
 ├── CHANGELOG.md
 ├── docker-compose.yml
 ├── .env.example
@@ -149,62 +175,89 @@ The R worker mounts:
 
 Key directories:
 
-- `backend/`: FastAPI application, API routes, job services, cleanup service, R executor, and Pytest tests.
+- `backend/`: FastAPI application, API routes, job services, resource governor, cleanup service, R executor, and pytest tests.
 - `frontend/app/`: React, TypeScript, Vite, Vitest, and ESLint application source.
-- `frontend/`: frontend Dockerfile and nginx reverse proxy configuration.
-- `r_backend/`: R scripts, R tests, Dockerfile, and progress helpers.
-- `data/`: mounted into the R worker as `/app/data`; the inspected checkout does not include usable demo IDAT data.
-- `jobs/`: bind-mounted job storage. It is ignored by Git and may contain sensitive biological data.
+- `nginx/`: nginx reverse proxy configuration and proxy parameter file; copied into the frontend image during build.
+- `r_backend/`: R analysis scripts, shared utility modules, R testthat tests, and the R worker Dockerfile.
+- `e2e/`: Playwright end-to-end test suite against the running Docker Compose stack.
+- `data/`: mounted into the R worker; the repository does not include usable demo IDAT data.
+- `jobs/`: bind-mounted job storage. Gitignored and may contain sensitive biological data.
+- `certs/`: gitignored directory for TLS certificate files generated by mkcert.
+- `docs/`: architecture documentation, testing strategy, and developer guides.
 
 ## Prerequisites
 
 For Docker-based operation:
 
 - Git
-- Docker
+- Docker (Engine 24+ or Docker Desktop)
 - Docker Compose v2
+- [mkcert](https://github.com/FiloSottile/mkcert) for generating local TLS certificates
 
 For local frontend development:
 
-- Node.js compatible with the `node:20-alpine` Docker build stage
+- Node.js 20 or later
 - npm
 
 For local backend development:
 
-- Python 3.11, matching `backend/Dockerfile`
+- Python 3.11
 - pip
 
-For local R script work:
+Docker is the recommended path for complete application execution.
 
-- R 4.4.x, matching the `rocker/r-ver:4.4.3` R image
-- Bioconductor packages used by the R scripts
+## TLS Certificate Setup
 
-Docker is the recommended path for complete application execution because the backend currently invokes R scripts through Docker.
+The nginx container requires a TLS certificate before it can start. The required files are:
+
+| File | Purpose |
+|---|---|
+| `certs/bigtom-local.pem` | Certificate (public) |
+| `certs/bigtom-local-key.pem` | Private key |
+
+These files are gitignored and must be generated once on each machine.
+
+**Windows (PowerShell):**
+
+See [docs/deployment/https-nginx.md](docs/deployment/https-nginx.md) for detailed certificate generation instructions on Windows.
+
+**Linux and macOS:**
+
+Install mkcert (for example via Homebrew or your package manager), then run:
+
+```bash
+mkdir -p certs
+mkcert -install
+mkcert -key-file certs/bigtom-local-key.pem -cert-file certs/bigtom-local.pem localhost 127.0.0.1 ::1
+```
+
+After generating the certificate, the browser needs to trust the mkcert root CA. The `mkcert -install` step handles this for the current user on most systems. If a browser still shows a certificate warning, restart the browser. See [docs/deployment/https-nginx.md](docs/deployment/https-nginx.md) for diagnostics.
+
+Never commit `certs/` files or share `rootCA-key.pem`; that key can sign certificates trusted by any machine that installed the mkcert root.
 
 ## Quick Start with Docker
 
 ```bash
-git clone git@magrathea.mni.thm.de:swtp-ss26-bigtom.git 
+git clone <repository-url>
 cd swtp-ss26-bigtom
 cp .env.example .env
+# Generate TLS certificates (see TLS Certificate Setup above)
 docker compose up --build
 ```
-Hinweise: The SSH clone command requires an SSH key registered with the project Git server.
 
 Open:
 
-- Application: <http://localhost:3000>
-- Upload page: <http://localhost:3000/upload>
-- FastAPI documentation: <http://localhost:8000/docs>
-- OpenAPI JSON: <http://localhost:8000/openapi.json>
+- Application: `https://localhost:8443`
+- HTTP redirects automatically to HTTPS: `http://localhost:8080`
+- Backend Swagger UI (optional): `http://localhost:8000/docs`
+
+The first R image build can take a long time because Bioconductor, ChAMP, and annotation packages are installed during the Docker build.
 
 On Windows PowerShell, create the environment file with:
 
 ```powershell
 Copy-Item .env.example .env
 ```
-
-The first R image build can take a long time because Bioconductor, ChAMP, and annotation packages are installed during the Docker build.
 
 ## Detailed Docker Setup and Operation
 
@@ -261,7 +314,7 @@ Rebuild without cache when diagnosing image build issues:
 docker compose build --no-cache r_worker
 ```
 
-Use this carefully for the R image because it can trigger a long full rebuild.
+Use this carefully for the R image because it triggers a long full rebuild.
 
 Remove containers and Docker-managed volumes:
 
@@ -269,9 +322,9 @@ Remove containers and Docker-managed volumes:
 docker compose down -v
 ```
 
-Warning: `docker compose down -v` removes Docker-managed volumes. This repository also stores job files in the host bind mount `./jobs`; those files are not removed by `down -v`, but they may be removed by the application cleanup service when expired.
+Note: `docker compose down -v` removes Docker-managed volumes. Job files in `./jobs` are stored as host bind mounts and are not removed by `down -v`; they may be removed by the application cleanup service when expired.
 
-Inspect containers:
+Inspect running containers:
 
 ```bash
 docker compose exec backend bash
@@ -279,7 +332,7 @@ docker compose exec frontend sh
 docker compose exec r_worker bash
 ```
 
-The `frontend` service is the nginx runtime image and does not contain Node.js or npm. Run frontend development commands locally from `frontend/app` or in a separate temporary Node container.
+The `frontend` service is the nginx runtime image and does not contain Node.js or npm. Run frontend development commands locally from `frontend/app` or in a temporary Node container.
 
 ## Local Development Setup
 
@@ -291,7 +344,7 @@ npm ci
 npm run dev
 ```
 
-The Vite development server starts on its default local development port unless another port is selected by Vite. In Docker, the compiled frontend is served through nginx at <http://localhost:3000>.
+The Vite development server starts on `http://localhost:5173` by default. In Docker, the compiled frontend is served through nginx at `https://localhost:8443`.
 
 Available npm scripts from `frontend/app/package.json`:
 
@@ -302,8 +355,6 @@ npm run lint
 npm run build
 npm run preview
 ```
-
-The production Docker build uses `node:20-alpine`, runs `npm install`, and then runs `npm run build`. The nginx runtime proxies `/api/` to `http://backend:8000`.
 
 Optional one-shot frontend tests in Docker:
 
@@ -344,7 +395,7 @@ $env:JOB_CLEANUP_INTERVAL_SECONDS = "86400"
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Linux/macOS:
+Linux and macOS:
 
 ```bash
 cd backend
@@ -364,11 +415,11 @@ cd backend
 python -m pytest
 ```
 
-Local backend limitation: R execution still expects Docker access because `backend/app/services/r_executor.py` builds `docker exec` commands for the `r_worker` container. For the complete workflow, keep the Docker `r_worker` service running.
+Local backend limitation: R execution expects Docker access because the backend uses `docker exec` commands targeting the `r_worker` container. Keep the Docker `r_worker` service running for the complete workflow.
 
-### R Worker / Processing Component
+### R Worker
 
-The R component is a collection of scripts, not an R package. The Docker image uses `rocker/r-ver:4.4.3` and installs system libraries, Bioconductor, ChAMP, ChAMPdata, minfi, ComplexHeatmap, EPICv2 annotations, and related R packages.
+The R component is a collection of scripts, not an R package. The Docker image uses `rocker/r-ver:4.4.3` and installs Bioconductor, ChAMP, minfi, and related packages.
 
 Start the R worker through Docker Compose:
 
@@ -382,7 +433,7 @@ Check R availability in the running service:
 docker compose exec r_worker Rscript --version
 ```
 
-Direct script execution is possible for debugging, but it bypasses FastAPI job-state handling and can overwrite files in a job directory:
+Direct script execution is possible for debugging, but it bypasses FastAPI job-state handling:
 
 ```bash
 JOB_ID="replace-with-real-job-id"
@@ -398,36 +449,89 @@ Use direct R commands only on disposable test jobs or copied job directories.
 
 ## Configuration and Environment Variables
 
-Create `.env` from `.env.example` for Docker Compose:
+Copy `.env.example` to `.env` for Docker Compose:
 
 ```bash
 cp .env.example .env
 ```
 
-| Variable                       | Purpose                                                     | Default in repository                                                               | Required                      | Notes                                                                        |
-|--------------------------------|-------------------------------------------------------------|-------------------------------------------------------------------------------------|-------------------------------|------------------------------------------------------------------------------|
-| `JOB_BASE_DIR`                 | Base directory for uploaded job files and generated outputs | `/app/jobs` in `.env.example` and Docker Compose; `./jobs` in backend code if unset | Yes for predictable operation | Must match the mounted job directory in Docker.                              |
-| `JOB_RETENTION_HOURS`          | Age threshold for automatic job directory cleanup           | `24`                                                                                | Yes                           | Must be a positive number. Also used to calculate job expiration timestamps. |
-| `JOB_CLEANUP_INTERVAL_SECONDS` | Interval between cleanup scans                              | `86400`                                                                             | Yes                           | Must be a positive integer.                                                  |
-| `PYTHONUNBUFFERED`             | Forces unbuffered Python output in the backend container    | `1` in `docker-compose.yml`                                                         | No                            | Useful for real-time Docker logs.                                            |
-| `OMP_NUM_THREADS`              | Limits OpenMP thread count in R worker                      | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
-| `OPENBLAS_NUM_THREADS`         | Limits OpenBLAS thread count in R worker                    | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
-| `MKL_NUM_THREADS`              | Limits MKL thread count in R worker                         | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
-| `BLAS_NUM_THREADS`             | Limits BLAS thread count in R worker                        | `1` in `docker-compose.yml`                                                         | No                            | Reduces resource contention.                                                 |
-| `BIOCPARALLEL_WORKER_NUMBER`   | Limits Bioconductor parallel workers                        | `1` in `docker-compose.yml`                                                         | No                            | Reduces memory pressure.                                                     |
-| `R_BIOC_PARALLEL_WORKERS`      | Limits R/Bioconductor parallel workers                      | `1` in `docker-compose.yml`                                                         | No                            | Reduces memory pressure.                                                     |
+### Job Storage and Lifecycle
 
-No real secrets are defined in `.env.example`.
+| Variable | Purpose | Default | Notes |
+|---|---|---|---|
+| `JOB_BASE_DIR` | Base directory for committed job files and R outputs | `/app/jobs` | Must match the bind mount in Docker Compose. |
+| `JOB_RETENTION_HOURS` | Age threshold for automatic job directory cleanup | `24` | Must be a positive number. |
+| `JOB_CLEANUP_INTERVAL_SECONDS` | Interval between cleanup scans for committed jobs | `86400` | Must be a positive integer. |
+| `STAGING_BASE_DIR` | Directory for uncommitted staging uploads | `<JOB_BASE_DIR>/staging` | **Not configurable.** Derived in code as `JOB_BASE_DIR + "/staging"` so both directories stay on the same filesystem; setting it in `.env` has no effect. |
+| `STAGING_RETENTION_HOURS` | Maximum age of uncommitted staging uploads | `2` | Staging directories are checked every `STAGING_CLEANUP_INTERVAL_SECONDS`. |
+| `STAGING_CLEANUP_INTERVAL_SECONDS` | Interval between staging cleanup scans | `900` | |
+
+### Container Resource Limits (Hard Walls)
+
+| Variable | Purpose | Default | Notes |
+|---|---|---|---|
+| `R_WORKER_MEM_LIMIT` | Docker memory limit for the r_worker container | `10g` | If the container exceeds this, its cgroup OOM-killer stops the R process; the host stays alive. Tune to available RAM. |
+| `R_WORKER_CPUS` | Docker CPU limit for the r_worker container | `2` | |
+| `BACKEND_MEM_LIMIT` | Docker memory limit for the backend container | `1g` | The backend only orchestrates and needs little RAM. |
+
+### Resource Governor (Soft Admission Control)
+
+| Variable | Purpose | Default | Notes |
+|---|---|---|---|
+| `PIPELINE_MEMORY_BUDGET_GB` | Soft memory budget: jobs exceeding this are queued | `8` | Must be at most `R_WORKER_MEM_LIMIT`. |
+| `PIPELINE_CORE_BUDGET` | Soft CPU core budget | `2` | |
+
+### Per-Step Memory Estimates (Used by the Soft Queue)
+
+| Variable | Purpose | Default | Notes |
+|---|---|---|---|
+| `PIPELINE_STEP_MEMORY_GB` | Memory estimate for standard pipeline steps | `5` | Used by the soft admission queue; re-measure and adjust for your dataset. |
+| `PIPELINE_DMR_MEMORY_GB` | Memory estimate for the DMR step | `6` | Each DMR core holds a copy of the beta matrix; re-measure when data changes. |
+| `PIPELINE_DMP_MEMORY_GB` | Memory estimate for the DMP step | `4` | |
+| `DMR_CORES` | Bootstrap cores for `dmr.R` | `1` | Raising this multiplies DMR RAM linearly. Raise `PIPELINE_DMR_MEMORY_GB` accordingly. |
+
+### Intake Guards
+
+| Variable | Purpose | Default | Notes |
+|---|---|---|---|
+| `MAX_SAMPLES_PER_JOB` | Hard upper limit on IDAT pairs per upload | `48` | Uploads exceeding this are rejected immediately with a clear message. |
+| `MAX_JOBS_DISK_GB` | Maximum total disk space for all job directories combined | `0` (disabled) | Set to a value appropriate for the deployment disk size. |
+| `MAX_TOTAL_UPLOAD_MB` | Maximum total IDAT file size per upload | `900` | nginx client body limit is 1400 MB, providing a buffer. |
+| `MAX_SAMPLE_SHEET_MB` | Maximum sample sheet file size | `10` | |
+
+### API and Logging
+
+| Variable | Purpose | Default | Notes |
+|---|---|---|---|
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of browser origins allowed to call the API | `http://localhost:3000,...` | Set to the deployed frontend origin in production, for example `https://app.example.com`. |
+| `LOG_LEVEL` | Python logging level for the backend | `INFO` | Set to `DEBUG` for verbose diagnostics; keep `INFO` or higher in production. |
+
+### R Worker Threading
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `OMP_NUM_THREADS` | Limits OpenMP threads | `1` |
+| `OPENBLAS_NUM_THREADS` | Limits OpenBLAS threads | `1` |
+| `MKL_NUM_THREADS` | Limits MKL threads | `1` |
+| `BLAS_NUM_THREADS` | Limits BLAS threads | `1` |
+| `BIOCPARALLEL_WORKER_NUMBER` | Limits Bioconductor parallel workers | `1` |
+| `R_BIOC_PARALLEL_WORKERS` | Limits R/Bioconductor parallel workers | `1` |
+
+All threading variables are set to `1` to prevent uncontrolled thread proliferation and ensure the container resource limits are the actual ceiling.
+
+### Sizing Examples
+
+The `.env.example` file contains commented sizing examples for a development laptop (16 GiB) and a dedicated server (20 GiB, shared with other apps). The golden rule: `R_WORKER_MEM_LIMIT + BACKEND_MEM_LIMIT + (other apps) + OS headroom` must be at or below the machine's physical RAM.
 
 ## Application URLs and API Documentation
 
-| Target       | URL                                  |
-|--------------|--------------------------------------|
-| Frontend     | <http://localhost:3000>              |
-| Upload page  | <http://localhost:3000/upload>       |
-| Backend root | <http://localhost:8000/>             |
-| Swagger UI   | <http://localhost:8000/docs>         |
-| OpenAPI JSON | <http://localhost:8000/openapi.json> |
+| Target | URL |
+|---|---|
+| Application (HTTPS) | `https://localhost:8443` |
+| Application (HTTP redirect) | `http://localhost:8080` |
+| Backend root | `http://localhost:8000/` |
+| Swagger UI | `http://localhost:8000/docs` |
+| OpenAPI JSON | `http://localhost:8000/openapi.json` |
 
 Frontend routes implemented in `frontend/app/src/App.tsx`:
 
@@ -437,36 +541,36 @@ Frontend routes implemented in `frontend/app/src/App.tsx`:
 - `/normalization/:job_id`
 - `/batch/:job_id`
 - `/results/:job_id`
-- `/datenschutz`
+- `/privacy`
 
 Main API endpoints implemented by FastAPI:
 
-Swagger UI at `/docs` is the authoritative complete API reference for a running backend. The table below lists the verified primary routes from the current FastAPI routers.
+The Swagger UI at `/docs` is the authoritative API reference for a running backend. The table below lists the primary routes from the current FastAPI routers.
 
-| Method | Path                                                 | Purpose                                                        |
-|--------|------------------------------------------------------|----------------------------------------------------------------|
-| `GET`  | `/`                                                  | Backend root message and API version.                          |
-| `POST` | `/api/v1/upload`                                     | Upload IDAT files, Sample Sheet, and filter settings.          |
-| `GET`  | `/api/v1/status/{job_id}`                            | Read in-memory job status.                                     |
-| `GET`  | `/api/v1/filter/{job_id}/stats`                      | Read filtering statistics after filtering output is available. |
-| `GET`  | `/api/v1/preview/normalization/{job_id}`             | Read normalization preview metadata.                           |
-| `GET`  | `/api/v1/preview/normalization/{job_id}/{plot_name}` | Download normalization preview PNG files.                      |
-| `POST` | `/api/v1/normalize/{job_id}`                         | Start normalization.                                           |
-| `POST` | `/api/v1/reset/{job_id}`                             | Cancel/reset a cancelable job.                                 |
-| `GET`  | `/api/v1/batch/{job_id}/batch-options`               | Read eligible Sample Sheet columns for batch correction.       |
-| `GET`  | `/api/v1/batch/{job_id}/history`                     | Read batch correction history.                                 |
-| `POST` | `/api/v1/batch/{job_id}`                             | Start batch correction.                                        |
-| `POST` | `/api/v1/batch/{job_id}/skip`                        | Skip batch correction and start downstream analysis.           |
-| `GET`  | `/api/v1/batch/{job_id}/svd-plot/{round_id}`         | Download an SVD plot.                                          |
-| `GET`  | `/api/v1/table/{job_id}/{table}`                     | Read paginated `dmp` or `dmr` results.                         |
-| `GET`  | `/api/v1/table/{job_id}/{table}/export`              | Export `dmp` or `dmr` results as CSV.                          |
-| `GET`  | `/api/v1/heatmap/{job_id}/options`                   | Read eligible Sample Sheet columns for heatmaps.               |
-| `POST` | `/api/v1/heatmap/{job_id}`                           | Start heatmap generation.                                      |
-| `GET`  | `/api/v1/heatmap/{job_id}`                           | Download `heatmap.png`.                                        |
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/` | Backend root message and API version. |
+| `POST` | `/api/v1/upload` | Upload IDAT files, Sample Sheet, and filter settings. |
+| `GET` | `/api/v1/status/{job_id}` | Read in-memory job status. |
+| `GET` | `/api/v1/filter/{job_id}/stats` | Read filtering statistics after filtering has completed. |
+| `GET` | `/api/v1/preview/normalization/{job_id}` | Read normalization preview metadata. |
+| `GET` | `/api/v1/preview/normalization/{job_id}/{plot_name}` | Download a normalization preview PNG or PDF. |
+| `POST` | `/api/v1/normalize/{job_id}` | Start normalization. |
+| `POST` | `/api/v1/reset/{job_id}` | Cancel and permanently delete a job and all its data. |
+| `GET` | `/api/v1/batch/{job_id}/batch-options` | Read eligible Sample Sheet columns for batch correction. |
+| `GET` | `/api/v1/batch/{job_id}/history` | Read batch correction history. |
+| `POST` | `/api/v1/batch/{job_id}` | Start batch correction. |
+| `POST` | `/api/v1/batch/{job_id}/skip` | Skip batch correction and start downstream analysis. |
+| `GET` | `/api/v1/batch/{job_id}/svd-plot/{round_id}` | Download an SVD plot PNG or PDF. |
+| `GET` | `/api/v1/table/{job_id}/{table}` | Read paginated `dmp` or `dmr` results with filtering and sorting. |
+| `GET` | `/api/v1/table/{job_id}/{table}/export` | Export `dmp` or `dmr` results as CSV. |
+| `GET` | `/api/v1/heatmap/{job_id}/options` | Read eligible Sample Sheet columns for heatmap sorting. |
+| `POST` | `/api/v1/heatmap/{job_id}` | Start heatmap generation. |
+| `GET` | `/api/v1/heatmap/{job_id}` | Download `heatmap.png` or `heatmap.pdf`. |
 
 ## Testing
 
-The repository contains backend Pytest tests, frontend Vitest tests, and R testthat test files. Some integration tests require valid IDAT files, a compatible Sample Sheet, generated `.rds` files, or prepared job directories.
+The repository contains backend pytest tests, frontend Vitest tests, R testthat test files, and a Playwright end-to-end suite.
 
 Docker service validation:
 
@@ -475,20 +579,20 @@ docker compose config --services
 docker compose ps
 ```
 
-Backend tests:
+### Backend Tests
 
 ```bash
 docker compose exec backend pytest
 ```
 
-or locally:
+Or locally:
 
 ```bash
 cd backend
 python -m pytest
 ```
 
-Frontend tests:
+### Frontend Tests
 
 ```bash
 cd frontend/app
@@ -498,53 +602,98 @@ npm run lint
 npm run build
 ```
 
-R test files exist under `r_backend/tests/` and use `testthat`. The current `r_backend/Dockerfile` does not install `testthat`, so R tests do not work in a fresh `r_worker` container until that missing test dependency is installed temporarily or added permanently in a separate infrastructure/code change.
+### R Tests
 
-R tests through Docker after `testthat` is available:
+R test files exist under `r_backend/tests/` and use testthat, which is installed in the `r_worker` image. Run the R tests directly:
 
 ```bash
-docker compose exec r_worker Rscript -e "setwd('/app/r_backend'); testthat::test_dir('tests')"
+docker compose exec r_worker Rscript \
+  -e "setwd('/app/r_backend'); testthat::test_dir('tests')"
 ```
 
-Temporary validation install:
+If testthat is reported missing, the running image predates its addition to `r_backend/Dockerfile` — rebuild the image with `docker compose build r_worker`. Installing it at runtime with `install.packages` does not work, because the `r_worker` container runs on an isolated network without internet access.
+
+### End-to-End Tests (Playwright)
+
+The E2E suite runs against the full running Docker Compose stack (`https://localhost:8443`). The stack must be up before running tests. See `e2e/README.md` for full details.
+
+Prerequisites: the Docker Compose stack must be running (`docker compose up -d`).
+
+**Fast suite** (seconds, no IDAT data required):
 
 ```bash
-docker compose exec r_worker Rscript -e \
-  "install.packages('testthat', repos='https://cloud.r-project.org')"
+# With Node.js installed locally
+cd e2e
+npm ci
+npx playwright install chromium
+npm run test:fast
 ```
 
-This temporary installation is lost when the container is removed, recreated, or rebuilt. Add the dependency permanently only through a separate infrastructure/code change.
+```bash
+# With Docker, Linux (--network host reaches localhost:8443)
+docker run --rm \
+  --network host \
+  -v "$PWD/e2e:/e2e" \
+  -w /e2e \
+  mcr.microsoft.com/playwright:v1.61.0-noble \
+  sh -c "npm ci && npx playwright install chromium && npm run test:fast"
+```
 
-Manual API smoke checks:
+```powershell
+# With Docker, Windows/macOS (host.docker.internal for host access)
+docker run --rm `
+  -e E2E_BASE_URL=https://host.docker.internal:8443 `
+  -v "${PWD}/e2e:/e2e" `
+  -w /e2e `
+  mcr.microsoft.com/playwright:v1.61.0-noble `
+  sh -c "npm ci && npx playwright install chromium && npm run test:fast"
+```
+
+**Full suite** (10 to 20 minutes, requires a real IDAT dataset):
 
 ```bash
-curl -i http://localhost:8000/
+export E2E_DATASET_DIR=/absolute/path/to/idat_dataset
+docker run --rm \
+  --network host \
+  -e E2E_DATASET_DIR=/dataset \
+  -v "$PWD/e2e:/e2e" \
+  -v "$E2E_DATASET_DIR:/dataset:ro" \
+  -w /e2e \
+  mcr.microsoft.com/playwright:v1.61.0-noble \
+  sh -c "npm ci && npx playwright install chromium && npm test"
+```
+
+If no dataset is found, upload-based `@slow` tests skip gracefully instead of failing.
+
+### Manual API Smoke Checks
+
+```bash
+curl -k -i https://localhost:8443/
 curl -i http://localhost:8000/docs
 ```
 
-End-to-end validation requires real Green/Red IDAT pairs and a compatible Sample Sheet. Upload data, follow the frontend workflow, and inspect backend/R logs if a job fails.
-
 ## Deployment
 
-The repository currently provides a Docker Compose-based deployment workflow. A fully automated production CI/CD pipeline, Kubernetes manifests, managed reverse proxy configuration, TLS termination, health checks, database-backed job persistence, and backup automation are not included in this repository.
+The repository provides a Docker Compose-based deployment workflow. Automated CI/CD pipelines, Kubernetes manifests, database-backed job persistence, and backup automation are not included.
 
 For a Compose-based deployment:
 
 1. Prepare the host with Docker and Docker Compose.
-2. Create `.env` from `.env.example` and adjust retention settings as needed.
-3. Build images:
+2. Create `.env` from `.env.example` and adjust limits to match available hardware (see sizing examples in `.env.example`).
+3. Obtain or generate TLS certificates (see TLS Certificate Setup above). For production, use certificates from a trusted CA instead of mkcert.
+4. Build images:
 
    ```bash
    docker compose build
    ```
 
-4. Start services in detached mode:
+5. Start services in detached mode:
 
    ```bash
    docker compose up -d
    ```
 
-5. Verify services:
+6. Verify services:
 
    ```bash
    docker compose ps
@@ -553,14 +702,15 @@ For a Compose-based deployment:
 
 Deployment considerations:
 
-- Exposed host ports are `80` and `443` for the frontend and `8000` for the backend.
-- The frontend nginx config proxies `/api/` to the backend service inside the Compose network.
-- TLS termination and public reverse proxy rules must be provided outside this repository.
+- The frontend binds to host ports 8080 (HTTP redirect) and 8443 (HTTPS). For standard ports on a production server, change the host side of the port mappings in `docker-compose.yml` to `80:8080` and `443:8443`. The HTTP-to-HTTPS redirect in `nginx/nginx.conf` is hardcoded to `https://$host:8443`; remove the `:8443` when serving on the standard port 443, otherwise the redirect points clients back to port 8443.
+- For a real domain, change `server_name` from `localhost` to the deployment hostname in both `server` blocks of `nginx/nginx.conf`. `nginx/nginx.conf` is copied into the frontend image at build time (it is not a bind mount), so rebuild the frontend image after editing it: `docker compose build frontend`.
+- TLS is handled by the nginx container. For production, replace the mkcert certificate with one from a trusted CA, mounted at the same paths (`./certs/bigtom-local.pem`, `./certs/bigtom-local-key.pem`) or updated in `nginx/nginx.conf` (`ssl_certificate` / `ssl_certificate_key`); alternatively use an external reverse proxy that handles TLS.
 - `./jobs` is bind-mounted host storage and may contain sensitive biological data.
 - Job directories are automatically deleted after `JOB_RETENTION_HOURS` based on modification time.
+- Staging directories for uncommitted uploads are cleaned up separately every `STAGING_CLEANUP_INTERVAL_SECONDS`.
 - Backend job state is not durable across backend restarts.
-- Application updates are manual: pull the repository, rebuild images, and restart Compose services.
-- The backend container mounts the Docker socket so it can run `docker exec` against `r_worker`; this is powerful and should be treated as a production security concern.
+- Application updates require pulling the repository, rebuilding images, and restarting Compose services.
+- Set `CORS_ALLOWED_ORIGINS` in `.env` to the actual deployed frontend origin before exposing the backend port publicly.
 
 ## Logging and Debugging
 
@@ -600,62 +750,86 @@ Useful debugging points:
 - `GET /api/v1/status/{job_id}`: current in-memory job status.
 - `GET /api/v1/filter/{job_id}/stats`: filtering output after filtering has completed.
 - `./jobs/{job_id}/`: uploaded files and generated R outputs on the host.
-- Backend logs: upload validation, job status updates, cleanup service logs, and R executor output.
-- R worker logs: package loading, R script progress, and R errors.
+- Backend logs: upload validation, job state transitions, resource governor decisions, cleanup service, and R executor output.
+- R worker logs: package loading, R script progress messages, and R errors.
 - `docker compose config`: effective Compose configuration after `.env` substitution.
+
+HTTPS-specific diagnostics (Windows):
+
+​```powershell
+docker compose exec frontend nginx -t
+​```
+
+See [docs/deployment/https-nginx.md](docs/deployment/https-nginx.md) for further diagnostics.
 
 ## Troubleshooting
 
-| Problem | Possible cause | Recommended solution |
-| --- | --- | --- |
-| Port `3000` or `8000` is already in use | Another local process or old container is using the port | Stop the conflicting process or run `docker compose down`; keep repository port mappings unchanged unless intentionally operating a custom local setup. |
-| Frontend cannot reach backend | Backend is not running, nginx proxy cannot reach `backend:8000`, or frontend code uses a localhost API URL in a non-local deployment | Check `docker compose ps`, `docker compose logs -f backend`, and browser Network requests. For non-local deployments, review frontend code that references `http://localhost:8000`. |
-| Backend route returns `404` for a job that has files in `jobs/` | Job metadata is stored in memory and was lost after backend restart | Re-run the upload/workflow or implement durable job state in a separate code change. |
-| Upload returns `400` for IDAT files | Missing files, non-`.idat` extension, binary plausibility check failed, odd number of IDAT files, duplicate filenames, or total size above the backend limit | Upload paired Green/Red `.idat` files with unique filenames and valid binary content. |
-| Upload returns `415` for Sample Sheet | Unsupported extension or invalid file content | Use a valid `.csv`, `.xlsx`, or `.xls` file. The frontend file picker currently accepts `.csv` and `.xlsx`. |
-| Upload is rejected because of size | Backend IDAT total limit is `900 MB`, Sample Sheet limit is `10 MB`, nginx request limit is `1400M` | Reduce upload size or adjust limits in a separate, reviewed configuration/code change. |
+| Problem | Possible cause | Recommended action |
+|---|---|---|
+| Port 8080 or 8443 is already in use | Another local process or old container is using the port | Stop the conflicting process or run `docker compose down`. |
+| Browser shows certificate warning | mkcert root CA is not installed in the browser or OS trust store | Run `mkcert -install`, then restart the browser. See [docs/deployment/https-nginx.md](docs/deployment/https-nginx.md) for Windows instructions. |
+| Frontend cannot reach backend | Backend is not running or nginx proxy cannot reach `backend:8000` | Check `docker compose ps`, `docker compose logs -f backend`, and browser Network requests. |
+| Backend route returns 404 for a job that has files in `jobs/` | Job metadata is stored in memory and was lost after backend restart | Re-run the upload workflow or start a new session. |
+| Upload returns 400 for IDAT files | Missing files, non-`.idat` extension, binary format check failed, odd number of IDAT files, duplicate filenames, or total size above the backend limit | Upload paired Green/Red `.idat` files with unique filenames and valid binary content. |
+| Upload returns 415 for Sample Sheet | Unsupported extension or invalid file content | Use a valid `.csv`, `.xlsx`, or `.xls` file. |
+| Upload is rejected because of size | Backend IDAT total limit is 900 MB; Sample Sheet limit is 10 MB; nginx request limit is 1400 MB | Reduce upload size or adjust limits in `.env`. |
 | Filtering statistics are not available | Filtering is still running or failed before `filter_stats.json` was written | Poll `/api/v1/status/{job_id}` and inspect backend and R worker logs. |
-| Normalization preview is not available | Preview generation is still running, failed, or no preview PNG files were generated | Check job status, inspect `./jobs/{job_id}/`, and review backend/R logs. |
-| Normalization fails | Missing `filtered_data.rds`, invalid method for the R script, or R dependency/data problem | Confirm filtering completed and inspect `docker compose logs -f r_worker`. |
-| R image build takes a long time | Bioconductor, ChAMP, ChAMPdata, and annotation packages are installed during build | Let the build finish; rebuild only the affected image when possible. |
-| R package missing at runtime | Stale or failed image build, or package is not declared in the Dockerfile | Rebuild `r_worker` for declared packages. For undeclared `testthat`, install temporarily for validation or add it in a separate infrastructure/code ticket. |
-| Frontend npm command fails inside `frontend` service | The running service is nginx and does not include Node.js/npm | Run npm commands from `frontend/app` locally or use the documented temporary Node container. |
-| PowerShell blocks virtual environment activation | Local execution policy prevents scripts | Use an approved local policy change for the current user, or activate through another supported shell. |
-| Job files disappear | Automatic cleanup removed directories older than `JOB_RETENTION_HOURS` | Increase retention before starting the backend if longer retention is required, and keep backups outside `jobs/` when needed. |
+| Normalization preview is not available | Preview generation is still running, failed, or no preview files were generated | Check job status and inspect `./jobs/{job_id}/`. |
+| Normalization fails | Missing `filtered_data.rds`, invalid method for the R script, or R dependency problem | Confirm filtering completed and inspect `docker compose logs -f r_worker`. |
+| R image build takes a long time | Bioconductor, ChAMP, ChAMPdata, and annotation packages are installed during the Docker build | Let the build finish; rebuild only the affected image when possible. |
+| R package missing at runtime | Stale or failed image build, or package is not declared in the Dockerfile | Rebuild `r_worker` for declared packages. For undeclared `testthat`, install it temporarily as described in the Testing section. |
+| Frontend npm command fails inside the `frontend` service | The running service is nginx and does not include Node.js or npm | Run npm commands from `frontend/app` locally or in a temporary Node container. |
+| PowerShell blocks virtual environment activation | Execution policy prevents scripts | Set an approved execution policy for the current user or activate through another supported shell. |
+| Job files disappear | Automatic cleanup removed directories older than `JOB_RETENTION_HOURS` | Increase retention before starting the backend if longer retention is needed. |
+| `docker-socket-proxy` fails to start | Docker socket is not accessible on the host | Ensure Docker is running and the current user has access to the Docker daemon. |
 
 ## Job Data Retention and Cleanup
 
-The backend starts an asynchronous cleanup loop during FastAPI startup. It scans `JOB_BASE_DIR` every `JOB_CLEANUP_INTERVAL_SECONDS` and deletes job directories whose modification time is older than `JOB_RETENTION_HOURS`.
+The backend runs two asynchronous cleanup loops during startup.
 
-Defaults:
+**Committed jobs** under `JOB_BASE_DIR` are deleted when their modification time is older than `JOB_RETENTION_HOURS`. The cleanup scan runs every `JOB_CLEANUP_INTERVAL_SECONDS` (default: once per day).
 
-- `JOB_BASE_DIR=/app/jobs`
-- `JOB_RETENTION_HOURS=24`
-- `JOB_CLEANUP_INTERVAL_SECONDS=86400`
+**Staging directories** for uncommitted uploads are deleted when older than `STAGING_RETENTION_HOURS` (default: 2 hours). The scan runs every `STAGING_CLEANUP_INTERVAL_SECONDS` (default: every 15 minutes).
+
+Defaults from `.env.example`:
+
+| Variable | Default |
+|---|---|
+| `JOB_BASE_DIR` | `/app/jobs` |
+| `JOB_RETENTION_HOURS` | `24` |
+| `JOB_CLEANUP_INTERVAL_SECONDS` | `86400` |
+| `STAGING_BASE_DIR` | `<JOB_BASE_DIR>/staging` (derived, not settable) |
+| `STAGING_RETENTION_HOURS` | `2` |
+| `STAGING_CLEANUP_INTERVAL_SECONDS` | `900` |
 
 Operational notes:
 
-- Cleanup deletes directories under the configured job base directory.
-- Job files can contain sensitive biological data and must not be committed.
-- `.gitignore` excludes `jobs/`, real IDAT files, local environments, generated frontend builds, and common secret file extensions.
+- Job files can contain sensitive biological data and must not be committed to the repository.
+- `.gitignore` excludes `jobs/`, `certs/`, real IDAT files, local environments, generated frontend builds, and common secret file extensions.
 - The cleanup service does not replace a backup or retention policy for production data.
 
 ## Security and Production Considerations
 
-- Do not commit private IDAT files, Sample Sheets, `.env` files, keys, certificates, or generated job data.
-- Treat `./jobs` as sensitive storage.
-- The backend mounts `/var/run/docker.sock`; this grants powerful host-level Docker control to the backend container.
-- The repository does not include authentication or authorization around the exposed application routes.
-- The repository does not include TLS configuration. Use an external reverse proxy or platform layer for HTTPS.
-- The repository does not include automated backups.
-- Review upload limits, retention settings, Docker socket access, CORS settings, and public exposure before production use.
+- Do not commit private IDAT files, Sample Sheets, `.env` files, TLS keys, certificates, or generated job data.
+- Treat `./jobs` and `./certs` as sensitive storage.
+- The backend connects to Docker through the `docker-socket-proxy` container, which limits the exposed Docker API to `CONTAINERS`, `EXEC`, and `POST` only. The raw Docker socket (`/var/run/docker.sock`) is not mounted in any application container.
+- All containers run with `cap_drop: ALL` and `no-new-privileges: true`. Frontend and backend containers use read-only root filesystems.
+- The r_worker container is on an isolated Docker network without internet access.
+- The application does not include authentication or authorization. All users share the same session space on a running instance.
+- For production deployments: replace the mkcert development certificate with one from a trusted CA. Set `CORS_ALLOWED_ORIGINS` to the actual frontend origin. Review upload limits, retention settings, and resource limits. Consider placing an authenticated reverse proxy in front of the application.
+- Review upload limits, retention settings, and resource limits before a production deployment.
 
 ## Additional Documentation
 
 - [CHANGELOG.md](CHANGELOG.md): project change history.
-- FastAPI-generated API docs are available from a running backend at <http://localhost:8000/docs>.
-
-No tracked `docs/` directory is present in the inspected checkout.
+- [docs/architecture/README.md](docs/architecture/README.md): entry point for architecture documentation, including the job lifecycle and state machine.
+- [docs/backend/README.md](docs/backend/README.md): entry point for backend-related documentation.
+- [docs/contracts/README.md](docs/contracts/README.md): entry point for contracts and data specifications.
+- [docs/deployment/README.md](docs/deployment/README.md): entry point for deployment and operations documentation.
+- [docs/frontend/README.md](docs/frontend/README.md): entry point for frontend documentation.
+- [docs/testing/testing-strategy.md](docs/testing/testing-strategy.md): detailed testing strategy including how to run each test type.
+- [e2e/README.md](e2e/README.md): end-to-end test suite documentation with full Docker run commands.
+- FastAPI Swagger UI is available at `http://localhost:8000/docs` from a running backend.
 
 ## Contributing and Development Workflow
 
@@ -663,10 +837,11 @@ No formal contribution guide is included in the repository. Use the existing pro
 
 - Keep frontend changes in `frontend/app`.
 - Keep backend API, service, and model changes in `backend/app`.
+- Keep nginx configuration changes in `nginx/`.
 - Keep R analysis changes in `r_backend`.
 - Run the relevant backend, frontend, and R checks before handing off work.
-- Do not commit generated job data, private biological data, local virtual environments, or dependency folders.
+- Do not commit generated job data, private biological data, local virtual environments, dependency folders, or certificate files.
 
 ## License
 
-No license file is present in the inspected repository. Do not assume redistribution or usage terms without clarification from the project owners.
+No license file is present in the repository. Do not assume redistribution or usage terms without clarification from the project owners.

@@ -4,10 +4,11 @@
 
 
 # ─── Jobs (Patientendaten – niemals ins Repo) ────────
-jobs/*/
-!jobs/.gitkeep
-jobs/*.idat
-jobs/
+# Verzeichnis behalten (als Bind-Mount-Ziel), aber den gesamten Inhalt ignorieren.
+# /jobs muss auf dem Host existieren, sonst legt Docker es beim Bind-Mount als
+# root an und der Backend-Prozess (UID 1000) kann nicht hineinschreiben.
+/jobs/*
+!/jobs/.gitkeep
 
 
 # ─── Python ──────────────────────────────────────────

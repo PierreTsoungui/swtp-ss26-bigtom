@@ -1,6 +1,23 @@
 import AnalyticsIcon from "@mui/icons-material/Analytics";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { StepIndicator } from "./StepIndicator";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Button } from "../components/Button";
+
+/**
+ * A single in-page anchor shown in the landing-page navigation.
+ *
+ * The shell renders these links but does not own the list — the composition root
+ * injects the active feature's sections (see {@link AppHeaderProps.sections}),
+ * so the shared layer stays free of any feature dependency.
+ */
+export interface NavSection {
+  /** Anchor target (the section element's `id`). */
+  id: string;
+  /** Label shown in the navigation. */
+  label: string;
+}
 
 /**
  * Props for the AppHeader component.
@@ -23,6 +40,11 @@ interface AppHeaderProps {
   /** Whether an analysis is currently loaded or running, enabling the reset option. */
   isAnalysisActive: boolean;
   /**
+   * In-page sections rendered as the landing-page navigation. Injected by the
+   * composition root so the shell need not know about any feature. @default []
+   */
+  sections?: readonly NavSection[];
+  /**
    * Whether the reset operation is currently being processed.
    * @default false
    */
@@ -44,22 +66,54 @@ export function AppHeader({
   isLandingPage = false,
   showStepIndicator = true,
   isAnalysisActive,
+  sections = [],
   isResetting = false,
   onReset,
 }: AppHeaderProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const wasResetting = useRef(false);
+  useEffect(() => {
+    if (wasResetting.current && !isResetting) setConfirmOpen(false);
+    wasResetting.current = isResetting;
+  }, [isResetting]);
+
   return (
-    <header className="border-b border-neutral-borderDefault bg-neutral-card px-6 py-4">
+    <header
+      className={`border-b border-neutral-borderDefault bg-neutral-card px-6 py-4 ${
+        isLandingPage ? "sticky top-0 z-40" : ""
+      }`}
+    >
       <div
         className={`mx-auto max-w-7xl ${
           isLandingPage
-            ? "flex items-center justify-between"
+            ? "flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
             : "grid gap-4 lg:grid-cols-[1fr_3fr_1fr] lg:items-center"
         }`}
       >
-        <Link to="/" className="inline-flex items-center gap-2 text-2xl font-bold text-neutral-textPrimary hover:text-primary-hover">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-2xl font-bold text-neutral-textPrimary hover:text-primary-hover"
+        >
           <AnalyticsIcon fontSize="large" />
           <span>MethylAnalyzer</span>
         </Link>
+
+        {isLandingPage && (
+          <nav aria-label="Landing page sections">
+            <ul className="flex flex-wrap items-center justify-end gap-x-1 gap-y-1">
+              {sections.map((section) => (
+                <li key={section.id}>
+                  <a
+                    href={`#${section.id}`}
+                    className="block rounded-md px-3 py-2 text-sm font-medium text-neutral-textSecondary transition-colors hover:bg-neutral-surface hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    {section.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
         {!isLandingPage && (
           <>
@@ -71,18 +125,35 @@ export function AppHeader({
             </div>
 
             <div className="flex justify-start lg:justify-end">
-              <button
-                type="button"
-                onClick={onReset}
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmOpen(true)}
                 disabled={!isAnalysisActive || isResetting}
-                className="rounded-md border border-neutral-textSecondary bg-neutral-card px-4 py-2 text-sm font-semibold text-neutral-textSecondary transition-colors hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:border-neutral-borderEmphasis disabled:bg-neutral-surface disabled:text-neutral-textSecondary disabled:hover:border-neutral-borderEmphasis disabled:hover:text-neutral-textSecondary"
               >
                 {isResetting ? "Resetting..." : "Reset"}
-              </button>
+              </Button>
             </div>
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        destructive
+        title="Delete this analysis?"
+        description={
+          <>
+            This permanently deletes the current analysis and all of its uploaded files and results
+            from the server. This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        busy={isResetting}
+        busyLabel="Deleting…"
+        onConfirm={onReset}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </header>
   );
 }

@@ -1,12 +1,14 @@
 # app/api/routes/normalize.py
+"""Route for starting the normalization step for a job."""
+
 import logging
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from app.core.error_types import ErrorTypes, problem_detail
 from app.models.normalize import NormalizeRequest, NormalizeResponse
 from app.services import normalize_service, pipeline_task
-from app.services.job_manager import get_job, transition_job, JobPhase, JobStatusValue
+from app.services.job_manager import JobPhase, JobStatusValue, get_job, transition_job
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -21,13 +23,18 @@ async def start_normalization(
     job_id: str,
     body: NormalizeRequest,
 ):
+    """Validate the method and start the normalization pipeline in the background.
+
+    Raises:
+        HTTPException: 404 if the job is unknown, 400 for an invalid method.
+    """
     job = get_job(job_id)
     if not job:
         raise HTTPException(
             status_code=404,
             detail=problem_detail(
                 error_type=ErrorTypes.JOB_NOT_FOUND,
-                detail=f"Kein Job mit der ID '{job_id}' gefunden",
+                detail=f"No job found with id '{job_id}'",
                 instance=request.url.path,
                 job_id=job_id,
             ),
@@ -39,7 +46,7 @@ async def start_normalization(
             status_code=400,
             detail=problem_detail(
                 error_type=ErrorTypes.INVALID_NORMALIZATION_METHOD,
-                detail=f"Ungültige Methode '{body.method}'. Erlaubt: {', '.join(VALID_METHODS)}",
+                detail=f"Invalid method '{body.method}'. Allowed: {', '.join(VALID_METHODS)}",
                 instance=request.url.path,
                 job_id=job_id,
                 provided_method=body.method,
@@ -55,7 +62,7 @@ async def start_normalization(
         new_phase=JobPhase.NORMALIZATION,
         new_status=JobStatusValue.RUNNING,
         progress_percent=0,
-        current_step=f"Starte Normalisierung mit Methode '{method}'...",
+        current_step=f"Starting normalization with method '{method}'...",
     )
 
     # The pipeline lifecycle (cancel_event creation, task registration, cleanup)

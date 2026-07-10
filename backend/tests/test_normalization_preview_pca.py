@@ -4,6 +4,7 @@ The normalization preview now ships density plots as PNG files and PCA data as
 JSON (rendered interactively in the frontend). These tests pin that contract on
 the service scan helper and on the GET route.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -12,9 +13,9 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.main import app
 from app.api.routes import normalization_preview as preview_route
-from app.services.job_manager import create_job, jobs, JobPhase, JobStatusValue
+from app.main import app
+from app.services.job_manager import JobPhase, JobStatusValue, create_job, jobs
 from app.services.normalization_preview_service import _scan_preview_artifacts
 
 client = TestClient(app)
@@ -23,15 +24,17 @@ client = TestClient(app)
 def _make_pca(job_dir: Path, method: str):
     (job_dir / f"density_{method}.png").write_bytes(b"\x89PNG\r\n")
     (job_dir / f"pca_{method}.json").write_text(
-        json.dumps({
-            "method": method.upper(),
-            "axes": {"x": "PC1", "y": "PC2"},
-            "variance_explained": {"pc1": 40.0, "pc2": 20.0},
-            "points": [
-                {"sample": "HeLa", "group": "Cellline", "pc1": 1.2, "pc2": -0.5},
-                {"sample": "NA12878", "group": "Coriell", "pc1": -1.1, "pc2": 0.7},
-            ],
-        }),
+        json.dumps(
+            {
+                "method": method.upper(),
+                "axes": {"x": "PC1", "y": "PC2"},
+                "variance_explained": {"pc1": 40.0, "pc2": 20.0},
+                "points": [
+                    {"sample": "HeLa", "group": "Cellline", "pc1": 1.2, "pc2": -0.5},
+                    {"sample": "NA12878", "group": "Coriell", "pc1": -1.1, "pc2": 0.7},
+                ],
+            }
+        ),
         encoding="utf-8",
     )
 

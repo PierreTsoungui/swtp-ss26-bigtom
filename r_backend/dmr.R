@@ -209,30 +209,27 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
 
   emit_progress(0, "Initializing Differential Methylation Region (DMR) workflow")
 
-  # Parallel backend (fall back to sequential on any failure).
-  emit_progress(5, "Configuring parallel compute environment")
-  if (n_cores == 1L) {
-    registerDoSEQ()
-  } else {
-    ok <- tryCatch(
-      {
-        n_actual <- min(n_cores, parallel::detectCores(logical = FALSE))
-        cl_par <- makeCluster(n_actual)
-        registerDoParallel(cl_par)
-        on.exit(stopCluster(cl_par), add = TRUE)
-        TRUE
-      },
-      error = function(e) FALSE
-    )
-    if (!isTRUE(ok)) {
-      emit_progress(5, "Parallel setup failed; falling back to sequential processing.")
-      registerDoSEQ()
-    }
-  }
+  # Parallelism for the region search is delegated to champ.DMR()'s own `cores`
+  # argument (passed below). We register ONLY a sequential foreach backend here
+  # so we never stack a SECOND parallel pool on top of champ.DMR's internal one —
+  # that would multiply the number of in-memory beta-matrix copies and blow the
+  # RAM budget (the original cause of DMR's ~11 GiB peak and the OOM crashes).
+  emit_progress(5, "Configuring compute environment")
+  registerDoSEQ()
 
   emit_progress(15, "Loading and validating methylation beta matrix")
   beta <- load_beta_matrix(beta_path)
   beta <- clamp_beta(beta)
+  # Restrict to the probes that passed the probe-level QC filters (init_filter.R):
+  # filtered_data.rds keeps all probes for normalization, so the selection is
+  # enforced here, on the beta matrix that feeds region discovery.
+  n_before_filter <- nrow(beta)
+  beta <- restrict_to_passed_probes(beta, job_dir)
+  if (nrow(beta) < n_before_filter) {
+    emit_progress(15, sprintf(
+      "Probe QC filter applied: %d of %d probes retained", nrow(beta), n_before_filter
+    ))
+  }
 
   emit_progress(35, "Loading and aligning sample sheet metadata")
   if (!file.exists(sample_sheet_path)) {
@@ -288,7 +285,14 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
       cutoff     = cutoff,
       adjPvalDmr = adj_pval,
       maxGap     = max_gap,
-      B          = n_bootstraps
+      B          = n_bootstraps,
+      # Honour the caller's core budget. champ.DMR defaults to cores=3 and spawns
+      # that many Bumphunter workers, EACH holding a full copy of the beta matrix
+      # (~3x memory — the root cause of the ~11 GiB peak). With the default
+      # n_cores=1 the region search stays single-copy and fits the RAM budget;
+      # bump it up only on machines with RAM to spare (memory scales ~linearly
+      # with cores). champ.DMR caps this at the host's physical cores internally.
+      cores      = n_cores
     ),
     error = function(e) {
       msg <- conditionMessage(e)

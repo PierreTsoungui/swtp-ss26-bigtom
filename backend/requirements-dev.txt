@@ -1,0 +1,17 @@
+# Development and test dependencies.
+# Install with:  pip install -r requirements-dev.txt
+# Includes the runtime deps plus the test + quality toolchain (kept out of the
+# runtime image).
+-r requirements.txt
+
+# Test runner & coverage
+pytest==9.1.0
+pytest-cov==7.1.0
+httpx==0.28.1
+# Parses docker-compose.yml in the deployment-config invariant tests
+PyYAML==6.0.3
+
+# Quality tooling (config lives in pyproject.toml)
+ruff==0.15.20
+black==26.5.1
+mypy==2.1.0

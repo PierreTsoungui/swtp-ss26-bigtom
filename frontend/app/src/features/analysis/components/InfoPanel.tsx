@@ -1,37 +1,39 @@
+import { useId } from "react";
+
 /**
- * Props for the InfoPanel component.
+ * Props for the {@link InfoPanel}.
  */
 interface InfoPanelProps {
-    /** Heading of the information block. */
-    title: string;
-    /** Descriptive message or status details. */
-    message: string;
+  /** Heading of the information block. */
+  title: string;
+  /** Descriptive message or status details. */
+  message: string;
 }
 
 /**
- * A reusable container for displaying status updates, placeholders, or informational messages.
+ * A container for a status update, placeholder, or informational message.
  *
- * Commonly used within page layouts to inform the user about ongoing processes
- * or missing data states
+ * Used within page layouts to inform the user about an ongoing process or a
+ * missing-data state. The heading is associated with the region via a unique
+ * generated id, so multiple panels never share an `id`.
+ *
+ * @param props - See {@link InfoPanelProps}.
  */
 function InfoPanel({ title, message }: InfoPanelProps) {
-    return (
-        <section
-            className="w-full max-w-2xl rounded-lg border border-neutral-borderDefault bg-neutral-card p-6 shadow-sm"
-            aria-labelledby="analysis-title"
-        >
-            <h1
-                id="analysis-title"
-                className="text-2xl font-semibold text-neutral-textPrimary"
-            >
-                {title}
-            </h1>
+  const titleId = useId();
 
-            <p className="mt-3 text-neutral-textSecondary">
-                {message}
-            </p>
-        </section>
-    );
+  return (
+    <section
+      className="w-full max-w-2xl rounded-lg border border-neutral-borderDefault bg-neutral-card p-6 shadow-sm"
+      aria-labelledby={titleId}
+    >
+      <h1 id={titleId} className="text-2xl font-semibold text-neutral-textPrimary">
+        {title}
+      </h1>
+
+      <p className="mt-3 text-neutral-textSecondary">{message}</p>
+    </section>
+  );
 }
 
 export default InfoPanel;

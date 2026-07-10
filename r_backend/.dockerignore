@@ -1,0 +1,19 @@
+# The R worker image needs only the analysis scripts and their utils.
+# Everything excluded here either is not required at runtime or is provided
+# via the ./r_backend bind mount in docker-compose.yml.
+
+# Tests are bind-mounted at runtime and not needed inside the image.
+tests/
+
+# Build metadata (already consumed by the build, pointless to bake in).
+Dockerfile
+.dockerignore
+
+# R session cruft (in case a developer ran R locally in this folder).
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+*.Rout
+*.rdb
+*.rdx

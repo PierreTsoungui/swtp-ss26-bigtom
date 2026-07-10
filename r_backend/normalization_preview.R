@@ -56,6 +56,9 @@ suppressPackageStartupMessages({
 source("/app/r_backend/utils/progress.R")
 source("/app/r_backend/utils/beta.R")
 source("/app/r_backend/utils/plotting.R")
+# sample_sheet_match_id(): the single source of truth for how a sample-sheet row
+# is keyed to a loaded-data column (Basename vs. Sentrix array id).
+source("/app/r_backend/utils/samplesheet.R")
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -357,24 +360,29 @@ if (sys.nframe() == 0L) {
   emit_progress(5, "Loading sample sheet...")
   sample_sheet <- read_sample_sheet(sample_sheet_path)
 
-  # Sentrix columns are required to build the Array_ID that links samples to the
-  # beta-matrix columns; fail clearly if they are missing.
-  missing_cols <- setdiff(c("Sentrix_ID", "Sentrix_Position"), colnames(sample_sheet))
-  if (length(missing_cols) > 0) {
-    emit_error(paste("Sample sheet is missing required column(s):", paste(missing_cols, collapse = ", ")))
+  # The beta-matrix columns are named after the identity minfi gives each loaded
+  # sample: basename(Basename) when the sheet uses the alternative IDAT-naming
+  # convention, otherwise Sentrix_ID_Sentrix_Position. Key the lookups by that
+  # same identity so the group/name attach correctly (otherwise every PCA point
+  # loses its group and is rendered grey). Requires one of the two id sources.
+  sample_key <- sample_sheet_match_id(sample_sheet)
+  if (all(is.na(sample_key))) {
+    emit_error(paste(
+      "Sample sheet must contain a 'Basename' column or both",
+      "'Sentrix_ID' and 'Sentrix_Position' to link samples to the data."
+    ))
   }
 
-  # Lookup tables: Array_ID -> Sample_Name and Array_ID -> Sample_Group. The group
+  # Lookup tables: match-id -> Sample_Name and match-id -> Sample_Group. The group
   # (phenotype) is attached to every PCA point so the frontend can colour the
   # points dynamically by group (NRM-03).
-  sample_sheet$Array_ID <- paste0(sample_sheet$Sentrix_ID, "_", sample_sheet$Sentrix_Position)
   id_to_name <- if ("Sample_Name" %in% colnames(sample_sheet)) {
-    setNames(as.character(sample_sheet$Sample_Name), sample_sheet$Array_ID)
+    setNames(as.character(sample_sheet$Sample_Name), sample_key)
   } else {
-    setNames(sample_sheet$Array_ID, sample_sheet$Array_ID)
+    setNames(sample_key, sample_key)
   }
   id_to_group <- if ("Sample_Group" %in% colnames(sample_sheet)) {
-    setNames(as.character(sample_sheet$Sample_Group), sample_sheet$Array_ID)
+    setNames(as.character(sample_sheet$Sample_Group), sample_key)
   } else {
     setNames(character(0), character(0))
   }

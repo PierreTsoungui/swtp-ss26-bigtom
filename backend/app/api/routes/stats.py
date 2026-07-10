@@ -1,15 +1,17 @@
-# app/api/routes/filter.py
+# app/api/routes/stats.py
+"""Route for retrieving the filter statistics of a job."""
+
 import json
-from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Request
-from app.services.job_manager import get_job, JobPhase, JobStatusValue
+
 from app.core.error_types import ErrorTypes, problem_detail
+from app.services.job_manager import JobPhase, JobStatusValue, get_job
+from app.services.job_paths import JOBS_DIR, validate_job_id
 
 router = APIRouter()
 
-JOBS_DIR = Path("jobs").resolve()
-
-# Phasen, in denen die Filterung noch nicht abgeschlossen ist
+# Phases in which filtering is not finished yet
 _PHASES_BEFORE_STATS = {
     JobPhase.UPLOADED.value,
     JobPhase.FILTERING.value,
@@ -18,6 +20,13 @@ _PHASES_BEFORE_STATS = {
 
 @router.get("/filter/{job_id}/stats")
 async def get_filter_stats(request: Request, job_id: str):
+    """Return a job's filter_stats.json once filtering has finished.
+
+    Raises:
+        HTTPException: 404 if the job is unknown, 409 if filtering is not
+            finished or the statistics are not available yet.
+    """
+    validate_job_id(job_id)  # traversal guard before the id reaches the FS below
     job = get_job(job_id)
 
     if not job:
@@ -25,19 +34,19 @@ async def get_filter_stats(request: Request, job_id: str):
             status_code=404,
             detail=problem_detail(
                 error_type=ErrorTypes.JOB_NOT_FOUND,
-                detail=f"Kein Job mit der ID '{job_id}' gefunden",
+                detail=f"No job found with id '{job_id}'",
                 instance=request.url.path,
                 job_id=job_id,
             ),
         )
 
-    # Filterung noch nicht abgeschlossen
+    # Filtering not finished yet
     if job.phase in _PHASES_BEFORE_STATS:
         raise HTTPException(
             status_code=409,
             detail=problem_detail(
                 error_type=ErrorTypes.FILTERING_NOT_FINISHED,
-                detail=f"Filterung ist noch nicht abgeschlossen (Phase: {job.phase})",
+                detail=f"Filtering is not finished yet (phase: {job.phase})",
                 instance=request.url.path,
                 job_id=job_id,
                 current_phase=job.phase,
@@ -46,13 +55,13 @@ async def get_filter_stats(request: Request, job_id: str):
             ),
         )
 
-    # Filterung fehlgeschlagen
+    # Filtering failed
     if job.phase == JobPhase.FILTERING.value and job.status == JobStatusValue.FAILED.value:
         raise HTTPException(
             status_code=409,
             detail=problem_detail(
                 error_type=ErrorTypes.FILTERING_NOT_FINISHED,
-                detail="Filterung ist fehlgeschlagen.",
+                detail="Filtering failed.",
                 instance=request.url.path,
                 job_id=job_id,
                 current_phase=job.phase,
@@ -60,14 +69,14 @@ async def get_filter_stats(request: Request, job_id: str):
             ),
         )
 
-    # filter_stats.json vom Dateisystem lesen
+    # Read filter_stats.json from the filesystem
     stats_path = JOBS_DIR / job_id / "filter_stats.json"
     if not stats_path.exists():
         raise HTTPException(
             status_code=409,
             detail=problem_detail(
                 error_type=ErrorTypes.FILTERING_NOT_FINISHED,
-                detail="Filterstatistiken noch nicht verfügbar.",
+                detail="Filter statistics are not available yet.",
                 instance=request.url.path,
                 job_id=job_id,
                 current_phase=job.phase,
@@ -76,5 +85,5 @@ async def get_filter_stats(request: Request, job_id: str):
             ),
         )
 
-    with open(stats_path, "r", encoding="utf-8") as f:
+    with open(stats_path, encoding="utf-8") as f:
         return json.load(f)

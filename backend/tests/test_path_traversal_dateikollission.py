@@ -2,20 +2,20 @@
 
 from io import BytesIO
 from pathlib import Path
-from app.services.file_handler import save_idat_files, save_sample_sheet
-from fastapi import UploadFile
+
 import pytest
+from fastapi import UploadFile
+
+from app.services.file_handler import save_idat_files, save_sample_sheet
 
 
 def create_upload_file(filename: str, content: bytes = b"test"):
     """Create a test UploadFile."""
-    return UploadFile(
-        filename=filename,
-        file=BytesIO(content)
-    )
+    return UploadFile(filename=filename, file=BytesIO(content))
 
 
 # ── TESTS FOR save_sample_sheet ─────────────────────────────────────────────
+
 
 def test_save_sample_sheet_success(tmp_path):
     """Test successful sample sheet saving."""
@@ -47,7 +47,7 @@ def test_save_sample_sheet_creates_directory(tmp_path):
     nested_path = tmp_path / "sub" / "dir"
     # ─── FIX: Create directory first ──────────────────────────────────────
     nested_path.mkdir(parents=True, exist_ok=True)
-    
+
     file = create_upload_file("sheet.csv")
 
     saved_path = save_sample_sheet(file, nested_path)
@@ -70,6 +70,7 @@ def test_save_sample_sheet_with_excel_file(tmp_path):
 
 
 # ── TESTS FOR save_idat_files ────────────────────────────────────────────────
+
 
 def test_save_idat_files_success(tmp_path):
     """Test successful IDAT file saving."""
@@ -94,7 +95,7 @@ def test_save_idat_files_duplicate_filename(tmp_path):
         create_upload_file("sample.idat"),
     ]
 
-    with pytest.raises(ValueError, match="Doppelter Dateiname erkannt"):
+    with pytest.raises(ValueError, match="Duplicate filename detected"):
         save_idat_files(files, tmp_path)
 
 
@@ -103,7 +104,7 @@ def test_save_idat_files_creates_directory(tmp_path):
     nested_path = tmp_path / "sub" / "dir"
     # ─── FIX: Create directory first ──────────────────────────────────────
     nested_path.mkdir(parents=True, exist_ok=True)
-    
+
     files = [
         create_upload_file("sample1.idat"),
         create_upload_file("sample2.idat"),
@@ -159,6 +160,7 @@ def test_save_idat_files_large_files(tmp_path):
 
 # ── TESTS FOR BOTH FUNCTIONS (Integration) ──────────────────────────────────
 
+
 def test_save_both_sample_sheet_and_idat(tmp_path):
     """Test saving both sample sheet and IDAT files in the same directory."""
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -168,7 +170,7 @@ def test_save_both_sample_sheet_and_idat(tmp_path):
         create_upload_file("sample2.idat"),
     ]
 
-    sheet_path = save_sample_sheet(sheet, tmp_path)
+    save_sample_sheet(sheet, tmp_path)
     idat_paths = save_idat_files(idat_files, tmp_path)
 
     assert (tmp_path / "SampleSheet.csv").exists()
@@ -179,12 +181,13 @@ def test_save_both_sample_sheet_and_idat(tmp_path):
 
 # ── EDGE CASES ────────────────────────────────────────────────────────────────
 
+
 def test_save_sample_sheet_with_empty_content(tmp_path):
     """Test saving a sample sheet with empty content."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     file = create_upload_file("sheet.csv", b"")
 
-    saved_path = save_sample_sheet(file, tmp_path)
+    save_sample_sheet(file, tmp_path)
 
     expected_path = tmp_path / "SampleSheet.csv"
     assert expected_path.exists()

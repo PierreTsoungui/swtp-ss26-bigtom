@@ -3,49 +3,49 @@
  * These boundaries are aligned with the technical requirements defined in `types.ts`.
  */
 export const FILTER_CONSTRAINTS = {
-    det_p: {
-        cutoff: {
-            min: 0.01,
-            max: 0.05,
-            step: 0.001,
-            label: "Detection P-Value Cutoff",
-            description: "Area: 0.01 - 0.05",
-        },
+  det_p: {
+    cutoff: {
+      min: 0.01,
+      max: 0.05,
+      step: 0.001,
+      label: "Detection P-Value Cutoff",
+      description: "Area: 0.01 - 0.05",
     },
-    bead_count: {
-        bead_cutoff: {
-            min: 0.0,
-            max: 1.0,
-            step: 0.01,
-            label: "Bead Cutoff",
-            description: "Area: 0.0 - 1.0",
-        },
+  },
+  bead_count: {
+    bead_cutoff: {
+      min: 0.0,
+      max: 1.0,
+      step: 0.01,
+      label: "Bead Cutoff",
+      description: "Area: 0.0 - 1.0",
     },
-    snp: {
-        maf_cutoff: {
-            min: 0.0,
-            max: 0.5,
-            step: 0.01,
-            label: "Minor Allele Frequency (MAF) Cutoff",
-            description: "Area: 0.0 - 0.5",
-        },
+  },
+  snp: {
+    maf_cutoff: {
+      min: 0.0,
+      max: 0.5,
+      step: 0.01,
+      label: "Minor Allele Frequency (MAF) Cutoff",
+      description: "Area: 0.0 - 0.5",
     },
-    sample_quality: {
-        detection_p_cutoff: {
-            min: 0.01,
-            max: 0.05,
-            step: 0.001,
-            label: "Detection P-Value Cutoff",
-            description: "Area: 0.01 - 0.05",
-        },
-        sample_failure_rate: {
-            min: 0.05,
-            max: 0.2,
-            step: 0.01,
-            label: "Sample Failure Rate",
-            description: "Area: 5% - 20%",
-        },
+  },
+  sample_quality: {
+    detection_p_cutoff: {
+      min: 0.01,
+      max: 0.05,
+      step: 0.001,
+      label: "Detection P-Value Cutoff",
+      description: "Area: 0.01 - 0.05",
     },
+    sample_failure_rate: {
+      min: 0.05,
+      max: 0.2,
+      step: 0.01,
+      label: "Sample Failure Rate",
+      description: "Area: 5% - 20%",
+    },
+  },
 };
 
 /**
@@ -57,23 +57,23 @@ export const FILTER_CONSTRAINTS = {
  * @returns An object indicating validity and an optional error message.
  */
 export function validateFilterValue(
-    value: number,
-    min: number,
-    max: number
+  value: number,
+  min: number,
+  max: number,
 ): { isValid: boolean; error?: string } {
-    if (value < min) {
-        return {
-            isValid: false,
-            error: `Wert muss mindestens ${min} sein`,
-        };
-    }
-    if (value > max) {
-        return {
-            isValid: false,
-            error: `Wert darf höchstens ${max} sein`,
-        };
-    }
-    return { isValid: true };
+  if (value < min) {
+    return {
+      isValid: false,
+      error: `Value must be at least ${min}`,
+    };
+  }
+  if (value > max) {
+    return {
+      isValid: false,
+      error: `Value must be at most ${max}`,
+    };
+  }
+  return { isValid: true };
 }
 
 /**
@@ -86,5 +86,5 @@ export function validateFilterValue(
  * @returns The clamped numerical value.
  */
 export function clampValue(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, value));
+  return Math.max(min, Math.min(max, value));
 }

@@ -1,8 +1,11 @@
+"""Run R commands in the Docker worker and stream their structured output."""
+
 import asyncio
 import logging
 import re
-from typing import Optional, Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
+from app.core.resource_governor import governor
 from app.services.r_executor.commands.base import RCommand
 from app.services.r_executor.protocol import extract_json_objects
 from app.services.r_executor.result import ExecutionResult, ExecutionStatus
@@ -21,7 +24,7 @@ _R_STDERR_ALERT = re.compile(r"(?i)\b(error|warn|fehler|cannot|fail|halt)")
 async def run_r_script(
     command: RCommand,
     cancel_event: asyncio.Event,
-    on_progress: Optional[Callable[[dict], Awaitable[None]]] = None,
+    on_progress: Callable[[dict], Awaitable[None]] | None = None,
 ) -> ExecutionResult:
     """Run an R command inside the Docker worker and stream its output.
 
@@ -46,6 +49,41 @@ async def run_r_script(
 
     logger.info("R command prepared: job_id=%s mode=%s", command.job_id, command.mode_label)
 
+    async def _queued_notice() -> None:
+        """Tell the UI the job is waiting for a free compute slot (backpressure)."""
+        if on_progress is not None:
+            await on_progress(
+                {
+                    "status": "running",
+                    "current_step": "Queued — waiting for free compute capacity...",
+                }
+            )
+
+    # Admission control: hold a memory+core slot for the entire subprocess
+    # lifetime so concurrent jobs cannot oversubscribe the host and trigger the
+    # OOM-killer (see app.core.resource_governor). Under load this QUEUES the job
+    # instead of crashing the server; the container mem_limit is the hard backstop.
+    async with governor.slot(
+        command.mem_gb,
+        command.cores,
+        label=command.mode_label,
+        on_wait=_queued_notice,
+    ):
+        return await _run_subprocess(command, cancel_event, on_progress, cmd)
+
+
+async def _run_subprocess(
+    command: RCommand,
+    cancel_event: asyncio.Event,
+    on_progress: Callable[[dict], Awaitable[None]] | None,
+    cmd: list[str],
+) -> ExecutionResult:
+    """Start the built R command, stream its output, and resolve the result.
+
+    Extracted from :func:`run_r_script` so the resource-governor slot can wrap the
+    whole subprocess lifetime (start → drain → reap) without deeply nesting the
+    streaming logic. Behaviour is unchanged from the original inline body.
+    """
     try:
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -67,12 +105,14 @@ async def run_r_script(
     # Holds the message of the last {"type":"error"} the R script emitted on
     # stdout. Surfaced via ExecutionResult.extra["r_error"] so callers can show
     # the real cause instead of a generic fallback.
-    protocol: dict[str, Optional[str]] = {"r_error": None}
+    protocol: dict[str, str | None] = {"r_error": None}
 
     async def forward_progress(line: str) -> None:
-        """Translate R's line-based JSON protocol into ``on_progress`` calls and
-        capture protocol state. Runs even when ``on_progress`` is None so the
-        error message is always recorded."""
+        """Translate R's JSON protocol into ``on_progress`` calls, capturing state.
+
+        Runs even when ``on_progress`` is None so the error message is always
+        recorded.
+        """
         for data in extract_json_objects(line):
             msg_type = data.get("type")
             if msg_type == "error":
@@ -82,21 +122,25 @@ async def run_r_script(
             if msg_type == "progress":
                 await on_progress(data)
             elif msg_type == "error":
-                await on_progress({
-                    "status":       "failed",
-                    "current_step": "Pipeline wegen R-Fehlers abgebrochen",
-                    "error": {
-                        "title":  "Pipeline Execution Error",
-                        "status": 500,
-                        "detail": data.get("message", "Unbekannter R-Fehler."),
-                    },
-                })
+                await on_progress(
+                    {
+                        "status": "failed",
+                        "current_step": "Pipeline aborted due to an R error",
+                        "error": {
+                            "title": "Pipeline Execution Error",
+                            "status": 500,
+                            "detail": data.get("message", "Unknown R error."),
+                        },
+                    }
+                )
             elif msg_type == "done":
-                await on_progress({
-                    "status":           "running",
-                    "progress_percent": 100,
-                    "current_step":     "Skript-Verarbeitung abgeschlossen",
-                })
+                await on_progress(
+                    {
+                        "status": "running",
+                        "progress_percent": 100,
+                        "current_step": "Script processing finished",
+                    }
+                )
 
     async def read_stream(stream: asyncio.StreamReader, sink: list[str], is_stdout: bool) -> None:
         """Read a stream to EOF, accumulating lines and forwarding progress.
@@ -121,22 +165,31 @@ async def run_r_script(
                 level = logging.WARNING if _R_STDERR_ALERT.search(decoded) else logging.DEBUG
                 logger.log(level, "R_STDERR: job_id=%s line=%s", command.job_id, decoded)
 
+    # The subprocess was created with PIPE for both streams, so neither is None.
+    assert process.stdout is not None and process.stderr is not None
     stdout_task = asyncio.create_task(read_stream(process.stdout, stdout_lines, is_stdout=True))
     stderr_task = asyncio.create_task(read_stream(process.stderr, stderr_lines, is_stdout=False))
+
     # Completes once BOTH streams hit EOF, which happens when the subprocess
     # closes its pipes on exit. Waiting on this (rather than process.wait())
     # guarantees we have read every byte before resolving the result.
-    readers_task = asyncio.ensure_future(
-        asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
-    )
+    async def wait_for_readers():
+        return await asyncio.gather(
+            stdout_task,
+            stderr_task,
+            return_exceptions=True,
+        )
+
+    readers_task = asyncio.create_task(wait_for_readers())
     cancel_wait_task = asyncio.create_task(cancel_event.wait())
 
     execution_status: ExecutionStatus = ExecutionStatus.FAILED
     returncode: int | None = None
 
     try:
+        pending: set[asyncio.Future] = {readers_task, cancel_wait_task}
         done, _ = await asyncio.wait(
-            {readers_task, cancel_wait_task},
+            pending,
             timeout=command.timeout_seconds,
             return_when=asyncio.FIRST_COMPLETED,
         )
@@ -147,7 +200,8 @@ async def run_r_script(
         elif not done:
             logger.error(
                 "R script timeout: job_id=%s limit_seconds=%s",
-                command.job_id, command.timeout_seconds,
+                command.job_id,
+                command.timeout_seconds,
             )
             execution_status = ExecutionStatus.TIMEOUT
         else:
@@ -186,7 +240,10 @@ async def run_r_script(
         # notably the CancelledError raised when we cancel a reader — is left
         # unretrieved and logged by the event loop.
         await asyncio.gather(
-            readers_task, stdout_task, stderr_task, cancel_wait_task,
+            readers_task,
+            stdout_task,
+            stderr_task,
+            cancel_wait_task,
             return_exceptions=True,
         )
 
@@ -208,6 +265,8 @@ async def run_r_script(
 
     logger.info(
         "R subprocess finished: job_id=%s returncode=%s status=%s",
-        command.job_id, returncode, execution_status.value,
+        command.job_id,
+        returncode,
+        execution_status.value,
     )
     return final_result

@@ -1,16 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import {
-  commitUpload,
-  discardUpload,
-  inspectUpload,
-  type ColumnMapping,
-  type InspectManifest,
-  type RoleKey,
-  type SampleSheetCandidate,
-} from "../utils/uploadApi";
+import { commitUpload, discardUpload, inspectUpload } from "./uploadApi";
+import type { ColumnMapping, InspectManifest, RoleKey, SampleSheetCandidate } from "../types";
 import type { RoleSelection } from "../components/ColumnRoleMapper";
-import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from "../utils/types";
-
+import { DEFAULT_FILTER_SETTINGS, type FilterSettings } from "../types";
 
 /**
  * Current operational state of the upload process.
@@ -40,7 +32,6 @@ function prefillMapping(sheet: SampleSheetCandidate | null): RoleSelection {
   };
 }
 
-
 /**
  * Orchestrates the "Inspect → Review → Commit" upload workflow.
  *
@@ -54,21 +45,17 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [manifest, setManifest] = useState<InspectManifest | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Auto-select only when there is exactly one sheet; with several the user
-  // picks via radio (no default).
   const [selectedSheetId, setSelectedSheetId] = useState<string | null>(null);
   const [removedPairIds, setRemovedPairIds] = useState<Set<string>>(new Set());
   const [columnMapping, setColumnMapping] = useState<RoleSelection>(EMPTY_MAPPING);
   const [filterSettings, setFilterSettings] = useState<FilterSettings>(DEFAULT_FILTER_SETTINGS);
 
-  // Accumulated File objects, so "add more files" can re-inspect the full set.
   const filesRef = useRef<File[]>([]);
   const sessionRef = useRef<string | null>(null);
 
   const runInspect = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
-      // Discard a previous staging session before starting a new one.
       if (sessionRef.current) discardUpload(sessionRef.current);
 
       setStatus("inspecting");
@@ -79,7 +66,9 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
         sessionRef.current = result.session_id;
         setManifest(result);
         setRemovedPairIds(new Set());
-        setSelectedSheetId(result.sample_sheets.length === 1 ? result.sample_sheets[0].id : null);
+        setSelectedSheetId(
+          result.sample_sheets.length === 1 ? (result.sample_sheets[0]?.id ?? null) : null,
+        );
         setStatus("review");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Inspection failed");
@@ -115,7 +104,6 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
     setColumnMapping((prev) => ({ ...prev, [role]: value }));
   }, []);
 
-  // ── Derived view state ──────────────────────────────────────────────────────
   const sheets = useMemo(() => manifest?.sample_sheets ?? [], [manifest]);
   const visiblePairs = useMemo(
     () => (manifest?.idats ?? []).filter((p) => !removedPairIds.has(p.pair_id)),
@@ -123,9 +111,8 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
   );
   const completePairs = useMemo(() => visiblePairs.filter((p) => p.complete), [visiblePairs]);
 
-  // One sample sheet → auto-selected; several → the user's radio choice.
   const effectiveSheetId = useMemo(() => {
-    if (sheets.length === 1) return sheets[0].id;
+    if (sheets.length === 1) return sheets[0]?.id ?? null;
     if (selectedSheetId && sheets.some((s) => s.id === selectedSheetId)) return selectedSheetId;
     return null;
   }, [sheets, selectedSheetId]);
@@ -136,27 +123,20 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
   );
   const mappingColumns = useMemo(() => selectedSheet?.columns ?? [], [selectedSheet]);
 
-  // Pre-fill the role dropdowns from the backend's suggestion whenever the chosen
-  // sheet changes (re-inspect or a different radio pick). Uses React's
-  // render-phase "reset state on prop change" pattern instead of an effect, so
-  // user edits to an unchanged sheet are preserved (the id only flips on a real
-  // change). See https://react.dev/reference/react/useState#resetting-state.
   const [mappingSheetId, setMappingSheetId] = useState<string | null>(null);
   if (effectiveSheetId !== mappingSheetId) {
     setMappingSheetId(effectiveSheetId);
     setColumnMapping(prefillMapping(selectedSheet));
   }
-
-  // All four roles assigned, and every choice is a real column of the sheet.
   const mappingComplete = useMemo(
-    () => ROLE_KEYS.every((k) => {
-      const v = columnMapping[k];
-      return v !== null && mappingColumns.includes(v);
-    }),
+    () =>
+      ROLE_KEYS.every((k) => {
+        const v = columnMapping[k];
+        return v !== null && mappingColumns.includes(v);
+      }),
     [columnMapping, mappingColumns],
   );
 
-  // Hard blockers only (missing prerequisites). Several sheets is fine — pick one.
   const blockingError = useMemo<string | null>(() => {
     if (!manifest) return null;
     if (sheets.length === 0) return "No sample sheet detected — add a valid sample sheet file.";
@@ -164,7 +144,6 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
     return null;
   }, [manifest, sheets, completePairs]);
 
-  // Soft hint guiding the user to the next required action.
   const selectionHint = useMemo<string | null>(() => {
     if (blockingError) return null;
     if (sheets.length > 1 && !effectiveSheetId) return "Select the sample sheet to use.";
@@ -186,17 +165,24 @@ export function useUploadFlow(onStarted: (jobId: string) => void) {
         session_id: manifest.session_id,
         selected_sample_sheet_id: effectiveSheetId,
         selected_pair_ids: completePairs.map((p) => p.pair_id),
-        column_mapping: columnMapping as ColumnMapping, // mappingComplete guarantees no nulls
-        // Unwrap: the backend expects the inner settings object.
+        column_mapping: columnMapping as ColumnMapping,
         filter_settings: filterSettings.filter_settings,
       });
-      sessionRef.current = null; // committed → staging consumed server-side
+      sessionRef.current = null;
       onStarted(jobId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start the analysis");
       setStatus("review");
     }
-  }, [manifest, effectiveSheetId, mappingComplete, completePairs, columnMapping, filterSettings, onStarted]);
+  }, [
+    manifest,
+    effectiveSheetId,
+    mappingComplete,
+    completePairs,
+    columnMapping,
+    filterSettings,
+    onStarted,
+  ]);
 
   const discardOnUnmount = useCallback(() => {
     if (sessionRef.current) discardUpload(sessionRef.current);

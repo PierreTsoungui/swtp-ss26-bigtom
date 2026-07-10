@@ -1,15 +1,14 @@
 import { workflowSteps } from "./workflowSteps";
 
-
 /**
  * Props for the StepIndicator component.
  */
 interface StepIndicatorProps {
-    /**
-     * The ID of the currently active step.
-     * Used to highlight the current position in the sequence.
-     */
-    currentStepId?: number;
+  /**
+   * The ID of the currently active step.
+   * Used to highlight the current position in the sequence.
+   */
+  currentStepId?: number;
 }
 
 /**
@@ -20,12 +19,16 @@ interface StepIndicatorProps {
  */
 export function StepIndicator({ currentStepId }: StepIndicatorProps) {
   return (
-    <nav aria-label="Schrittanzeige" className="w-full">
+    <nav aria-label="Step indicator" className="w-full">
       <ol className="flex flex-wrap items-center justify-center gap-2 text-sm sm:gap-3">
         {workflowSteps.map((step) => {
           const isCurrent = step.id === currentStepId;
           const isCompleted = currentStepId !== undefined && step.id < currentStepId;
-          const statusText = isCurrent ? "Aktueller Schritt" : isCompleted ? "Abgeschlossen" : "Ausstehend";
+          const statusText = isCurrent
+            ? "Current step"
+            : isCompleted
+              ? "Completed"
+              : "Pending";
 
           return (
             <li
@@ -34,7 +37,7 @@ export function StepIndicator({ currentStepId }: StepIndicatorProps) {
               className="flex items-center gap-2"
             >
               <span
-                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-semibold ${
+                className={`flex h-8 w-8 items-center justify-center rounded-md border text-sm font-semibold ${
                   isCurrent
                     ? "border-primary bg-primary text-primary-text"
                     : isCompleted
@@ -42,15 +45,20 @@ export function StepIndicator({ currentStepId }: StepIndicatorProps) {
                       : "border-neutral-textSecondary bg-neutral-card text-neutral-textSecondary"
                 }`}
               >
-                <span>{step.id}</span>
-                {isCompleted && (
-                  <span aria-hidden="true" className="ml-1 text-xs leading-none">
+                {isCompleted ? (
+                  <span aria-hidden="true" className="leading-none">
                     ✓
                   </span>
+                ) : (
+                  <span>{step.id}</span>
                 )}
               </span>
               <span className="hidden whitespace-nowrap sm:inline">
-                <span className={isCurrent ? "font-semibold text-primary" : "text-neutral-textSecondary"}>
+                <span
+                  className={
+                    isCurrent ? "font-semibold text-primary" : "text-neutral-textSecondary"
+                  }
+                >
                   {step.label}
                 </span>
                 <span className="sr-only">, {statusText}</span>

@@ -1,0 +1,72 @@
+# Central tooling configuration for the backend.
+#
+# One file drives ruff (lint + import order + docstring style), black
+# (formatting), mypy (type checking) and pytest/coverage, so quality is enforced
+# identically on a developer's machine, in pre-commit and in CI.
+
+# ── Formatter ─────────────────────────────────────────────────────────────────
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+# ── Linter (ruff) ─────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# A pragmatic, enforceable baseline: pycodestyle/pyflakes correctness (E/F/W),
+# likely-bug patterns (B), import ordering (I), modernization (UP),
+# comprehensions (C4), simplifications (SIM) and docstring style (D, PEP 257).
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "D"]
+ignore = [
+    "E501",  # line length is owned by the formatter (black)
+    "B008",  # FastAPI's Depends()/File() default-argument pattern is intentional
+    "D203",  # incompatible with D211 (no blank line before a class docstring)
+    "D213",  # incompatible with D212 (multi-line summary starts on the first line)
+    "D105",  # dunder methods are self-explanatory; a docstring is rarely useful
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests need no docstrings and commonly use sys.path.insert before app imports.
+"tests/*" = ["D", "E402"]
+
+# ── Type checking ─────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+files = ["app"]
+# The app uses implicit namespace packages (no __init__.py); these two flags let
+# mypy resolve app.api.routes.batch vs app.models.batch as distinct modules.
+namespace_packages = true
+explicit_package_bases = true
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# ── Tests & coverage ──────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Write the pytest cache to /tmp so UID 1000 can always write it, even if a
+# previous root run left /app/.pytest_cache owned by root.
+cache_dir = "/tmp/pytest_cache_bigtom"
+markers = [
+    "integration: exercises the real R worker / external services (needs them running)",
+]
+
+[tool.coverage.run]
+source = ["app/services"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+# Floor for app/services (currently ~66%). Kept a little below the current value
+# so unrelated changes do not trip it, while still preventing regressions. Raise
+# it as coverage improves.
+fail_under = 60
