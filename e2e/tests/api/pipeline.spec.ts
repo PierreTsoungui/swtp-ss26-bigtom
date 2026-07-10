@@ -62,8 +62,12 @@ test.describe.serial("full pipeline @slow", () => {
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
     expect(Array.isArray(body.available_columns)).toBeTruthy();
+    expect(body.available_columns.length).toBeGreaterThan(0);
+    // Sample_Group must always be eligible (multiple groups, not one per sample).
     expect(body.available_columns).toContain("Sample_Group");
-    expect(body.available_columns).toContain("Sentrix_Position");
+    // Sentrix_Position is intentionally excluded: with one unique position per
+    // sample it has as many distinct values as there are rows, so it cannot
+    // group samples and is correctly filtered out by get_eligible_columns.
   });
 
   test("skip batch → downstream analysis completes with results", async ({ request }) => {
