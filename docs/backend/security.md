@@ -31,15 +31,16 @@
 
 The backend processes files that are, by definition, untrusted: a user uploads raw IDAT files, a sample sheet, and optionally a ZIP archive. The primary attack surface is therefore the **upload path**, and the primary risks are:
 
-| Threat | Vector | Primary control |
-|---|---|---|
-| Path traversal / arbitrary file write | crafted filenames, client-supplied ids | server-generated UUIDs + basename flattening + containment checks ([§3](#3-path-traversal-protection)) |
-| Zip-Slip (write outside target) | `..`/absolute paths in a ZIP member | `safe_extract_zip` member resolution ([§4](#4-safe-archive-extraction)) |
-| Zip-bomb (resource exhaustion) | high compression ratio / oversized archive | count/size/ratio caps, streamed extraction ([§4](#4-safe-archive-extraction)) |
-| Malicious/malformed content | file masquerading as IDAT/CSV | magic-byte + extension + size validation ([§5](#5-file-validation)) |
-| Premature/partial persistence | interrupted or invalid upload | two-phase inspect → commit with rollback ([§6](#6-two-phase-upload-inspect--commit)) |
-| Cross-origin abuse | browser-driven requests | CORS allow-list ([§9](#9-cors-policy)) |
-| Host compromise via container | Docker socket access | documented residual risk + hardening guidance ([§8](#8-process-execution--the-docker-socket)) |
+| Threat                                | Vector                                     | Primary control                                                                                                         |
+|---------------------------------------|--------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| Path traversal / arbitrary file write | crafted filenames, client-supplied ids     | server-generated UUIDs + basename flattening + containment checks ([§3](#3-path-traversal-protection))                  |
+| Zip-Slip (write outside target)       | `..`/absolute paths in a ZIP member        | `safe_extract_zip` member resolution ([§4](#4-safe-archive-extraction))                                                 |
+| Zip-bomb (resource exhaustion)        | high compression ratio / oversized archive | count/size/ratio caps, streamed extraction ([§4](#4-safe-archive-extraction))                                           |
+| Malicious/malformed content           | file masquerading as IDAT/CSV              | magic-byte + extension + size validation ([§5](#5-file-validation))                                                     |
+| Premature/partial persistence         | interrupted or invalid upload              | two-phase inspect → commit with rollback ([§6](#6-two-phase-upload-inspect--commit))                                    |
+| Cross-origin abuse                    | browser-driven requests                    | CORS allow-list ([§9](#9-cors-policy))                                                                                  |
+| Host compromise via container         | Docker socket access                       | documented residual risk + hardening guidance ([§8](#8-process-execution--the-docker-socket))                           |
+| DoS / resource exhaustion             | large uploads, many sessions               | central limits, two-phase upload, cleanup loops ([§7](#7-central-limits--allow-lists), [§11](#11-data-protection-gdpr)) |
 
 **Design assumptions.** The application has **no user accounts and no authentication**. Access control relies on network placement (the deployment is intended for an internal, trusted network) and on the fact that job and session identifiers are unguessable UUIDs. A job UUID therefore acts as a **bearer capability**: any party that possesses it can read that job's results. This is acceptable for the intended internal deployment; see [§13](#13-production-hardening-checklist) for public-deployment considerations.
 
@@ -273,7 +274,17 @@ The deletion *mechanism* (the two cleanup loops, mtime-based expiry, and reset t
 
 ---
 
-## 12. Security Testing
+## 12. DoS / Resource Exhaustion
+
+A key residual risk is overload caused by many or too-frequent requests (DoS / resource exhaustion),
+especially for uploads, status polling, and compute-intensive analysis endpoints.
+This is mitigated primarily at the reverse-proxy layer by Nginx rate limiting,
+so excessive traffic is rejected before it reaches the backend whenever possible.
+The concrete rate-limiting strategy, affected routes, and the `429 Too Many Requests` response handling are documented in [`docs/deployment/https-nginx.md`](../deployment/https-nginx.md).
+
+---
+
+## 13. Security Testing
 
 Security-relevant behaviour is pinned by automated tests so that a regression fails the suite:
 
@@ -283,18 +294,3 @@ Security-relevant behaviour is pinned by automated tests so that a regression fa
 | Safe archive extraction | [`test_archive_utils.py`](../../backend/tests/test_archive_utils.py) | Zip-Slip, absolute paths, corrupt archive, junk dropping, count/size/ratio caps, extension whitelist |
 | Two-phase upload | [`test_upload_inspect_commit.py`](../../backend/tests/test_upload_inspect_commit.py) | inspect → commit flow, selection validation, rollback |
 | Upload validation | [`test_upload.py`](../../backend/tests/test_upload.py) | extension/magic-byte/size validation and error mapping |
-
----
-
-## 13. Production Hardening Checklist
-
-The controls above are appropriate for the intended internal deployment. Before exposing the service more widely, review:
-
-- [ ] **Authentication/authorization** — add real auth; today a job UUID is a bearer capability and there are no user accounts.
-- [ ] **Docker socket** — replace the raw `docker.sock` mount with a restricted socket proxy, an internal RPC to the worker, or rootless Docker ([§8](#8-process-execution--the-docker-socket)).
-- [ ] **CORS** — set the exact production origin(s); narrow methods/headers; drop `allow_credentials` unless credentials are actually used ([§9](#9-cors-policy)).
-- [ ] **Security headers** — configure HSTS/CSP/`nosniff`/etc. at the Nginx layer ([§10](#10-transport-security--security-headers)).
-- [ ] **Worker sandboxing** — tighten `seccomp` for the R worker where Bioconductor allows.
-- [ ] **Limit consolidation** — migrate the deprecated single-shot `/upload` route off its local constants onto `core/upload_limits.py`, or remove the route ([§7](#7-central-limits--allow-lists)).
-- [ ] **Request-rate limiting** — add rate limiting / body-size limits at the proxy to complement the application-level upload caps.
-```
