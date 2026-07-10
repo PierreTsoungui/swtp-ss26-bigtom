@@ -10,7 +10,7 @@ const FILTER_DEFINITIONS = {
     { key: "chr", label: "Chromosome", type: "select", options: getChromosomeOptions() },
     { key: "start", label: "Start Position", type: "number", group: "positional", min: 0 },
     { key: "stop", label: "Stop Position", type: "number", group: "positional", min: 0 },
-    { key: "gene", label: "Gene (contains)", type: "text" },
+    { key: "gene", label: "Gene (equals)", type: "text" },
     { key: "feature", label: "Feature", type: "select", options: getFeatureOptions() },
     { key: "cgi", label: "CpG context", type: "select", options: getCgiOptions() },
     { key: "adj_p_value", label: "Adj. P-Value (≤)", type: "number", step: 0.01, min: 0, max: 1 },

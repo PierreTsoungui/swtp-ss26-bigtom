@@ -79,7 +79,7 @@ describe("TableFilters", () => {
     fireEvent.click(screen.getByRole("button", { name: /filter/i }));
 
     // Check specific DMP inputs are rendered via placeholders or text
-    expect(screen.getByPlaceholderText("Gene (contains)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Gene (equals)")).toBeInTheDocument();
     expect(screen.getByText("CpG context")).toBeInTheDocument();
   });
 
@@ -172,8 +172,8 @@ describe("TableFilters", () => {
     // Open panel
     fireEvent.click(screen.getByRole("button", { name: /filter/i }));
 
-    // Target the input field for 'Gene (contains)'
-    const geneInput = screen.getByPlaceholderText("Gene (contains)");
+    // Target the input field for 'Gene (equals)'
+    const geneInput = screen.getByPlaceholderText("Gene (equals)");
     fireEvent.change(geneInput, { target: { value: "A" } });
 
     expect(onChangeMock).toHaveBeenCalledWith("gene", "A");
