@@ -601,7 +601,7 @@ The full error-type catalogue (URIs, status codes, and example bodies) is in [ap
 
 ### Add a new pipeline step
 
-1. Create an R script and document it in [scripts-reference.md](../r-backend/scripts-reference.md) and [job-directory-layout.md](../contracts/job-directory-layout.md).
+1. Create an R script and document it in [r_backend-architecture.md](../architecture/r_backend-architecture.md) and [job-directory-layout.md](../contracts/job-directory-layout.md).
 2. Add an `RCommand` subclass in `r_executor/commands/commands.py`. Never modify `executor.py`.
 3. Write an `async run_<step>_pipeline(job_id, …, cancel_event)` coroutine in a new or existing orchestration service. Use `handle_step_result` from `pipeline_outcome` to apply the standard cancel/timeout/failure policy.
 4. Add the new `(phase, status)` values to `job_manager` and the transition graph (→ [job-lifecycle.md](../architecture/job-lifecycle.md)).

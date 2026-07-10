@@ -468,7 +468,7 @@ cp .env.example .env
 | `JOB_BASE_DIR` | Base directory for committed job files and R outputs | `/app/jobs` | Must match the bind mount in Docker Compose. |
 | `JOB_RETENTION_HOURS` | Age threshold for automatic job directory cleanup | `24` | Must be a positive number. |
 | `JOB_CLEANUP_INTERVAL_SECONDS` | Interval between cleanup scans for committed jobs | `86400` | Must be a positive integer. |
-| `STAGING_BASE_DIR` | Directory for uncommitted staging uploads | `/app/staging` | Separate lifecycle from committed jobs. |
+| `STAGING_BASE_DIR` | Directory for uncommitted staging uploads | `<JOB_BASE_DIR>/staging` | **Not configurable.** Derived in code as `JOB_BASE_DIR + "/staging"` so both directories stay on the same filesystem; setting it in `.env` has no effect. |
 | `STAGING_RETENTION_HOURS` | Maximum age of uncommitted staging uploads | `2` | Staging directories are checked every `STAGING_CLEANUP_INTERVAL_SECONDS`. |
 | `STAGING_CLEANUP_INTERVAL_SECONDS` | Interval between staging cleanup scans | `900` | |
 
@@ -510,7 +510,7 @@ cp .env.example .env
 | Variable | Purpose | Default | Notes |
 |---|---|---|---|
 | `CORS_ALLOWED_ORIGINS` | Comma-separated list of browser origins allowed to call the API | `http://localhost:3000,...` | Set to the deployed frontend origin in production, for example `https://app.example.com`. |
-| `LOG_LEVEL` | Python logging level for the backend | `DEBUG` | Use `INFO` or higher in production. |
+| `LOG_LEVEL` | Python logging level for the backend | `INFO` | Set to `DEBUG` for verbose diagnostics; keep `INFO` or higher in production. |
 
 ### R Worker Threading
 
@@ -610,21 +610,14 @@ npm run build
 
 ### R Tests
 
-R test files exist under `r_backend/tests/` and use testthat. The current `r_backend/Dockerfile` does not install testthat, so R tests require a temporary or permanent addition of the package to the image.
-
-Temporary installation (lost when the container is removed or rebuilt):
-
-```bash
-docker compose exec r_worker Rscript -e \
-  "install.packages('testthat', repos='https://cloud.r-project.org')"
-```
-
-Run the R tests after installation:
+R test files exist under `r_backend/tests/` and use testthat, which is installed in the `r_worker` image. Run the R tests directly:
 
 ```bash
 docker compose exec r_worker Rscript \
   -e "setwd('/app/r_backend'); testthat::test_dir('tests')"
 ```
+
+If testthat is reported missing, the running image predates its addition to `r_backend/Dockerfile` — rebuild the image with `docker compose build r_worker`. Installing it at runtime with `install.packages` does not work, because the `r_worker` container runs on an isolated network without internet access.
 
 ### End-to-End Tests (Playwright)
 
@@ -715,8 +708,9 @@ For a Compose-based deployment:
 
 Deployment considerations:
 
-- The frontend binds to host ports 8080 (HTTP redirect) and 8443 (HTTPS). Adjust the host port mappings in `docker-compose.yml` for standard ports 80 and 443 on production servers.
-- TLS is handled by the nginx container. For production, replace the mkcert certificate with one from a trusted CA or use an external reverse proxy that handles TLS.
+- The frontend binds to host ports 8080 (HTTP redirect) and 8443 (HTTPS). For standard ports on a production server, change the host side of the port mappings in `docker-compose.yml` to `80:8080` and `443:8443`. The HTTP-to-HTTPS redirect in `nginx/nginx.conf` is hardcoded to `https://$host:8443`; remove the `:8443` when serving on the standard port 443, otherwise the redirect points clients back to port 8443.
+- For a real domain, change `server_name` from `localhost` to the deployment hostname in both `server` blocks of `nginx/nginx.conf`. `nginx/nginx.conf` is copied into the frontend image at build time (it is not a bind mount), so rebuild the frontend image after editing it: `docker compose build frontend`.
+- TLS is handled by the nginx container. For production, replace the mkcert certificate with one from a trusted CA, mounted at the same paths (`./certs/bigtom-local.pem`, `./certs/bigtom-local-key.pem`) or updated in `nginx/nginx.conf` (`ssl_certificate` / `ssl_certificate_key`); alternatively use an external reverse proxy that handles TLS.
 - `./jobs` is bind-mounted host storage and may contain sensitive biological data.
 - Job directories are automatically deleted after `JOB_RETENTION_HOURS` based on modification time.
 - Staging directories for uncommitted uploads are cleaned up separately every `STAGING_CLEANUP_INTERVAL_SECONDS`.
@@ -810,7 +804,7 @@ Defaults from `.env.example`:
 | `JOB_BASE_DIR` | `/app/jobs` |
 | `JOB_RETENTION_HOURS` | `24` |
 | `JOB_CLEANUP_INTERVAL_SECONDS` | `86400` |
-| `STAGING_BASE_DIR` | `/app/staging` |
+| `STAGING_BASE_DIR` | `<JOB_BASE_DIR>/staging` (derived, not settable) |
 | `STAGING_RETENTION_HOURS` | `2` |
 | `STAGING_CLEANUP_INTERVAL_SECONDS` | `900` |
 

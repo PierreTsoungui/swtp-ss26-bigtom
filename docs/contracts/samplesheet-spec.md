@@ -3,7 +3,7 @@
 **Purpose:** Define the canonical internal sample-sheet format, its columns and roles, and the guarantees the upload step provides when normalizing arbitrary uploads into that format.
 **Scope:** The canonical `SampleSheet.csv`, the accepted input variations, the role mapping applied at upload, and the resulting normalization guarantees. The contract between the user's upload and every downstream consumer.
 
-> This document is the **canonical source of truth** for the sample sheet. It describes the *contract*, not the parser. Where the canonical sheet is stored is defined in [job-directory-layout.md](./job-directory-layout.md); which of its columns become filterable/annotation metadata is defined in [filter-mapping.md](./filter-mapping.md); the upload endpoints and the mapping UI payloads are defined in [api-contract.md](../architecture/api-contract.md).
+> This document is the **canonical source of truth** for the sample sheet. It describes the *contract*, not the parser. Where the canonical sheet is stored is defined in [job-directory-layout.md](./job-directory-layout.md); which of its columns become filterable/annotation metadata is defined in [filter-mapping.md](./filter-mapping.md); the upload endpoints and the mapping UI payloads are defined in [api-contract.md](../api/api-contract.md).
 
 ---
 
@@ -23,7 +23,7 @@ The system resolves this by converting **once, at upload time**, into a single c
 
 In scope: the canonical CSV format, the required and optional columns, the semantic roles, the user-driven column mapping performed at upload, the accepted input variations, the normalization guarantees, and the validation/error conditions.
 
-Out of scope: the conversion algorithm (an implementation detail), the on-disk location of the stored sheet (see [job-directory-layout.md](./job-directory-layout.md)), the biological background of the columns (see the [glossary](../glossary.md)), and the HTTP shapes of the upload/mapping endpoints (see [api-contract.md](../architecture/api-contract.md)).
+Out of scope: the conversion algorithm (an implementation detail), the on-disk location of the stored sheet (see [job-directory-layout.md](./job-directory-layout.md)), the biological background of the columns (see the [glossary](../glossary.md)), and the HTTP shapes of the upload/mapping endpoints (see [api-contract.md](../api/api-contract.md)).
 
 ---
 
@@ -77,7 +77,7 @@ Beyond the four structural roles, the analysis uses **runtime role selections** 
 - a **comparison group column** with a **case** and **control** value — defines the DMP/DMR contrast;
 - **annotation columns** — used to group/colour the heatmap.
 
-These are **not fixed columns**. They are chosen at request time from the sample sheet's columns, and the system is deliberately permissive: any column that groups the samples is eligible (the biologist decides which is technical and which is biological). The eligibility rules and the endpoints that expose these choices are defined in [api-contract.md](../architecture/api-contract.md) (§6 Batch, §8 Heatmap); this document only guarantees that the columns exist in the canonical sheet.
+These are **not fixed columns**. They are chosen at request time from the sample sheet's columns, and the system is deliberately permissive: any column that groups the samples is eligible (the biologist decides which is technical and which is biological). The eligibility rules and the endpoints that expose these choices are defined in [api-contract.md](../api/api-contract.md) (§6 Batch, §8 Heatmap); this document only guarantees that the columns exist in the canonical sheet.
 
 ### 3.5 User mapping vs. alias detection
 
@@ -162,7 +162,7 @@ The canonical sheet is **restricted to the uploaded samples**: rows whose IDAT l
 
 ## 5. Error Cases / Edge Cases
 
-Canonicalization rejects an upload (surfaced as an HTTP `400`, see [api-contract.md](../architecture/api-contract.md)) when it cannot honour the contract:
+Canonicalization rejects an upload (surfaced as an HTTP `400`, see [api-contract.md](../api/api-contract.md)) when it cannot honour the contract:
 
 | Condition | Outcome |
 |---|---|
@@ -178,14 +178,14 @@ Edge cases that are **accepted**:
 - Barcodes mangled into floating-point notation by Excel — repaired.
 - Mixed delimiter/quoting typical of exported CSVs — handled by delimiter detection.
 
-The role-distinctness and column-existence rules are the same ones the upload contract exposes; this document is their canonical definition, and [api-contract.md](../architecture/api-contract.md) maps them to specific error responses.
+The role-distinctness and column-existence rules are the same ones the upload contract exposes; this document is their canonical definition, and [api-contract.md](../api/api-contract.md) maps them to specific error responses.
 
 ---
 
 ## 6. Extension Points
 
 - **Add a recognized alias.** Extend the alias table (§4.2) with the new raw name and its canonical target. This changes only fallback auto-detection; explicit user mapping is unaffected.
-- **Add a canonical column.** Add it to §4.1, define its role and whether it is required, and update any consumer that reads it (batch/heatmap options, or an R script — see the [R scripts reference](../r-backend/scripts-reference.md)).
-- **Add a runtime role.** Runtime roles (§3.4) are defined by the consuming feature, not by this contract; document the new selection in [api-contract.md](../architecture/api-contract.md). This document need only guarantee the underlying columns exist.
+- **Add a canonical column.** Add it to §4.1, define its role and whether it is required, and update any consumer that reads it (batch/heatmap options, or an R script — see the [R scripts reference](../architecture/r_backend-architecture.md)).
+- **Add a runtime role.** Runtime roles (§3.4) are defined by the consuming feature, not by this contract; document the new selection in [api-contract.md](../api/api-contract.md). This document need only guarantee the underlying columns exist.
 
 Backward compatibility: already-canonical sheets and the alias-detection path must keep working, so canonical names and existing aliases must never be repurposed.

@@ -552,30 +552,31 @@ The cURL examples below use Bash line continuations. In PowerShell, call `curl.e
 
 Upload (two-phase inspect/commit):
 
-The current primary upload flow is a two-phase process. First, inspect the folder or ZIP to get a session and a sample-sheet preview:
+The current primary upload flow is a two-phase process. First, inspect the selected files (or a folder's contents, or a single ZIP) to get a staging session and the classified manifest. The multipart field is `files` and accepts multiple entries:
 
 ```bash
 curl -i -X POST http://localhost:8000/api/v1/upload/inspect \
-  -F "archive=@/path/to/dataset.zip"
+  -F "files=@/path/to/dataset.zip"
 ```
 
-Expected status: `201 Created`. Expected fields: `session_id`, `candidates`, `idat_count`.
+Expected status: `201 Created`. Expected fields: `session_id`, `sample_sheets`, `idats` (plus `source`, `other_files`, `errors`, `expires_at`). Take the chosen sample sheet's `id` from `sample_sheets[]` and the IDAT `pair_id` values from `idats[]` for the next steps.
 
-Preview and map columns before committing:
+Preview one sample-sheet candidate before committing (the `sheet_id` query parameter is required):
 
 ```bash
 SESSION_ID="replace-with-session-id"
-curl -i "http://localhost:8000/api/v1/upload/$SESSION_ID/preview"
+curl -i "http://localhost:8000/api/v1/upload/$SESSION_ID/preview?sheet_id=s0"
 ```
 
-Commit the selection with column mapping and filter settings:
+Commit the confirmed selection (chosen sheet id, IDAT pair ids, role mapping, filter settings):
 
 ```bash
 curl -i -X POST http://localhost:8000/api/v1/upload/commit \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "'"$SESSION_ID"'",
-    "candidate_index": 0,
+    "selected_sample_sheet_id": "s0",
+    "selected_pair_ids": ["206891110001_R01C01"],
     "column_mapping": {
       "sample_name": "Sample_Name",
       "sample_group": "Sample_Group",
@@ -672,7 +673,7 @@ Cancel/reset:
 curl -i -X POST "http://localhost:8000/api/v1/reset/$JOB_ID"
 ```
 
-Expected status: `200 OK` for a cancelable job. Expected fields: `reset`, `status`. Expected errors: `404` for unknown job, `409` if the job is already `completed`, `canceled`, or `failed`.
+Expected status: `200 OK`. Expected fields: `reset`, `was_running`, `already_in_progress`. Expected errors: `404` for an unknown job, `500` (`/errors/reset-failed`) if the data could not be fully deleted. Reset is idempotent and concurrency-safe.
 
 Batch options:
 
@@ -950,7 +951,7 @@ Expected result: table data is available after analysis output files exist; othe
 curl -i -X POST "http://localhost:8000/api/v1/reset/$JOB_ID"
 ```
 
-Expected result: a cancelable job returns `{"reset":true,"status":"canceled"}`.
+Expected result: the running job is cancelled and permanently deleted; the response is `{"reset":true,"was_running":true,"already_in_progress":false}`.
 
 12. Inspect logs.
 

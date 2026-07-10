@@ -235,7 +235,7 @@ Origins are an explicit **allow-list** (no wildcard), scoped by default to local
 
 ## 10. Transport Security & Security Headers
 
-TLS is terminated at the **Nginx frontend container**, which serves the React application and reverse-proxies `/api/` to the backend over the private Docker network (`http://backend:8000`). The backend itself speaks plain HTTP inside Docker and holds no TLS material. See [`HTTPS.md`](../HTTPS.md) for the certificate and proxy setup.
+TLS is terminated at the **Nginx frontend container**, which serves the React application and reverse-proxies `/api/` to the backend over the private Docker network (`http://backend:8000`). The backend itself speaks plain HTTP inside Docker and holds no TLS material. See [`https-nginx.md`](../deployment/https-nginx.md) for the certificate and proxy setup.
 
 ### 10.1 Application-layer headers
 

@@ -827,5 +827,5 @@ Usage:
 - [Hooks reference](hooks-reference.md)
 - [Frontend theming and structure](theming.md)
 - [Frontend architecture](../architecture/frontend-architecture.md)
-- [API contract](../architecture/api-contract.md)
+- [API contract](../api/api-contract.md)
 - [Pipeline progress](../architecture/pipeline-progress.md)

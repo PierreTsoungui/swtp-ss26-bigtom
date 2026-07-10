@@ -185,7 +185,7 @@ Without these pins, each Bumphunter bootstrap worker would spawn its own thread 
 
 | Helper | Constraint | Applied to |
 |---|---|---|
-| `_get_positive_float(name, default)` | `value > 0` | `JOB_RETENTION_HOURS`, `STAGING_RETENTION_HOURS` (default 8h), `PIPELINE_MEMORY_BUDGET_GB`, `PIPELINE_STEP_MEMORY_GB`, `PIPELINE_DMR_MEMORY_GB`, `PIPELINE_DMP_MEMORY_GB` |
+| `_get_positive_float(name, default)` | `value > 0` | `JOB_RETENTION_HOURS`, `STAGING_RETENTION_HOURS`, `PIPELINE_MEMORY_BUDGET_GB`, `PIPELINE_STEP_MEMORY_GB`, `PIPELINE_DMR_MEMORY_GB`, `PIPELINE_DMP_MEMORY_GB` |
 | `_get_positive_int(name, default)` | `value > 0` | `JOB_CLEANUP_INTERVAL_SECONDS`, `STAGING_CLEANUP_INTERVAL_SECONDS`, `DMR_CORES`, `PIPELINE_CORE_BUDGET`, `MAX_TOTAL_UPLOAD_MB`, `MAX_SAMPLE_SHEET_MB` |
 | `_get_nonneg_int(name, default)` | `value ≥ 0` (0 = disabled) | `MAX_SAMPLES_PER_JOB`, `MIN_FREE_DISK_MB` |
 | `_get_nonneg_float(name, default)` | `value ≥ 0` (0 = disabled) | `MAX_JOBS_DISK_GB` |

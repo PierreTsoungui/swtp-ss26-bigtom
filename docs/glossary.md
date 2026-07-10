@@ -2,7 +2,7 @@
 
 **Scope:** Cross-cutting. The biological, statistical, and technical vocabulary used across the code base, the pipeline scripts, and the rest of the documentation.
 
-> This document is the **shared vocabulary reference** for the whole project. It combines two things: a short *biology primer* that gives a developer without a wet-lab background enough context to reason about the pipeline, and a *glossary* of the domain terms, technical abbreviations, and method codes that appear in filenames, log lines, API fields, and source code. Where a term has an authoritative home elsewhere — filter semantics in [filter-mapping.md](./contracts/filter-mapping.md), the sample-sheet columns in [samplesheet-spec.md](./contracts/samplesheet-spec.md), job states in the [API contract](./architecture/api-contract.md) — this document defines the *concept* and links out for the *contract*.
+> This document is the **shared vocabulary reference** for the whole project. It combines two things: a short *biology primer* that gives a developer without a wet-lab background enough context to reason about the pipeline, and a *glossary* of the domain terms, technical abbreviations, and method codes that appear in filenames, log lines, API fields, and source code. Where a term has an authoritative home elsewhere — filter semantics in [filter-mapping.md](./contracts/filter-mapping.md), the sample-sheet columns in [samplesheet-spec.md](./contracts/samplesheet-spec.md), job states in the [API contract](./api/api-contract.md) — this document defines the *concept* and links out for the *contract*.
 
 ---
 
@@ -22,7 +22,7 @@ It is a *reference*, not a tutorial: definitions are concise and neutral, and ea
 
 In scope: the biological background needed to follow the pipeline, definitions of the domain and statistical terms, the quality-control criteria applied during filtering, the normalization method codes, the batch-assessment concepts, the result metrics, and the technical abbreviations and object types used throughout the code base.
 
-Out of scope: the exact HTTP shapes (see [api-contract.md](./architecture/api-contract.md)), the filter operator semantics and column mappings (see [filter-mapping.md](./contracts/filter-mapping.md)), the canonical sample-sheet columns (see [samplesheet-spec.md](./contracts/samplesheet-spec.md)), the on-disk artifact names (see [job-directory-layout.md](./contracts/job-directory-layout.md)), and any tutorial-level instruction on how to run an analysis.
+Out of scope: the exact HTTP shapes (see [api-contract.md](./api/api-contract.md)), the filter operator semantics and column mappings (see [filter-mapping.md](./contracts/filter-mapping.md)), the canonical sample-sheet columns (see [samplesheet-spec.md](./contracts/samplesheet-spec.md)), the on-disk artifact names (see [job-directory-layout.md](./contracts/job-directory-layout.md)), and any tutorial-level instruction on how to run an analysis.
 
 ---
 
@@ -106,7 +106,7 @@ The seven criteria applied by `init_filter.R`. Each removes a well-characterised
 
 **Normalization** is a set of computational corrections that reduce *technical* differences between samples (dye bias between channels, the effect of the two probe chemistries, processing variation) so the remaining variation more faithfully reflects biology. It is recommended but optional.
 
-The method codes below are the canonical strings used in `normalize.R`, `normalization_preview.R`, filenames, and the API (`method` field). See [samplesheet-spec.md](./contracts/samplesheet-spec.md) and the normalization endpoints in [api-contract.md](./architecture/api-contract.md).
+The method codes below are the canonical strings used in `normalize.R`, `normalization_preview.R`, filenames, and the API (`method` field). See [samplesheet-spec.md](./contracts/samplesheet-spec.md) and the normalization endpoints in [api-contract.md](./api/api-contract.md).
 
 | Code | Name | Summary |
 |---|---|---|
@@ -178,11 +178,11 @@ Software-stack and pipeline vocabulary that a developer meets in code, filenames
 | **emit_progress / emit_error** | The R helper functions (`utils/progress.R`) that write the progress/error JSON events the Backend parses. |
 | **Job** | One end-to-end analysis, identified by a `job_id` (UUID). Its files live under `jobs/<job_id>/`. |
 | **job_id** | The UUID identifying a job and its directory. |
-| **status** | The global job state. Values: `waiting`, `running`, `completed`, `failed`. Authoritative list in [api-contract.md](./architecture/api-contract.md). |
+| **status** | The global job state. Values: `waiting`, `running`, `completed`, `failed`. Authoritative list in [api-contract.md](./api/api-contract.md). |
 | **phase** | The current technical pipeline stage. Values: `uploaded`, `filtering`, `normalization_preview`, `normalization`, `svd`, `batch`, `analysis`, `results`, `heatmap`. |
 | **Staging** | The pre-job holding area (`staging/<session_id>/`) used during the two-phase upload before a job is committed. See [job-directory-layout.md](./contracts/job-directory-layout.md). |
 | **Two-phase upload** | *Inspect* (stage + classify + map columns) then *commit* (create the job). Nothing enters `jobs/` until commit. |
-| **RFC 9457** | The IETF "Problem Details for HTTP APIs" standard (`application/problem+json`) used for all error responses. See [api-contract.md](./architecture/api-contract.md). |
+| **RFC 9457** | The IETF "Problem Details for HTTP APIs" standard (`application/problem+json`) used for all error responses. See [api-contract.md](./api/api-contract.md). |
 | **Polling** | The Frontend model of repeatedly calling `GET /status/{job_id}` to track progress, stopping at terminal states. |
 | **r_worker** | The R container in which pipeline scripts run, invoked by the Backend via `docker exec`. See [r-executor.md](./architecture/r-executor.md). |
 | **DMR_CORES** | Environment variable capping the parallel worker count for the memory-heavy DMR step. |
@@ -222,5 +222,5 @@ How to keep this glossary correct as the system grows. A term belongs here when 
 - **New normalization method:** add its canonical code and one-line summary to §6, matching the string used in `normalize.R`/`normalization_preview.R` and the API `method` field. Cross-reference the extension playbook for adding a method.
 - **New quality-control criterion:** add a row to §5.1 with what it removes and why.
 - **New filter or column:** do **not** describe filter semantics here — define the *concept* only, and link to [filter-mapping.md](./contracts/filter-mapping.md) / [samplesheet-spec.md](./contracts/samplesheet-spec.md), which own the contract.
-- **New `status`/`phase` value or technical term:** update §9 and keep the value lists in sync with the authoritative [api-contract.md](./architecture/api-contract.md); do not let this document become a second source of truth for enums — link to it.
+- **New `status`/`phase` value or technical term:** update §9 and keep the value lists in sync with the authoritative [api-contract.md](./api/api-contract.md); do not let this document become a second source of truth for enums — link to it.
 - **Consistency rule:** definitions here must not contradict the source specs. When they would, fix the source spec and link to it, not duplicate it.

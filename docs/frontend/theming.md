@@ -312,6 +312,6 @@ For new visual or structural work, add tests for:
 
 - [Frontend architecture](../architecture/frontend-architecture.md)
 - [Pipeline progress](../architecture/pipeline-progress.md)
-- [API contract](../architecture/api-contract.md)
+- [API contract](../api/api-contract.md)
 - [Hooks reference](hooks-reference.md)
 - [Components reference](components-reference.md)

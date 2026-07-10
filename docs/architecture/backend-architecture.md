@@ -78,7 +78,7 @@ The backend and the R worker communicate over **exactly two channels**:
 1. **Control** — the backend launches R with `docker exec <container> Rscript …` and reads its stdout/stderr. R streams structured progress as one JSON object per line ([§6.4](#64-r-execution--progress-protocol)).
 2. **Data** — both sides exchange files through the shared `jobs/<job_id>/` directory. This file contract is the actual integration surface and is specified in [job-directory-layout.md](../contracts/job-directory-layout.md).
 
-The full C4 context/container diagrams and the end-to-end sequence live in [system-overview.md](./system-overview.md); this section is the orientation subset.
+The full C4 context/container diagrams and the end-to-end sequence live in [System_Overview.md](./System_Overview.md); this section is the orientation subset.
 
 ---
 
@@ -293,7 +293,7 @@ The legacy `POST /upload` performs inspect+commit in a single request and remain
 - **Shared storage.** `jobs/<job_id>/` is a volume visible to both the backend (host path) and the R worker (container path); `RCommand` objects translate between the two path views. `staging/<id>/` is a sibling volume for unconfirmed uploads, enabling an atomic move on commit.
 - **Durability.** Files on the volume are durable until TTL cleanup; in-memory job state is ephemeral.
 
-The container topology, volumes, the Docker-socket rationale, and R-worker specifics are documented in [docker.md](../deployment/docker.md); TLS/reverse-proxy in [HTTPS.md](../HTTPS.md).
+The container topology, volumes, the Docker-socket rationale, and R-worker specifics are documented in [docker.md](../deployment/docker.md); TLS/reverse-proxy in [https-nginx.md](../deployment/https-nginx.md).
 
 ---
 
@@ -312,7 +312,7 @@ The architecture is designed so common changes follow an existing template rathe
 
 ## 10. Architecture Decisions & Known Boundaries
 
-The decisions that shape the whole system are recorded as **Architecture Decision Records** in [`decisions/`](./decisions/) — notably: R via `docker exec` rather than an embedded process or HTTP service; file-based communication over a shared volume rather than a database/queue; in-memory job state + polling rather than WebSockets/persistence; the two-phase upload; the `RCommand` pattern; and the RFC 9457 error format. Consult the ADRs for the context and consequences; they are the authoritative record of *why*.
+The key decisions that shape the whole system are, notably: R via `docker exec` rather than an embedded process or HTTP service; file-based communication over a shared volume rather than a database/queue; in-memory job state + polling rather than WebSockets/persistence; the two-phase upload; the `RCommand` pattern; and the RFC 9457 error format.
 
 The following are **deliberate boundaries, not defects**:
 

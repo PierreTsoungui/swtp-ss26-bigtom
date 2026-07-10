@@ -3,7 +3,7 @@
 **Purpose:** Define the complete, authoritative filter contract as filters flow Frontend => Backend => result dataset: every filter, its query parameter, its operator, its target column, and its semantics.
 **Scope:** The result-table filters (DMP and DMR) and the heatmap filters. The single filter layer shared by the table and heatmap features.
 
-> This document is the **single source of truth for filter behaviour**. The endpoints that accept these filters are defined in [api-contract.md](../architecture/api-contract.md) (§7 Table, §8 Heatmap); the dataset columns referenced here originate from the differential-analysis result files in [job-directory-layout.md](./job-directory-layout.md); grouping metadata originates from the [sample sheet](./samplesheet-spec.md).
+> This document is the **single source of truth for filter behaviour**. The endpoints that accept these filters are defined in [api-contract.md](../api/api-contract.md) (§7 Table, §8 Heatmap); the dataset columns referenced here originate from the differential-analysis result files in [job-directory-layout.md](./job-directory-layout.md); grouping metadata originates from the [sample sheet](./samplesheet-spec.md).
 
 ---
 
@@ -21,7 +21,7 @@ Filters exist at three layers — the Frontend UI, the Backend query parameters,
 
 In scope: the DMP and DMR table filters, the operator catalogue and semantics, value expectations, validation and error behaviour, and heatmap/table filter parity.
 
-Out of scope: pagination and sorting (see [api-contract.md](../architecture/api-contract.md) §7), the exact Frontend field labels and the client-side conversion helpers (owned by the Frontend documentation), and the biological meaning of the metrics (see the [glossary](../glossary.md)).
+Out of scope: pagination and sorting (see [api-contract.md](../api/api-contract.md) §7), the exact Frontend field labels and the client-side conversion helpers (owned by the Frontend documentation), and the biological meaning of the metrics (see the [glossary](../glossary.md)).
 
 ---
 
@@ -134,7 +134,7 @@ These bounds do not change the filter semantics; they gate the render.
 | **No filters supplied** | Valid — the full result set is returned/rendered. |
 | **Unknown table** (`table` ≠ `dmp`/`dmr`) | Rejected by the table endpoint before filtering (`400`). |
 
-The `400` responses follow the standard error format defined in [api-contract.md](../architecture/api-contract.md).
+The `400` responses follow the standard error format defined in [api-contract.md](../api/api-contract.md).
 
 ---
 
@@ -144,7 +144,7 @@ To add a filter:
 
 1. Choose a filter key and add a `filter_<key>` => `(column, operator)` entry to the relevant table map (DMP and/or DMR) in this reference.
 2. Reuse an existing operator from §4.1 where possible; introduce a new operator only if no existing one expresses the semantics, and define it in the catalogue with its value expectation and applicable column type.
-3. Ensure the target column exists in the corresponding result dataset (see [job-directory-layout.md](./job-directory-layout.md) and the [R scripts reference](../r-backend/scripts-reference.md)); if it does not, the filter will be silently skipped.
+3. Ensure the target column exists in the corresponding result dataset (see [job-directory-layout.md](./job-directory-layout.md) and the [R scripts reference](../architecture/r_backend-architecture.md)); if it does not, the filter will be silently skipped.
 4. If the filter should apply to the heatmap, confirm it belongs to the DMP map (§4.4).
 
 A filter is part of the contract only once it appears in the §4 tables. Existing keys, operators, and column names must not be repurposed, to preserve backward compatibility and table/heatmap parity.

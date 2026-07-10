@@ -104,7 +104,7 @@ It depends only on base R and treats `BiocParallel`/`RhpcBLASctl` as optional, s
 `dmr.R` is the only script that adds parallelism above the serial baseline. Region discovery runs a bootstrap step whose iterations are independent and therefore parallelise cleanly, so `dmr.R` may spawn multiple worker processes via `doParallel`. This does not violate the single-thread rule, for the following reasons:
 
 - each bootstrap worker is a separate R process that remains single-threaded for BLAS (the `*_NUM_THREADS=1` environment is inherited), so threads are never nested;
-- the core count comes from the backend configuration value `DMR_CORES` (default `4`, passed as the `nCores` CLI argument);
+- the core count comes from the backend configuration value `DMR_CORES` (default `1`, passed as the `nCores` CLI argument);
 - `dmr.R` caps it at the host's physical cores (`min(nCores, parallel::detectCores(logical = FALSE))`), so an over-large value has no adverse effect;
 - `nCores == 1` uses `registerDoSEQ()` (fully sequential), and any failure to start the cluster falls back to sequential execution.
 
@@ -174,7 +174,7 @@ There are three recurring positional shapes. Optional arguments have in-script d
 |---|---|---|
 | `HEATMAP_GROUP1` | `""` | Primary annotation column (auto-selected if empty) |
 | `HEATMAP_GROUP2` | `""` | Optional secondary annotation column |
-| `HEATMAP_MAX_ROWS` | `1000` | Hard cap on plotted CpG rows |
+| `HEATMAP_MAX_ROWS` | `1000` | Hard cap on plotted CpG rows. The backend always passes `500` (its `MAX_CPGS`), so the effective user-facing limit is 500; the `1000` default only applies when `heatmap.R` is run standalone. |
 | `HEATMAP_OUTPUT` | `heatmap.png` | Output PNG name (PDF derived from it) |
 | `HEATMAP_INPUT` | `heatmap_input.csv` | CSV of the CpG ids selected in the results table |
 

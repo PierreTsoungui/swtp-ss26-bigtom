@@ -639,6 +639,6 @@ Related hooks: `useFilterStats`, `useNormalizationPreview`, `useBatchParameters`
 
 - [Frontend architecture](../architecture/frontend-architecture.md)
 - [Pipeline progress states](../architecture/pipeline-progress.md)
-- [API contract](../architecture/api-contract.md)
+- [API contract](../api/api-contract.md)
 - [Components reference](components-reference.md)
 - [Frontend theming and structure](theming.md)

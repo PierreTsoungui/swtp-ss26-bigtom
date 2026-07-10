@@ -24,7 +24,7 @@ The backend itself never speaks TLS at any point — it is only reachable via th
 
 ## 2. Current State: Local Development Setup (mkcert)
 
-For local development, a self-signed certificate is currently generated via [`mkcert`](https://github.com/FiloSottile/mkcert) (see `HTTPS.md` in the repository for the detailed instructions). In this process, `mkcert` installs a locally generated root CA into the certificate store of the respective developer machine, which causes the browser to trust the certificate without showing a warning.
+For local development, a self-signed certificate is currently generated via [`mkcert`](https://github.com/FiloSottile/mkcert) (see the [repository README](../../README.md) for the exact commands). In this process, `mkcert` installs a locally generated root CA into the certificate store of the respective developer machine, which causes the browser to trust the certificate without showing a warning.
 
 The generated files (`bigtom-local.pem`, `bigtom-local-key.pem`) are deliberately **not** version-controlled (`.gitignore`) and must be generated locally by each developer. Without these files, the `frontend` container fails to start with an Nginx certificate error.
 

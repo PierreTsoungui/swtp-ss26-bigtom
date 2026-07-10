@@ -3,7 +3,7 @@
 **Purpose:** Define the on-disk file contract for a job — every artifact under `jobs/<job_id>/`, who produces it, and who consumes it.
 **Scope:** The `jobs/<job_id>/` directory and its relationship to the `staging/<session_id>/` directory. The file-level integration surface between the Backend and the R backend.
 
-> This document is the **canonical source of truth** for job artifacts. It defines *what* files exist and *who owns them*, not *how* the pipeline computes them. Pipeline sequencing and execution belong to [backend-architecture.md](../architecture/backend-architecture.md) and [pipeline-progress.md](../architecture/pipeline-progress.md); the per-script inputs/outputs belong to the [R scripts reference](../r-backend/scripts-reference.md).
+> This document is the **canonical source of truth** for job artifacts. It defines *what* files exist and *who owns them*, not *how* the pipeline computes them. Pipeline sequencing and execution belong to [backend-architecture.md](../architecture/backend-architecture.md) and [pipeline-progress.md](../architecture/pipeline-progress.md); the per-script inputs/outputs belong to the [R scripts reference](../architecture/r_backend-architecture.md).
 
 ---
 
@@ -23,7 +23,7 @@ This document fixes that contract so that:
 
 In scope: the directory `jobs/<job_id>/`, every artifact it may contain, the producer/consumer of each, naming conventions, persistence guarantees, and the staging directory that feeds it.
 
-Out of scope: the internal logic of the pipeline, the HTTP request/response shapes (see [api-contract.md](../architecture/api-contract.md)), the sample-sheet format (see [samplesheet-spec.md](./samplesheet-spec.md)), and the meaning of the result-table columns (see [filter-mapping.md](./filter-mapping.md)).
+Out of scope: the internal logic of the pipeline, the HTTP request/response shapes (see [api-contract.md](../api/api-contract.md)), the sample-sheet format (see [samplesheet-spec.md](./samplesheet-spec.md)), and the meaning of the result-table columns (see [filter-mapping.md](./filter-mapping.md)).
 
 ---
 
@@ -42,7 +42,7 @@ No component may write another producer's artifact. This single-writer rule is w
 
 ### 3.2 Persistence guarantees
 
-- **Job directories are durable.** Files persist on the shared volume until the job is deleted, either explicitly (a reset — see [api-contract.md](../architecture/api-contract.md) §9) or automatically by the retention cleanup (see [security.md](../backend/security.md)).
+- **Job directories are durable.** Files persist on the shared volume until the job is deleted, either explicitly (a reset — see [api-contract.md](../api/api-contract.md) §9) or automatically by the retention cleanup (see [security.md](../backend/security.md)).
 - **In-memory job state is ephemeral.** The `(phase, status)` of a job lives in the Backend process, not in the directory, and is lost on restart. The files survive a restart; the live session does not (see [job-lifecycle.md](../architecture/job-lifecycle.md)).
 - **Artifacts are append-only within a run.** A stage writes its outputs once; later stages add new files rather than mutating earlier ones. The batch loop is the only iterative case and it writes **new, indexed** files per round (§4.3).
 - **JSON artifacts the Backend owns are written atomically** (temporary file + atomic rename), so a reader never observes a half-written file.
@@ -146,13 +146,13 @@ staging/<session_id>/
 | Retention | Long (job retention window) | Short (staging retention window) |
 | Purpose | The authoritative job data | Unconfirmed upload awaiting commit |
 
-`_manifest.json` is an internal Backend artifact; its shape is an implementation detail and is not part of the external contract. The classified result exposed to the Frontend is the `InspectManifest` response documented in [api-contract.md](../architecture/api-contract.md) §1.
+`_manifest.json` is an internal Backend artifact; its shape is an implementation detail and is not part of the external contract. The classified result exposed to the Frontend is the `InspectManifest` response documented in [api-contract.md](../api/api-contract.md) §1.
 
 ---
 
 ## 5. Error Cases / Edge Cases
 
-- **Missing expected artifact.** If a consumer cannot find a required file, it fails with the corresponding API error rather than proceeding — e.g. requesting filter stats before filtering has produced `filter_stats.json` returns `409 filtering-not-finished`; requesting a heatmap before differential analysis has produced `dmp_results.csv` returns `404 file-not-found`. See [api-contract.md](../architecture/api-contract.md).
+- **Missing expected artifact.** If a consumer cannot find a required file, it fails with the corresponding API error rather than proceeding — e.g. requesting filter stats before filtering has produced `filter_stats.json` returns `409 filtering-not-finished`; requesting a heatmap before differential analysis has produced `dmp_results.csv` returns `404 file-not-found`. See [api-contract.md](../api/api-contract.md).
 - **Partial run.** A job directory reflects only the stages that have completed. The absence of later artifacts is normal, not an error.
 - **Concurrent deletion.** The retention cleanup may remove an expired directory at any time. Backend file walks tolerate a file disappearing mid-operation and never crash on it.
 - **Corrupt Backend-owned JSON.** A damaged `batch_history.json` is treated as "no history" and rebuilt, rather than surfacing a 500; this is possible because the Backend is its sole writer.
@@ -166,7 +166,7 @@ To add a new artifact:
 
 1. Choose a fixed, descriptive filename that follows §4.3 and does not collide with an existing name.
 2. Assign exactly one producer and record it, with its consumers, in the §4.2 table.
-3. If an R script is the producer, document its output in the [R scripts reference](../r-backend/scripts-reference.md); if the Backend serves it, document the endpoint in [api-contract.md](../architecture/api-contract.md).
+3. If an R script is the producer, document its output in the [R scripts reference](../architecture/r_backend-architecture.md); if the Backend serves it, document the endpoint in [api-contract.md](../api/api-contract.md).
 4. Preserve the single-writer rule and the persistence guarantees (§3.2).
 
 A new artifact is part of the contract only once it appears in this document.
