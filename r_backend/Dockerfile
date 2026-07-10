@@ -55,7 +55,7 @@ RUN R -e "BiocManager::install('ChAMP', dependencies=TRUE, ask=FALSE)"
 # Visualisierung und kllassische Datenverarbeitung nachladen (remotes hier direkt mit rein)
 RUN R -e "BiocManager::install('ComplexHeatmap', ask=FALSE)"
 RUN R -e "install.packages(c( \
-    'data.table','readxl','logger','progressr','tidyverse','RhpcBLASctl', 'remotes' \
+    'data.table','readxl','logger','progressr','tidyverse','RhpcBLASctl', 'remotes', 'testthat' \
     ), repos='https://cloud.r-project.org')"
 
 # ChAMP & ChAMPdata direkt aus dem Entwickler-Repository auf GitHub ziehen
