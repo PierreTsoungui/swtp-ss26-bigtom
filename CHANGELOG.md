@@ -16,13 +16,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 - **Heatmap Color Scheme & Genomic Sorting**: The heatmap color palette was updated to Blue–Black–Yellow (BSY), the established scientific standard for DNA methylation data (hypomethylation → intermediate → hypermethylation). Rows are now sorted by genomic position (chromosome, then start coordinate) rather than by hierarchical clustering order alone.
 - **Privacy Policy Route and Language**: The privacy policy was rewritten in English and moved from `/datenschutz` to `/privacy`; the footer link was updated accordingly.
+- **Privacy Policy Content**: The controller section was reduced to the responsible institution (THM), and the data-category wording now states that uploaded data need not be personal and may, depending on its origin, constitute health data.
 - **Reset Button Behavior**: The Reset button is now always enabled for any loaded analysis, not only during an active pipeline run. Clicking it opens a confirmation dialog, preventing accidental deletion of completed results.
 - **Landing Page**: FAQ items now show animated expand/collapse arrows for clearer affordance; the glossary hover effect was removed in favour of a simpler layout; all section copy was reviewed and improved for clarity.
 - **Large Upload Streaming**: `proxy_request_buffering off` is now set on the nginx upload route, enabling uploads larger than the 512 MB default in-memory buffer to be streamed directly to the backend without buffering to disk first.
+- **Backend Log-Level Default**: The default `LOG_LEVEL` was lowered from `DEBUG` to `INFO`, so the backend no longer logs verbose diagnostics (including R stdout) by default in a system that may process sensitive data.
+- **Memory-Safe DMR Core Default**: The shipped `docker-compose.yml` default for `DMR_CORES` was corrected from `4` to `1`, matching the backend code default. Each DMR bootstrap worker holds a full copy of the beta matrix, so the previous default risked an OOM kill under the container memory limit.
+- **Pinned R-Worker Container Name**: The `r_worker` service now sets a fixed `container_name`, so the backend's `docker exec` target resolves independently of the Compose project or checkout-directory name.
+- **Consolidated Ignore Files**: The `.gitignore` and `.dockerignore` files were cleaned up, and a dedicated `.dockerignore` was added for the R-worker build context so tests and build metadata stay out of the image.
 
 ### Fixed
 - **Gene Filter Exact Match**: The gene-name filter in the result tables now uses strict string equality instead of substring search, preventing false positive matches (e.g., the query `BRCA` previously matched `BRCA1`, `BRCA2`, and any other gene containing the substring).
 - **Batch History Refresh**: The batch history panel on the Batch page now correctly reloads after each correction round is submitted or skipped; previously the panel showed stale data until a manual page reload.
+- **Probe-Level Filters Applied to Results**: The probe-level quality filters (detection p-value, bead count, non-CpG, SNP, multi-hit, sex chromosomes) are now enforced on the DMP/DMR/heatmap results through a persisted `passed_probes.rds` selection, instead of being reported as counts but left in the analysed data.
+- **Dead Code & Mixed-Language Cleanup**: Removed unreachable and unused backend code (e.g. an unused heatmap-metadata parser and an unreachable pagination guard) and translated the last remaining German comments and user-facing strings to English.
+
+### Removed
+- **Benchmark Toolkit**: Removed the `benchmarks/` performance and stress-test scripts and their documentation references; they served only for local measurement during development and are not part of the deployed application.
 
 ### Refactored
 - **Frontend Architecture**: All feature modules restructured into a clean feature-based layout with unified `@features` / `@shared` path aliases, strict component boundary enforcement, and updated Vitest test coverage across all changed modules.
@@ -35,6 +45,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - **UI Selectors**: All smoke-test selectors updated to match the current English-only frontend — removed stale German strings (`IDAT-Dateien auswählen`, `Analyse starten`, `Datenschutzerklärung`), corrected the file-input `accept` attribute (`.zip,.idat,.csv,.xls,.xlsx`), and updated the folder input selector to `[webkitdirectory]`. Privacy page route corrected from `/datenschutz` to `/privacy`.
   - **Batch Validation Tests**: Replaced the obsolete "reject phenotype as batch variable" test (the column restriction was removed in v1.1.0) with three tests that accurately cover the current API contract: missing-column, self-referential covariate, and invalid-covariate-name.
 - **Backend Tests**: Test suite hardened for pipeline state dependencies; integration-only test cases that require real pipeline artifacts are now explicitly skipped with a descriptive reason instead of failing.
+- **Deployment-Config Regression Test**: Added `backend/tests/test_deploy_config.py`, which asserts the shipped `docker-compose.yml` defaults (memory-safe `DMR_CORES=1` and the pinned `r_worker` container name).
+- **testthat in the R Image**: `testthat` is now installed in the R-worker image, so the R test suite runs without a manual install (the worker has no internet access at runtime).
+- **E2E Pipeline Test Corrected**: The batch-options assertion in the full-pipeline Playwright test now matches the actual eligibility rule — a per-sample-unique column such as `Sentrix_Position` is correctly excluded as a grouping variable.
 
 ### Documentation
 - **E2E Test Runbook** (`e2e/README.md`): Completely rewritten with separate sections for local (Node.js 18+) and Docker-based Playwright execution, environment variable reference table, and a "what green means" section for the fast and full suites.
@@ -42,6 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - **New Backend Reference Documentation**: Added `docs/backend/configuration.md` (all environment variables and their defaults), `docs/backend/security.md` (authentication, input validation, rate limiting), `docs/backend/services-reference.md` (service layer catalogue), and `docs/deployment/docker.md` (full Docker Compose deployment guide).
 - **HTTPS / Nginx Deployment Guide** (`docs/deployment/https-nginx.md`): Documents the TLS setup, self-signed certificate generation, port mapping (8080 HTTP redirect, 8443 HTTPS in development; 80/443 in production), and nginx configuration decisions.
 - **Updated API Contracts**: `docs/contracts/samplesheet-spec.md` updated for the mandatory basename column convention; `docs/contracts/filter-mapping.md` updated to document the corrected strict-equality gene filter behavior.
+- **Documentation Synchronized with the Implementation**: The README and all `docs/` files were reviewed against the current code. Broken internal links were corrected, the `DMR_CORES` default and the heatmap CpG-limit description were aligned with the code, and deployment guidance for a real domain (nginx `server_name`, the HTTPS-redirect port, and the frontend image rebuild) was added.
 
 ## [1.2.0] - 2026-07-04
 
