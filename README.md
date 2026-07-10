@@ -841,7 +841,11 @@ Operational notes:
 ## Additional Documentation
 
 - [CHANGELOG.md](CHANGELOG.md): project change history.
-- [docs/architecture/](docs/architecture/): architecture documents including the job lifecycle and state machine.
+- [docs/architecture/README.md](docs/architecture/README.md): entry point for architecture documentation, including the job lifecycle and state machine.
+- [docs/backend/README.md](docs/backend/README.md): entry point for backend-related documentation.
+- [docs/contracts/README.md](docs/contracts/README.md): entry point for contracts and data specifications.
+- [docs/deployment/README.md](docs/deployment/README.md): entry point for deployment and operations documentation.
+- [docs/frontend/README.md](docs/frontend/README.md): entry point for frontend documentation.
 - [docs/testing/testing-strategy.md](docs/testing/testing-strategy.md): detailed testing strategy including how to run each test type.
 - [benchmarks/README.md](benchmarks/README.md): performance and stress-test toolkit documentation.
 - [e2e/README.md](e2e/README.md): end-to-end test suite documentation with full Docker run commands.
