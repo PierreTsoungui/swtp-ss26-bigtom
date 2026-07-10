@@ -8,6 +8,8 @@
 pytest==9.1.0
 pytest-cov==7.1.0
 httpx==0.28.1
+# Parses docker-compose.yml in the deployment-config invariant tests
+PyYAML==6.0.3
 
 # Quality tooling (config lives in pyproject.toml)
 ruff==0.15.20

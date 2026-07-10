@@ -71,7 +71,10 @@ services:
       - JOB_BASE_DIR=${JOB_BASE_DIR:-/app/jobs}
       - JOB_RETENTION_HOURS=${JOB_RETENTION_HOURS:-24}
       - JOB_CLEANUP_INTERVAL_SECONDS=${JOB_CLEANUP_INTERVAL_SECONDS:-86400}
-      - DMR_CORES=${DMR_CORES:-4}
+      # 1 = memory-safe default: each DMR bootstrap worker holds a full copy of
+      # the beta matrix, so a higher value risks an OOM kill under R_WORKER_MEM_LIMIT.
+      # Must match app.core.config.DMR_CORES' default.
+      - DMR_CORES=${DMR_CORES:-1}
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - PIPELINE_MEMORY_BUDGET_GB=${PIPELINE_MEMORY_BUDGET_GB:-8}
       - PIPELINE_CORE_BUDGET=${PIPELINE_CORE_BUDGET:-2}
@@ -105,6 +108,9 @@ services:
 
   r_worker:
     build: ./r_backend
+    # Pinned so the backend's `docker exec` target (RCommand.R_WORKER_CONTAINER)
+    # always resolves, independent of the compose project name / checkout directory.
+    container_name: swtp-ss26-bigtom-r_worker-1
     user: "1000:1000"
     # HARD RESOURCE WALL — all R analyses run here. If the container exceeds these
     # limits its OWN cgroup OOM-killer stops the offending R process while the
