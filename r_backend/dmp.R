@@ -203,10 +203,19 @@ main <- function(args = commandArgs(trailingOnly = TRUE)) {
   emit_progress(0, "Initializing Differential Methylation Probe (DMP) workflow")
 
   emit_progress(15, "Loading and validating methylation beta matrix")
-  # Compose the cleaning steps: load -> clamp to [0,1] -> drop non-finite/invariant
-  # probes (no methylation variance carries no DM signal and destabilises limma).
+  # Compose the cleaning steps: load -> clamp to [0,1] -> restrict to the probes
+  # that passed the probe-level QC filters (init_filter.R) -> drop non-finite/
+  # invariant probes (no methylation variance carries no DM signal and destabilises
+  # limma).
   beta <- load_beta_matrix(beta_path)
   beta <- clamp_beta(beta)
+  n_before_filter <- nrow(beta)
+  beta <- restrict_to_passed_probes(beta, job_dir)
+  if (nrow(beta) < n_before_filter) {
+    emit_progress(15, sprintf(
+      "Probe QC filter applied: %d of %d probes retained", nrow(beta), n_before_filter
+    ))
+  }
   beta <- drop_invariant_probes(beta, min_sd = 1e-5)
   if (nrow(beta) == 0L) {
     emit_error("No valid probes remain after removing non-finite and invariant rows.")

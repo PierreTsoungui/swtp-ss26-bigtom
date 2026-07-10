@@ -21,7 +21,14 @@
 #'   \item \code{filtered_data.rds} — the sample-filtered \code{RGChannelSet}.
 #'         It is intentionally an \code{RGChannelSet} (not a probe-subset object)
 #'         because the downstream normalization step (\code{normalize.R})
-#'         requires the raw channel data to model background and dye bias.
+#'         requires the raw channel data to model background and dye bias. The
+#'         probe-level selection is therefore not applied to this object but is
+#'         carried in \code{passed_probes.rds} and enforced on the beta matrix
+#'         before the differential analysis (see \code{dmp.R} / \code{dmr.R}).
+#'   \item \code{passed_probes.rds} — character vector of the CpG ids that passed
+#'         every enabled probe-level filter. \code{dmp.R} / \code{dmr.R} restrict
+#'         their beta matrix to these ids, so the reported filter counts match the
+#'         probes that are actually analysed.
 #'   \item \code{filter_stats.json} — per-step counts consumed by the frontend.
 #'   \item \code{qc_report.json} — beta distribution / correlation summary.
 #' }
@@ -643,14 +650,16 @@ filter_sample_quality <- function(rgset, cfg_sq, det_p = NULL) {
 #' Run the complete filtering pipeline.
 #'
 #' Applies sample-level QC to the \code{RGChannelSet}, then computes the
-#' probe-level filter statistics. The returned \code{RGChannelSet} is
-#' sample-filtered only — probe selections are reported in the statistics and
-#' applied downstream after normalization (see the script header).
+#' probe-level filter selection. The returned \code{RGChannelSet} is
+#' sample-filtered only; the surviving probe ids are returned separately
+#' (\code{passed_probes}) and persisted by the caller so the differential
+#' analysis can restrict its beta matrix to them (see the script header).
 #'
 #' @param rgset Raw \code{RGChannelSet} (all samples).
 #' @param job_dir Job directory (for the multi-hit probe list).
 #' @param cfg Parsed filter configuration.
-#' @return List with \code{filtered_rgset} and \code{filter_stats}.
+#' @return List with \code{filtered_rgset}, \code{filter_stats} and
+#'   \code{passed_probes} (the ids of the probes that passed every enabled filter).
 run_filtering <- function(rgset, job_dir, cfg) {
   emit_progress(22, "Computing detection p-values...")
   det_p <- tryCatch(detectionP(rgset), error = function(e) NULL)
@@ -763,7 +772,7 @@ run_filtering <- function(rgset, job_dir, cfg) {
   filter_stats$total_end <- length(probe_keep)
   filter_stats$total_removed <- total_start - length(probe_keep)
 
-  list(filtered_rgset = rgset, filter_stats = filter_stats)
+  list(filtered_rgset = rgset, filter_stats = filter_stats, passed_probes = probe_keep)
 }
 
 
@@ -905,6 +914,7 @@ main <- function(sample_sheet_path, job_dir) {
   )
   filtered_rgset <- result$filtered_rgset
   filter_stats <- result$filter_stats
+  passed_probes <- result$passed_probes
 
   # Biological QC (non-fatal).
   run_biological_qc(filtered_rgset, job_dir)
@@ -912,6 +922,11 @@ main <- function(sample_sheet_path, job_dir) {
   # Persist results.
   emit_progress(96, "Saving results")
   saveRDS(filtered_rgset, file.path(job_dir, "filtered_data.rds"))
+  # Persist the probe-level selection separately: filtered_data.rds must keep all
+  # probes for normalization, so dmp.R / dmr.R restrict their beta matrix to these
+  # ids (see utils/beta.R::restrict_to_passed_probes) so the reported filter counts
+  # match the probes actually analysed.
+  saveRDS(passed_probes, file.path(job_dir, "passed_probes.rds"))
   write(
     toJSON(filter_stats, auto_unbox = TRUE, pretty = TRUE),
     file.path(job_dir, "filter_stats.json")

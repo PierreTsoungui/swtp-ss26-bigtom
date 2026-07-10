@@ -154,3 +154,65 @@ test_that("load_beta_matrix aborts on an empty matrix", {
   saveRDS(matrix(numeric(0), nrow = 0, ncol = 0), f)
   expect_fatal(load_beta_matrix(f), "empty")
 })
+
+# ── restrict_to_passed_probes() ───────────────────────────────────────────────
+
+.beta_fixture <- function(ids) {
+  matrix(
+    seq_len(length(ids) * 2L), nrow = length(ids),
+    dimnames = list(ids, c("s1", "s2"))
+  )
+}
+
+test_that("restrict_to_passed_probes returns the matrix unchanged when no selection file exists", {
+  d <- tempfile()
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  m <- .beta_fixture(c("cg1", "cg2", "cg3"))
+  expect_identical(restrict_to_passed_probes(m, d), m)
+})
+
+test_that("restrict_to_passed_probes keeps only the allowlisted probes, preserving row order and columns", {
+  d <- tempfile()
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  m <- .beta_fixture(c("cg1", "cg2", "cg3", "cg4"))
+  saveRDS(c("cg2", "cg4"), file.path(d, "passed_probes.rds"))
+  out <- restrict_to_passed_probes(m, d)
+  expect_equal(rownames(out), c("cg2", "cg4")) # subset in the matrix's original order
+  expect_equal(colnames(out), colnames(m)) # columns untouched
+  expect_equal(out["cg2", ], m["cg2", ]) # values untouched
+  expect_true(is.matrix(out)) # never collapses to a vector
+})
+
+test_that("restrict_to_passed_probes intersects — allowlist ids absent from the matrix are ignored", {
+  d <- tempfile()
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  m <- .beta_fixture(c("cg1", "cg2"))
+  saveRDS(c("cg2", "cg99"), file.path(d, "passed_probes.rds")) # cg99 not in the matrix
+  expect_equal(rownames(restrict_to_passed_probes(m, d)), "cg2")
+})
+
+test_that("restrict_to_passed_probes leaves the matrix unchanged (with a warning) on an empty overlap", {
+  d <- tempfile()
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  m <- .beta_fixture(c("cg1", "cg2"))
+  saveRDS(c("other1", "other2"), file.path(d, "passed_probes.rds"))
+  expect_warning(out <- restrict_to_passed_probes(m, d), "no probe id")
+  expect_identical(out, m)
+})
+
+test_that("restrict_to_passed_probes tolerates an empty or unreadable selection", {
+  d <- tempfile()
+  dir.create(d)
+  on.exit(unlink(d, recursive = TRUE))
+  m <- .beta_fixture(c("cg1", "cg2"))
+
+  saveRDS(character(0), file.path(d, "passed_probes.rds")) # empty selection -> no filtering
+  expect_identical(restrict_to_passed_probes(m, d), m)
+
+  writeLines("not an rds", file.path(d, "passed_probes.rds")) # corrupt -> never aborts
+  expect_identical(restrict_to_passed_probes(m, d), m)
+})

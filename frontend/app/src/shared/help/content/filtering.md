@@ -4,10 +4,11 @@ Raw methylation array data always contains measurements that are technically
 unreliable or biologically uninformative. Left in the dataset, they add noise,
 reduce statistical power, and can lead to false conclusions.
 
-Filtering removes low-quality probes and samples **before** normalization and
-statistical testing, which improves the reliability of everything downstream.
-Every filter below is **optional and off by default** — enable the ones that fit
-your study design.
+Filtering removes low-quality probes and samples so they cannot distort the
+statistical analysis (DMP/DMR) or the heatmap: filtered probes are excluded from
+the results, and filtered samples are dropped before normalization. This improves
+the reliability of everything downstream. Every filter below is **optional and off
+by default** — enable the ones that fit your study design.
 
 ### Detection P-Value Filter
 

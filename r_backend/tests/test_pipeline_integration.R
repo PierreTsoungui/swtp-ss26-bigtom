@@ -232,6 +232,14 @@ test_that("step 1 — init_filter.R produces filtered_data.rds and detects the a
   expect_true(file.exists(file.path(p$job, "array_type.txt")))
   expect_true(file.exists(file.path(p$job, "filter_stats.json")))
   expect_equal(trimws(readLines(file.path(p$job, "array_type.txt"))[1]), FIXTURE$arraytype)
+
+  # A-1: the probe-level selection is persisted for the differential steps as a
+  # non-empty character vector of the CpG ids that passed the probe filters.
+  passed_path <- file.path(p$job, "passed_probes.rds")
+  expect_true(file.exists(passed_path))
+  passed <- readRDS(passed_path)
+  expect_type(passed, "character")
+  expect_gt(length(passed), 0L)
 })
 
 test_that("step 2 — normalize.R produces normalized_data.rds preserving all samples", {
@@ -288,6 +296,12 @@ test_that("step 6 — dmp.R keeps all probes and links to the upstream DMRs", {
   # a DMR and carry its id (end-to-end DMP<->DMR linkage).
   dmr <- readRDS(file.path(p$job, "dmr_results.rds"))
   if (nrow(dmr) > 0L) expect_true(any(dmp$DMR_ID != "-"))
+
+  # A-1: every analysed probe lies within the persisted probe-level selection —
+  # i.e. dmp.R restricted its beta matrix to passed_probes.rds (here all filters
+  # are off, so the selection is the full probe set and nothing is wrongly lost).
+  passed <- readRDS(file.path(p$job, "passed_probes.rds"))
+  expect_true(all(dmp$ID %in% passed))
 })
 
 test_that("step 7 — heatmap.R renders a PNG from the DMP table", {
