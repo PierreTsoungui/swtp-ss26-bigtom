@@ -182,7 +182,9 @@ Run one specific test:
 docker compose exec backend python -m pytest tests/test_upload.py::TestUpload::test_upload_success -v
 ```
 
-Expected output: `313 passed, 0 skipped`.
+Expected output: `314 passed, 1 skipped`.
+
+The skipped test is `tests/test_deploy_config.py` (audit B-1/N-1 regression guard): it locates `docker-compose.yml` relative to the test file and skips with `allow_module_level=True` when the file is not found. Inside the backend container, only the `backend/` directory is copied — the repo root is not present. To run the test, execute it locally with Python 3.11 and `PYTHONPATH=backend` pointing at the repository root, or include it in a CI job that checks out the full repository.
 
 Known tolerable warnings:
 
@@ -285,14 +287,16 @@ docker compose exec r_worker Rscript -e \
   "cat(requireNamespace('testthat', quietly = TRUE))"
 ```
 
-If the command prints `FALSE`, install `testthat` temporarily:
+If the command prints `FALSE`, the image must be rebuilt. The r_worker runs on an isolated internal network (`isolated: internal: true` in `docker-compose.yml`) and has **no internet access at runtime**, so `install.packages` cannot reach CRAN even with `--user root`. Additionally, the container runs as a non-root user (`ruser`), so the system library is not writable without `--user root`. Both constraints mean that runtime package installation is not viable — the only reliable path is to add the package to the Dockerfile and rebuild:
 
 ```bash
-docker compose exec r_worker Rscript -e \
-  "install.packages('testthat', repos='https://cloud.r-project.org')"
+# Add 'testthat' to r_backend/Dockerfile (already done as of this writing),
+# then rebuild the image:
+docker compose build r_worker
+docker compose up -d r_worker
 ```
 
-Installing R packages inside a running container is temporary. The installation can be lost when the container is removed, recreated, or rebuilt. For a durable fix, add the dependency to the R image in a separate code change.
+After the rebuild, the verification command above should print `TRUE`.
 
 Run all R tests inside Docker. The command sets the R working directory to `/app/r_backend` because some tests execute scripts by relative filename:
 
@@ -483,7 +487,7 @@ python -m pytest
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Local backend workflow limitation: R execution still expects Docker access because `backend/app/services/r_executor.py` builds `docker exec` commands for the `r_worker` container.
+Local backend workflow limitation: R execution still expects Docker access because `backend/app/services/r_executor/` builds `docker exec` commands for the `r_worker` container.
 
 If Python 3.11 is not available locally, install it first or use the Docker backend. The backend image is based on Python `3.11-slim`; using a newer local interpreter can expose differences that are not part of the reproducible Docker environment.
 
@@ -546,7 +550,53 @@ Expected status: `200 OK`.
 
 The cURL examples below use Bash line continuations. In PowerShell, call `curl.exe` instead of the `curl` alias and replace `\` line continuations with backticks.
 
-Upload:
+Upload (two-phase inspect/commit):
+
+The current primary upload flow is a two-phase process. First, inspect the folder or ZIP to get a session and a sample-sheet preview:
+
+```bash
+curl -i -X POST http://localhost:8000/api/v1/upload/inspect \
+  -F "archive=@/path/to/dataset.zip"
+```
+
+Expected status: `201 Created`. Expected fields: `session_id`, `candidates`, `idat_count`.
+
+Preview and map columns before committing:
+
+```bash
+SESSION_ID="replace-with-session-id"
+curl -i "http://localhost:8000/api/v1/upload/$SESSION_ID/preview"
+```
+
+Commit the selection with column mapping and filter settings:
+
+```bash
+curl -i -X POST http://localhost:8000/api/v1/upload/commit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "'"$SESSION_ID"'",
+    "candidate_index": 0,
+    "column_mapping": {
+      "sample_name": "Sample_Name",
+      "sample_group": "Sample_Group",
+      "sentrix_id": "Sentrix_ID",
+      "sentrix_position": "Sentrix_Position"
+    },
+    "filter_settings": {
+      "det_p": {"enabled": true, "cutoff": 0.01},
+      "bead_count": {"enabled": false},
+      "non_cpg": {"enabled": false},
+      "snp": {"enabled": false},
+      "multi_hit": {"enabled": false},
+      "xy_chromosomes": {"enabled": false},
+      "sample_quality": {"enabled": false}
+    }
+  }'
+```
+
+Expected status: `201 Created`. Expected fields: `job_id`, `status`, `filter_settings`.
+
+Legacy single-shot upload (deprecated, still accepted but not the primary flow):
 
 ```bash
 curl -i -X POST http://localhost:8000/api/v1/upload \
@@ -556,7 +606,7 @@ curl -i -X POST http://localhost:8000/api/v1/upload \
   -F 'filter_settings={"filter_settings":{"det_p":{"enabled":true,"cutoff":0.01},"bead_count":{"enabled":false},"non_cpg":{"enabled":false},"snp":{"enabled":false},"multi_hit":{"enabled":false},"xy_chromosomes":{"enabled":false},"sample_quality":{"enabled":false}}}'
 ```
 
-PowerShell equivalent:
+PowerShell equivalent (legacy):
 
 ```powershell
 $FilterSettings = '{"filter_settings":{"det_p":{"enabled":true,"cutoff":0.01},"bead_count":{"enabled":false},"non_cpg":{"enabled":false},"snp":{"enabled":false},"multi_hit":{"enabled":false},"xy_chromosomes":{"enabled":false},"sample_quality":{"enabled":false}}}'
@@ -695,10 +745,12 @@ Run heatmap:
 ```bash
 curl -i -X POST "http://localhost:8000/api/v1/heatmap/$JOB_ID" \
   -H "Content-Type: application/json" \
-  -d '{"dmp_filter":{"chromosome":"chr19","p_value_max":0.05},"grouping":{"primary":"Sample_Group"}}'
+  -d '{"filters":{"chr":"chr19","adj_p_value":"0.05"},"grouping":{"primary":"Sample_Group"}}'
 ```
 
 Expected status: `202 Accepted`. Expected fields: `job_id`, `phase`, `status`, `heatmap_metadata`.
+
+The `filters` map uses the same keys as the DMP table query parameters (without the `filter_` prefix). Valid DMP filter keys: `chr`, `start`, `stop`, `gene`, `feature`, `cgi`, `adj_p_value`, `delta_beta`, `delta_direction`, `group1_avg_min`, `group1_avg_max`, `group2_avg_min`, `group2_avg_max`, `dmr_id`. An empty `filters` object runs the heatmap on all DMP rows visible in the table.
 
 Download heatmap:
 
@@ -758,10 +810,11 @@ docker exec $rContainer `
   noob
 ```
 
-Open a shell in the R worker:
+Open a shell in the R worker (runs as `ruser`, not root — use `--user root` if system-level writes are needed):
 
 ```bash
 docker compose exec r_worker bash
+docker compose exec --user root r_worker bash
 ```
 
 Host/container path mapping from `docker-compose.yml`:
@@ -801,7 +854,7 @@ Inspect exit code in PowerShell after a local command:
 $LASTEXITCODE
 ```
 
-For low-level debugging, note a current implementation limitation: `backend/app/services/r_executor.py` hard-codes the R worker container name. If the project directory name changes or Compose generates a different name, R execution from the backend can fail even when the `r_worker` service is running. Confirm the actual container with `docker compose ps`.
+The R worker container name (`swtp-ss26-bigtom-r_worker-1`) is pinned via `container_name` in `docker-compose.yml` and must match the constant `RCommand.R_WORKER_CONTAINER` in `backend/app/services/r_executor/commands/base.py`. Both are kept in sync by a regression test (`backend/tests/test_deploy_config.py`). Confirm the running container with `docker compose ps`.
 
 ## 13. Manual End-to-End Test
 
@@ -923,8 +976,8 @@ Expected result: backend logs show route/R executor activity; R logs show script
 | Unknown job ID | `GET /api/v1/status/no-such-job` | `404` |
 | Invalid workflow order | Request stats before filtering finishes | `409` |
 | Upload limit violation | Exceed backend or nginx upload limits | backend `400` or proxy/request failure |
-| Invalid normalization method | `{"method":"bad"}` | `400` |
-| Invalid table name | `/api/v1/table/{job_id}/bad` | `400` |
+| Invalid normalization method | `{"method":"bad"}` with a real job ID | `400` (requires existing job — with an unknown job ID, the route returns `404` before validating the method) |
+| Invalid table name | `/api/v1/table/{job_id}/bad` with a real job ID | `400` (requires existing job — with an unknown job ID, the job-not-found check runs first and returns `404`) |
 | Unknown table filter | Request a ready table with an unsupported `filter_*` key, for example `?filter_banana=123` | `400` after the table data file is loaded |
 | Invalid plot name | `/api/v1/preview/normalization/{job_id}/bad.png` | `400` |
 
@@ -1004,12 +1057,12 @@ Common failure categories:
 | Component | Command | Success condition / notes |
 |---|---|---|
 | Docker Compose config | `docker compose config --services` | Lists `backend`, `frontend`, and `r_worker`; can be checked without starting containers |
-| Backend | `docker compose exec backend python -m pytest tests/ -v` | Exit code `0`, `313 passed, 0 skipped`; run without `--user root` (see Section 6) |
+| Backend | `docker compose exec backend python -m pytest tests/ -v` | Exit code `0`, `314 passed, 1 skipped`; run without `--user root` (see Section 6). The 1 skip is `test_deploy_config.py` (docker-compose.yml not in container) |
 | Frontend tests | `npm test -- --run` from `frontend/app` | Exit code `0` when the Vitest suite passes |
 | Frontend tests in temporary Node container | `docker run --rm -v "$PWD/frontend/app:/app" -v /app/node_modules -w /app node:20-alpine sh -c "npm ci && npm test -- --run"` | Exit code `0` when dependencies install and Vitest passes; separate from the nginx runtime service |
 | Frontend lint | `npm run lint` from `frontend/app` | Exit code `0` when ESLint passes |
 | Frontend build | `npm run build` from `frontend/app` | Creates `dist/` and exits with code `0` |
-| R tests | `docker compose exec r_worker Rscript -e "setwd('/app/r_backend'); testthat::test_dir('tests')"` | Exit code `0` when R dependencies and required test data are present |
+| R tests | `docker compose exec r_worker Rscript -e "setwd('/app/r_backend'); testthat::test_dir('tests')"` | Exit code `0` when R dependencies and required test data are present. `testthat` is installed in the image; if missing, rebuild with `docker compose build r_worker` |
 | E2E fast suite | `npm run test:fast` from `e2e/` (stack must be up) | Exit code `0`, 15 tests pass; covers API contract, error handling, batch validation, and frontend smoke |
 | E2E fast suite (Docker) | `docker run --rm --network host -v "$PWD/e2e:/e2e" -w /e2e mcr.microsoft.com/playwright:v1.61.0-noble sh -c "npm ci && npx playwright install chromium && npm run test:fast"` | Same as above; no local Node.js required |
 | E2E full suite | `npm test` from `e2e/` with `E2E_DATASET_DIR` set | Exit code `0` after full pipeline proof; requires a real IDAT dataset and 10–20 min |
@@ -1068,14 +1121,13 @@ A declared R package is missing after a stale or broken build:
 docker compose build --no-cache r_worker
 ```
 
-If `testthat` is missing, rebuilding alone will not install it unless it has been added to the image definition. For validation, install it temporarily in the running container:
+If `testthat` is missing, it must be added to `r_backend/Dockerfile` and the image rebuilt. Runtime installation via `install.packages` is not viable: the r_worker runs on an isolated internal network (no internet access at runtime) and as a non-root user (no write access to the system library without `--user root`). Even with `--user root`, the container cannot reach CRAN.
 
 ```bash
-docker compose exec r_worker Rscript -e \
-  "install.packages('testthat', repos='https://cloud.r-project.org')"
+# Ensure 'testthat' is in r_backend/Dockerfile, then rebuild:
+docker compose build r_worker
+docker compose up -d r_worker
 ```
-
-This temporary installation is lost when the container is removed, recreated, or rebuilt. Add `testthat` permanently only in a separate infrastructure/code ticket.
 
 Port already in use:
 
@@ -1091,7 +1143,6 @@ docker compose up -d
 
 ## 18. Test Completion Checklist
 
-- [ ] `docker compose config --services` lists `backend`, `frontend`, and `r_worker`.
 - [ ] `docker compose config --services` lists `backend`, `frontend`, and `r_worker`.
 - [ ] Docker services start with `docker compose up -d --build`.
 - [ ] Backend tests were run with Pytest and failures were documented or fixed.
