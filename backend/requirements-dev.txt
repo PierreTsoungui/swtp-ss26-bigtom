@@ -13,5 +13,5 @@ PyYAML==6.0.3
 
 # Quality tooling (config lives in pyproject.toml)
 ruff==0.15.20
-black==26.5.1
+black==26.10.1
 mypy==2.1.0
